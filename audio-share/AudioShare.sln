@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{FD1EF786-03E5-4BA8-B2B1-2AA8D91E3E76}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioShare.Core", "src\AudioShare.Core\AudioShare.Core.csproj", "{8CD5D9D5-8C19-4DDC-8EFD-526A2700097D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioShare.Windows", "src\AudioShare.Windows\AudioShare.Windows.csproj", "{431D86F4-CF57-4848-A47F-920180386F82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioShare.App", "src\AudioShare.App\AudioShare.App.csproj", "{B3316A54-7A80-4A44-A41F-649C629C9415}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{712FED92-982D-430F-8CC8-B67947DD05C6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioShare.Core.Tests", "tests\AudioShare.Core.Tests\AudioShare.Core.Tests.csproj", "{04AA057A-9E9F-48E6-A12C-A86518A2E1B2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8CD5D9D5-8C19-4DDC-8EFD-526A2700097D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8CD5D9D5-8C19-4DDC-8EFD-526A2700097D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8CD5D9D5-8C19-4DDC-8EFD-526A2700097D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8CD5D9D5-8C19-4DDC-8EFD-526A2700097D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{431D86F4-CF57-4848-A47F-920180386F82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{431D86F4-CF57-4848-A47F-920180386F82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{431D86F4-CF57-4848-A47F-920180386F82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{431D86F4-CF57-4848-A47F-920180386F82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B3316A54-7A80-4A44-A41F-649C629C9415}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3316A54-7A80-4A44-A41F-649C629C9415}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3316A54-7A80-4A44-A41F-649C629C9415}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3316A54-7A80-4A44-A41F-649C629C9415}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04AA057A-9E9F-48E6-A12C-A86518A2E1B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04AA057A-9E9F-48E6-A12C-A86518A2E1B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04AA057A-9E9F-48E6-A12C-A86518A2E1B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04AA057A-9E9F-48E6-A12C-A86518A2E1B2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8CD5D9D5-8C19-4DDC-8EFD-526A2700097D} = {FD1EF786-03E5-4BA8-B2B1-2AA8D91E3E76}
+		{431D86F4-CF57-4848-A47F-920180386F82} = {FD1EF786-03E5-4BA8-B2B1-2AA8D91E3E76}
+		{B3316A54-7A80-4A44-A41F-649C629C9415} = {FD1EF786-03E5-4BA8-B2B1-2AA8D91E3E76}
+		{04AA057A-9E9F-48E6-A12C-A86518A2E1B2} = {712FED92-982D-430F-8CC8-B67947DD05C6}
+	EndGlobalSection
+EndGlobal
