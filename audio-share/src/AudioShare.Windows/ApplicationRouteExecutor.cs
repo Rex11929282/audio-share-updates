@@ -49,7 +49,7 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
         {
             foreach (var snapshot in changedSnapshots.AsEnumerable().Reverse())
             {
-                await RestoreSnapshotAsync(snapshot, token);
+                await RestoreSnapshotAsync(snapshot, CancellationToken.None);
             }
 
             return new ApplicationRouteExecutionResult(false, exception.Message, snapshots);
@@ -66,11 +66,16 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
             return new ApplicationRouteExecutionResult(false, "No successful application route transaction exists.", []);
         }
 
+        if (token.IsCancellationRequested)
+        {
+            return new ApplicationRouteExecutionResult(false, "Restore was canceled before recovery began.", []);
+        }
+
         try
         {
             foreach (var snapshot in latestSuccessfulTransaction.Reverse())
             {
-                await RestoreSnapshotAsync(snapshot, token);
+                await RestoreSnapshotAsync(snapshot, CancellationToken.None);
             }
         }
         catch (Exception exception)

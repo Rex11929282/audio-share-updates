@@ -21,6 +21,23 @@ public sealed class ApplicationRouteExecutorTests
     }
 
     [Fact]
+    public async Task ApplyAsync_WhenCallerCancelsAfterFirstWrite_RestoresTheFirstSnapshot()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var helper = new RecordingHelper(
+            new Dictionary<int, string?> { [1] = "old-input", [2] = null },
+            cancelAfterSetProcessId: 1,
+            cancellation: cancellation);
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([new(1, "chrome.exe", "input"), new(2, "cloudmusic.exe", "aux")]);
+
+        var result = await executor.ApplyAsync(plan, cancellation.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("set:1:old-input", helper.Calls);
+    }
+
+    [Fact]
     public async Task ApplyAsync_ReadsEverySnapshotBeforeTheFirstWrite()
     {
         var helper = new RecordingHelper(new Dictionary<int, string?> { [1] = "old-input", [2] = "old-aux" });
@@ -76,11 +93,19 @@ public sealed class ApplicationRouteExecutorTests
     {
         private readonly IReadOnlyDictionary<int, string?> routes;
         private readonly int? failOnSetProcessId;
+        private readonly int? cancelAfterSetProcessId;
+        private readonly CancellationTokenSource? cancellation;
 
-        public RecordingHelper(IReadOnlyDictionary<int, string?> routes, int? failOnSetProcessId = null)
+        public RecordingHelper(
+            IReadOnlyDictionary<int, string?> routes,
+            int? failOnSetProcessId = null,
+            int? cancelAfterSetProcessId = null,
+            CancellationTokenSource? cancellation = null)
         {
             this.routes = routes;
             this.failOnSetProcessId = failOnSetProcessId;
+            this.cancelAfterSetProcessId = cancelAfterSetProcessId;
+            this.cancellation = cancellation;
         }
 
         public List<string> Calls { get; } = [];
@@ -94,9 +119,15 @@ public sealed class ApplicationRouteExecutorTests
         public Task SetRouteAsync(int processId, string deviceId, CancellationToken token)
         {
             Calls.Add($"set:{processId}:{deviceId}");
+            token.ThrowIfCancellationRequested();
             if (processId == failOnSetProcessId && deviceId is "aux")
             {
                 throw new InvalidOperationException("Route write failed.");
+            }
+
+            if (processId == cancelAfterSetProcessId)
+            {
+                cancellation!.Cancel();
             }
 
             return Task.CompletedTask;

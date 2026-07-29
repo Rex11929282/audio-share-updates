@@ -38,3 +38,33 @@
 ## Concerns
 
 - Rollback and restore use the caller-provided cancellation token. A caller that cancels during recovery can interrupt restoration; no live helper is included in this task, so this behavior remains unexercised beyond the abstract interface tests.
+
+## Cancellation Recovery Fix
+
+### Changed Paths
+
+- `audio-share/src/AudioShare.Windows/ApplicationRouteExecutor.cs`
+- `audio-share/tests/AudioShare.Core.Tests/ApplicationRouteExecutorTests.cs`
+- `.superpowers/sdd/task-2-report.md`
+
+### Test Added
+
+- `ApplyAsync_WhenCallerCancelsAfterFirstWrite_RestoresTheFirstSnapshot`
+
+### Commands And Results
+
+1. `dotnet test .\audio-share\AudioShare.sln --configuration Debug --filter FullyQualifiedName~ApplicationRouteExecutorTests`
+   - Red result: exit 1; the new test failed with `OperationCanceledException` during compensation because rollback received the caller's canceled token.
+   - Green result: passed 6, failed 0.
+2. `dotnet test .\audio-share\AudioShare.sln --configuration Debug`
+   - Result: passed 76, failed 0, skipped 0.
+
+### Self-Review
+
+- Rollback writes use `CancellationToken.None` after at least one route write succeeds.
+- `RestoreAsync` rejects an already-canceled request before issuing its first write; once recovery begins, all restore writes use `CancellationToken.None`.
+- No live audio, process, Python, or Windows-settings interaction was added.
+
+### Concerns
+
+- The prior cancellation concern is resolved for helper calls that honor cancellation tokens. Recovery can still fail only when the helper itself throws independently of cancellation.
