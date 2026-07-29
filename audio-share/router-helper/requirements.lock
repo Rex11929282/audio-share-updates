@@ -1,0 +1,9 @@
+# Resolved from requirements.in on CPython 3.12 for Windows x64.
+comtypes==1.4.16 \
+    --hash=sha256:e18d85179ff12955524c5a8c3bc09cb3c0d890f1da4d7123d14244c7b78f84c8
+psutil==7.2.2 \
+    --hash=sha256:eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988
+pycaw==20251023 \
+    --hash=sha256:ef06d234a2fe3c175925a2a8c7ed8824e450851014fdb7d900af1b56ce422d4e
+winappaudiorouter==1.1.1 \
+    --hash=sha256:44c5e3d69ede2f29ccb9e9a51d674b14021ec67a646ee8b2d7069a2ad9f32272

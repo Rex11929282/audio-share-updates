@@ -4,9 +4,12 @@ The Audio Share application code and Audio Share-provided assets are proprietary
 
 These proprietary restrictions do not apply to bundled third-party components. Every published ZIP includes these notice files:
 
-- `ThirdPartyNotices.txt` for NAudio 2.2.1.
+- `ThirdPartyNotices.txt` for NAudio 2.2.1 and the external routing helper dependencies: winappaudiorouter 1.1.1, comtypes 1.4.16, psutil 7.2.2, and pycaw 20251023.
+- `router-helper/PythonLicense.txt` for the bundled Python 3.12.10 embedded runtime, including its complete license and bundled-component notices.
 - `DotNetRuntimeLicense.txt` for the bundled Microsoft .NET runtime license terms.
 - `DotNetRuntimeThirdPartyNotices.txt` for third-party notices supplied with the bundled Microsoft .NET runtime.
+
+The external routing helper is experimental. It only targets the selected share bus (`Voicemeeter Input`); `Voicemeeter AUX Input` remains local-only, and protected processes remain excluded. The package does not download routing code at runtime.
 
 This list identifies the notice files included with this release; it does not describe components or licenses that are not bundled in the ZIP.
 
