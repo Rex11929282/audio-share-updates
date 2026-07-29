@@ -7,8 +7,11 @@ public sealed class AudioRoutingPolicyTests
     [Theory]
     [InlineData("discord")]
     [InlineData("Discord.EXE")]
+    [InlineData("DiscordCanary.exe")]
     [InlineData("Voicemod")]
+    [InlineData("VoicemodBeta.exe")]
     [InlineData("voicemeeterpro.exe")]
+    [InlineData("VoicemeeterPro64.exe")]
     public void IsProtectedProcess_RecognizesExcludedPrograms(string processName)
     {
         Assert.True(AudioRoutingPolicy.IsProtectedProcess(processName));

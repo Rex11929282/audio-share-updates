@@ -2,14 +2,22 @@ namespace AudioShare.Core;
 
 public static class AudioRoutingPolicy
 {
-    private static readonly HashSet<string> ProtectedProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly string[] ProtectedProcessPrefixes =
     {
-        "discord", "discord.exe", "voicemod", "voicemod.exe",
-        "voicemeeter", "voicemeeter.exe", "voicemeeterpro", "voicemeeterpro.exe",
+        "discord", "voicemod", "voicemeeter",
     };
 
-    public static bool IsProtectedProcess(string? processName) =>
-        !string.IsNullOrWhiteSpace(processName) && ProtectedProcessNames.Contains(processName);
+    public static bool IsProtectedProcess(string? processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return false;
+        }
+
+        var executableName = Path.GetFileName(processName);
+        return ProtectedProcessPrefixes.Any(prefix =>
+            executableName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     public static string GetSetupInstruction(IReadOnlyCollection<AudioSession> selectedSessions)
     {

@@ -18,14 +18,16 @@ public static class ApplicationRoutePlanner
             throw new ArgumentException("Protected processes cannot be routed.", nameof(active));
         }
 
-        var selectedProcessIds = selected.Select(session => session.ProcessId).ToHashSet();
+        var selectedApplicationIdentities = selected
+            .Select(session => session.ProcessName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var commands = active
             .GroupBy(session => session.ProcessId)
             .OrderBy(group => group.Key)
             .Select(group =>
             {
                 var session = group.First();
-                var targetDeviceId = selectedProcessIds.Contains(session.ProcessId)
+                var targetDeviceId = selectedApplicationIdentities.Contains(session.ProcessName)
                     ? inputDeviceId
                     : auxDeviceId;
 
