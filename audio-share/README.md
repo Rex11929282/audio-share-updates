@@ -27,3 +27,17 @@ The selection checkmark is only stored inside Audio Share. Clearing it does not 
 dotnet test .\audio-share\AudioShare.sln --configuration Debug
 dotnet run --project .\audio-share\src\AudioShare.App\AudioShare.App.csproj
 ```
+
+## Publish
+
+Publish the Voicemod edition (the default) with Voicemod and Voicemeeter Banana status:
+
+```powershell
+dotnet publish .\audio-share\src\AudioShare.App\AudioShare.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true --output .\AudioShare-Voicemod-win-x64
+```
+
+Publish the music-only edition with Voicemeeter Banana status but no Voicemod status or check:
+
+```powershell
+dotnet publish .\audio-share\src\AudioShare.App\AudioShare.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:RequireVoicemod=false --output .\AudioShare-MusicOnly-win-x64
+```

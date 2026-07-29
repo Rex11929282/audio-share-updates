@@ -2,6 +2,14 @@ namespace AudioShare.Core;
 
 public static class AudioSessionFilter
 {
+    private static readonly HashSet<string> ExcludedProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Voicemod",
+        "Voicemod.exe",
+        "voicemeeterpro",
+        "voicemeeterpro.exe",
+    };
+
     public static IReadOnlyList<AudioSession> GetActiveProcessSessions(
         IEnumerable<AudioSessionCandidate> candidates)
     {
@@ -12,7 +20,8 @@ public static class AudioSessionFilter
                 candidate.IsActive &&
                 !candidate.IsSystemSession &&
                 candidate.ProcessId > 0 &&
-                !string.IsNullOrWhiteSpace(candidate.ProcessName))
+                !string.IsNullOrWhiteSpace(candidate.ProcessName) &&
+                !ExcludedProcessNames.Contains(candidate.ProcessName))
             .GroupBy(candidate => candidate.ProcessId)
             .Select(group => group
                 .OrderByDescending(candidate => !string.IsNullOrWhiteSpace(candidate.DisplayName))

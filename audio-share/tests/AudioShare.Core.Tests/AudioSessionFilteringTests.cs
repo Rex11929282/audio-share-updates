@@ -21,6 +21,22 @@ public sealed class AudioSessionFilteringTests
     }
 
     [Fact]
+    public void GetActiveProcessSessions_ExcludesVoicemodAndVoicemeeterBanana()
+    {
+        var sessions = AudioSessionFilter.GetActiveProcessSessions(
+        [
+            new AudioSessionCandidate(21, 210, "Chrome.EXE", "Chrome", true, false),
+            new AudioSessionCandidate(22, 220, "Voicemod", "Voicemod", true, false),
+            new AudioSessionCandidate(23, 230, "voicemod.exe", "Voicemod", true, false),
+            new AudioSessionCandidate(24, 240, "VoicemeeterPro", "Voicemeeter Banana", true, false),
+            new AudioSessionCandidate(25, 250, "voicemeeterpro.exe", "Voicemeeter Banana", true, false),
+        ]);
+
+        var session = Assert.Single(sessions);
+        Assert.Equal("Chrome.EXE", session.ProcessName);
+    }
+
+    [Fact]
     public void GetActiveProcessSessions_DeduplicatesMultipleSessionsFromOneProcess()
     {
         var sessions = AudioSessionFilter.GetActiveProcessSessions(
