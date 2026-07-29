@@ -17,7 +17,7 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
 
     private readonly ISelectedProcessSourceFactory sourceFactory;
     private readonly IAudioOutputWriter writer;
-    private readonly IAudioSource? microphoneSource;
+    private IAudioSource? microphoneSource;
     private readonly SelectedSourceEngineOptions options;
     private readonly SelectedAudioMixer mixer = new();
     private readonly Dictionary<ProcessIdentity, IAudioSource> activeSources = [];
@@ -65,8 +65,21 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
             if (!activeSources.ContainsKey(identity))
             {
                 var source = await sourceFactory.CreateAsync(session, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                activeSources.Add(identity, source ?? throw new InvalidOperationException("The source factory returned null."));
+                if (source is null)
+                {
+                    throw new InvalidOperationException("The source factory returned null.");
+                }
+
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    activeSources.Add(identity, source);
+                }
+                catch
+                {
+                    await source.DisposeAsync();
+                    throw;
+                }
             }
         }
     }
@@ -87,9 +100,17 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
             await source.DisposeAsync();
         }
 
-        var microphoneFrame = options.IncludeMicrophone && microphoneSource is not null
-            ? await microphoneSource.ReadAsync(cancellationToken)
-            : null;
+        AudioFrame? microphoneFrame = null;
+        if (options.IncludeMicrophone && microphoneSource is not null)
+        {
+            var source = microphoneSource;
+            microphoneFrame = await source.ReadAsync(cancellationToken);
+            if (microphoneFrame is null)
+            {
+                microphoneSource = null;
+                await source.DisposeAsync();
+            }
+        }
         var mixedFrame = mixer.Mix(options.Format, DateTime.UtcNow.Ticks, frames, microphoneFrame);
 
         await writer.WriteAsync(mixedFrame, cancellationToken);

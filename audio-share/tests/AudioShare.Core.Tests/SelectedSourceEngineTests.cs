@@ -135,6 +135,25 @@ public sealed class SelectedSourceEngineTests
     }
 
     [Fact]
+    public async Task SynchronizeAsync_DisposesSourceWhenCancellationOccursBeforeRegistration()
+    {
+        var session = new AudioSession(27, 208, "app.exe", "App", true);
+        using var cancellationSource = new CancellationTokenSource();
+        var source = new FakeAudioSource("app", new AudioFormat(48_000, 2), [0.1f, 0.1f]);
+        var factory = new FakeSourceFactory((_, _) =>
+        {
+            cancellationSource.Cancel();
+            return source;
+        });
+        await using var engine = CreateEngine(factory);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            engine.SynchronizeAsync([session], cancellationSource.Token));
+
+        Assert.True(source.Disposed);
+    }
+
+    [Fact]
     public async Task MixOnceAsync_DisposesAndRemovesCompletedSource()
     {
         var session = new AudioSession(26, 207, "app.exe", "App", true);
@@ -182,6 +201,23 @@ public sealed class SelectedSourceEngineTests
     }
 
     [Fact]
+    public async Task MixOnceAsync_DisposesCompletedMicrophoneAndDoesNotReadItAgain()
+    {
+        var microphone = new FakeAudioSource("microphone", new AudioFormat(48_000, 2), null);
+        await using var engine = new SelectedSourceEngine(
+            new FakeSourceFactory((_, _) => new FakeAudioSource("x", new AudioFormat(48_000, 2), null)),
+            new RecordingWriter(),
+            microphone,
+            new SelectedSourceEngineOptions(new AudioFormat(48_000, 2), true));
+
+        await engine.MixOnceAsync(CancellationToken.None);
+        await engine.MixOnceAsync(CancellationToken.None);
+
+        Assert.Equal(1, microphone.ReadCount);
+        Assert.Equal(1, microphone.DisposeCount);
+    }
+
+    [Fact]
     public async Task MixOnceAsync_WritesExactlyOneFrame()
     {
         var writer = new RecordingWriter();
@@ -215,6 +251,8 @@ public sealed class SelectedSourceEngineTests
 
         public bool Disposed { get; private set; }
 
+        public int DisposeCount { get; private set; }
+
         public int ReadCount { get; private set; }
 
         public string SourceId { get; } = sourceId;
@@ -228,6 +266,7 @@ public sealed class SelectedSourceEngineTests
         public ValueTask DisposeAsync()
         {
             Disposed = true;
+            DisposeCount++;
             return ValueTask.CompletedTask;
         }
     }
