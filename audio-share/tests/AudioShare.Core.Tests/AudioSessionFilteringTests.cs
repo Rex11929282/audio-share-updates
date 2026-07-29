@@ -37,6 +37,21 @@ public sealed class AudioSessionFilteringTests
     }
 
     [Fact]
+    public void GetActiveProcessSessions_ExcludesDiscordAndAllProtectedPrograms()
+    {
+        var sessions = AudioSessionFilter.GetActiveProcessSessions(
+        [
+            new AudioSessionCandidate(1, 10, "discord.exe", "Discord", true, false),
+            new AudioSessionCandidate(2, 20, "Voicemod.exe", "Voicemod", true, false),
+            new AudioSessionCandidate(3, 30, "Voicemeeter.exe", "Voicemeeter", true, false),
+            new AudioSessionCandidate(4, 40, "chrome.exe", "Chrome", true, false),
+        ]);
+
+        var session = Assert.Single(sessions);
+        Assert.Equal("chrome.exe", session.ProcessName);
+    }
+
+    [Fact]
     public void GetActiveProcessSessions_DeduplicatesMultipleSessionsFromOneProcess()
     {
         var sessions = AudioSessionFilter.GetActiveProcessSessions(
