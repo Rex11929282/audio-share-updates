@@ -33,6 +33,21 @@ public sealed class RouteCoordinatorTests
     }
 
     [Fact]
+    public async Task GetSelectedSessions_ReturnsOnlyActiveNonDiscordSelections()
+    {
+        var coordinator = new RouteCoordinator();
+        var chrome = new AudioSession(10, 100, "chrome.exe", "Chrome", true);
+        var discord = new AudioSession(11, 101, "discord.exe", "Discord", true);
+
+        await coordinator.ShareAsync(chrome, CancellationToken.None);
+        await coordinator.ShareAsync(discord, CancellationToken.None);
+
+        var selected = coordinator.GetSelectedSessions([chrome, discord]);
+
+        Assert.Equal([chrome], selected);
+    }
+
+    [Fact]
     public async Task UnshareAsync_RemovesOnlyTheLocalSelection()
     {
         var coordinator = new RouteCoordinator();

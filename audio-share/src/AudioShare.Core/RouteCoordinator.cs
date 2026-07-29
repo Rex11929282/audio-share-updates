@@ -54,6 +54,12 @@ public sealed class RouteCoordinator
         return selectedProcesses.ContainsKey(ProcessIdentity.From(session));
     }
 
+    public IReadOnlyList<AudioSession> GetSelectedSessions(IEnumerable<AudioSession> activeSessions) =>
+        activeSessions
+            .Where(session => !DeniedProcessNames.Contains(session.ProcessName))
+            .Where(IsSelected)
+            .ToArray();
+
     private readonly record struct ProcessIdentity(int ProcessId, long ProcessStartUtcTicks, string ProcessName)
     {
         public static ProcessIdentity From(AudioSession session) =>
