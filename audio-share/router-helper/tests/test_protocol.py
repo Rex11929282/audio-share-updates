@@ -10,6 +10,8 @@ import pytest
 
 HELPER_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HELPER_DIRECTORY))
+PROCESS_START_UTC_TICKS = 638893440000000000
+PROCESS_CREATE_TIME_SECONDS = 1753747200.0
 
 
 @dataclass
@@ -23,6 +25,18 @@ class Device:
 class Session:
     process_id: int
     process_name: str
+
+
+@dataclass
+class ProcessInfo:
+    process_name: str
+    create_time_seconds: float
+
+    def name(self):
+        return self.process_name
+
+    def create_time(self):
+        return self.create_time_seconds
 
 
 class RecordingRouter:
@@ -54,6 +68,7 @@ class RecordingPolicy:
     def __init__(self):
         self.routes = {}
         self.get_calls = []
+        self.set_calls = []
         self.restore_calls = []
 
     def get_route(self, process_id):
@@ -66,10 +81,14 @@ class RecordingPolicy:
     def restore_route(self, process_id, route):
         self.restore_calls.append((process_id, route))
 
+    def set_route(self, process_id, device_id):
+        self.set_calls.append((process_id, device_id))
+
 
 class RecordingPolicyFactory:
-    def __init__(self, routes=None):
+    def __init__(self, routes=None, set_failures=()):
         self.routes = routes or {}
+        self.set_failures = set(set_failures)
         self.get_calls = []
         self.set_calls = []
 
@@ -92,6 +111,8 @@ class RecordingPolicyFactory:
         packed_device_id,
     ):
         self.set_calls.append((process_id, flow, role, packed_device_id))
+        if role in self.set_failures:
+            raise RuntimeError(f"role {role} failed")
 
 
 @pytest.fixture
@@ -101,6 +122,12 @@ def helper(monkeypatch):
     policy = RecordingPolicy()
     monkeypatch.setattr(module, "router", router)
     monkeypatch.setattr(module, "policy", policy, raising=False)
+    monkeypatch.setattr(
+        module,
+        "process_factory",
+        lambda _: ProcessInfo("chrome.exe", PROCESS_CREATE_TIME_SECONDS),
+        raising=False,
+    )
     router.policy = policy
     return module, router
 
@@ -174,6 +201,63 @@ def test_missing_active_session_is_rejected(helper):
     assert router.clear_calls == []
 
 
+@pytest.mark.parametrize(
+    "command,extra",
+    [
+        ("get-route", {}),
+        ("set-route", {"deviceId": "input"}),
+        (
+            "restore-route",
+            {
+                "consoleDeviceId": None,
+                "multimediaDeviceId": "previous-multimedia",
+            },
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "process_name,process_start_utc_ticks,create_time_seconds",
+    [
+        ("other.exe", PROCESS_START_UTC_TICKS, PROCESS_CREATE_TIME_SECONDS),
+        ("chrome.exe", PROCESS_START_UTC_TICKS + 10000000, PROCESS_CREATE_TIME_SECONDS),
+    ],
+)
+def test_route_identity_mismatch_never_reads_or_writes(
+    helper,
+    monkeypatch,
+    command,
+    extra,
+    process_name,
+    process_start_utc_ticks,
+    create_time_seconds,
+):
+    module, router = helper
+    router.sessions = [Session(7, "chrome.exe")]
+    monkeypatch.setattr(
+        module,
+        "process_factory",
+        lambda _: ProcessInfo("chrome.exe", create_time_seconds),
+        raising=False,
+    )
+    request = {
+        "command": command,
+        "processId": 7,
+        "processName": process_name,
+        "processStartUtcTicks": process_start_utc_ticks,
+        **extra,
+    }
+
+    assert module.handle(request) == {
+        "ok": False,
+        "error": "Process identity mismatch.",
+    }
+    assert router.policy.get_calls == []
+    assert router.policy.set_calls == []
+    assert router.policy.restore_calls == []
+    assert router.set_calls == []
+    assert router.clear_calls == []
+
+
 def test_list_devices_returns_json_safe_values(helper):
     module, router = helper
     router.devices = [Device("device-id", "Headphones", True)]
@@ -195,7 +279,14 @@ def test_get_route_returns_console_and_multimedia_roles_for_the_active_session(h
         "multimediaDeviceId": "previous-multimedia",
     }
 
-    assert module.handle({"command": "get-route", "processId": 9}) == {
+    assert module.handle(
+        {
+            "command": "get-route",
+            "processId": 9,
+            "processName": "chrome.exe",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+        }
+    ) == {
         "ok": True,
         "value": {
             "consoleDeviceId": "previous-console",
@@ -203,6 +294,26 @@ def test_get_route_returns_console_and_multimedia_roles_for_the_active_session(h
         },
     }
     assert router.policy.get_calls == [9]
+
+
+def test_set_route_writes_through_the_dual_role_policy(helper):
+    module, router = helper
+    router.sessions = [Session(9, "chrome.exe")]
+
+    assert module.handle(
+        {
+            "command": "set-route",
+            "processId": 9,
+            "processName": "chrome",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+            "deviceId": "input",
+        }
+    ) == {
+        "ok": True,
+        "value": None,
+    }
+    assert router.policy.set_calls == [(9, "input")]
+    assert router.set_calls == []
 
 
 def test_restore_route_writes_console_and_multimedia_roles_exactly(helper):
@@ -213,7 +324,15 @@ def test_restore_route_writes_console_and_multimedia_roles_exactly(helper):
         "multimediaDeviceId": "previous-multimedia",
     }
 
-    assert module.handle({"command": "restore-route", "processId": 9, **route}) == {
+    assert module.handle(
+        {
+            "command": "restore-route",
+            "processId": 9,
+            "processName": "chrome.exe",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+            **route,
+        }
+    ) == {
         "ok": True,
         "value": None,
     }
@@ -292,6 +411,56 @@ def test_persisted_route_policy_restores_each_role_including_default(helper):
     ]
 
 
+def test_persisted_route_policy_set_attempts_both_roles_and_aggregates_failures(helper):
+    module, _ = helper
+    factory = RecordingPolicyFactory(set_failures=(10, 20))
+    policy = module._PersistedRoutePolicy.__new__(module._PersistedRoutePolicy)
+    policy._com_initialized = lambda: factory
+    policy._factory = lambda: factory
+    policy._pack_device_id = lambda value: f"packed-{value}"
+    policy._flow = 5
+    policy._roles = {"consoleDeviceId": 10, "multimediaDeviceId": 20}
+
+    with pytest.raises(
+        RuntimeError,
+        match="consoleDeviceId.*multimediaDeviceId",
+    ):
+        policy.set_route(9, "input")
+
+    assert factory.set_calls == [
+        (9, 5, 10, "packed-input"),
+        (9, 5, 20, "packed-input"),
+    ]
+
+
+def test_persisted_route_policy_restore_attempts_both_roles_and_aggregates_failures(helper):
+    module, _ = helper
+    factory = RecordingPolicyFactory(set_failures=(10, 20))
+    policy = module._PersistedRoutePolicy.__new__(module._PersistedRoutePolicy)
+    policy._com_initialized = lambda: factory
+    policy._factory = lambda: factory
+    policy._pack_device_id = lambda value: f"packed-{value}" if value else None
+    policy._flow = 5
+    policy._roles = {"consoleDeviceId": 10, "multimediaDeviceId": 20}
+
+    with pytest.raises(
+        RuntimeError,
+        match="consoleDeviceId.*multimediaDeviceId",
+    ):
+        policy.restore_route(
+            9,
+            {
+                "consoleDeviceId": None,
+                "multimediaDeviceId": "multimedia",
+            },
+        )
+
+    assert factory.set_calls == [
+        (9, 5, 10, None),
+        (9, 5, 20, "packed-multimedia"),
+    ]
+
+
 def test_main_reads_one_request_and_writes_one_json_response(helper, monkeypatch):
     module, _ = helper
     stdout = io.StringIO()
@@ -301,7 +470,7 @@ def test_main_reads_one_request_and_writes_one_json_response(helper, monkeypatch
     assert module.main() == 0
     assert json.loads(stdout.getvalue()) == {
         "ok": True,
-        "value": {"version": "1.1.1"},
+        "value": {"version": "1.1.2"},
     }
 
 

@@ -5,8 +5,11 @@ import sys
 
 PROTECTED_PREFIXES = ("discord", "voicemod", "voicemeeter")
 ROUTE_COMMANDS = {"get-route", "set-route", "clear-route", "restore-route"}
+UNIX_EPOCH_UTC_TICKS = 621355968000000000
+START_TIME_TOLERANCE_TICKS = 10000
 router = None
 policy = None
+process_factory = None
 
 
 def _router():
@@ -49,15 +52,29 @@ class _PersistedRoutePolicy:
         return route
 
     def restore_route(self, process_id, route):
+        self._write_roles(process_id, lambda name: route[name])
+
+    def set_route(self, process_id, device_id):
+        self._write_roles(process_id, lambda _: device_id)
+
+    def _write_roles(self, process_id, device_id_for_role):
+        failures = []
         with self._com_initialized():
             with self._factory() as factory:
                 for name, role in self._roles.items():
-                    factory.set_persisted_default_endpoint(
-                        process_id=process_id,
-                        flow=self._flow,
-                        role=role,
-                        packed_device_id=self._pack_device_id(route[name]),
-                    )
+                    try:
+                        factory.set_persisted_default_endpoint(
+                            process_id=process_id,
+                            flow=self._flow,
+                            role=role,
+                            packed_device_id=self._pack_device_id(
+                                device_id_for_role(name)
+                            ),
+                        )
+                    except Exception as exception:
+                        failures.append(f"{name}: {exception}")
+        if failures:
+            raise RuntimeError("; ".join(failures))
 
 
 def _policy():
@@ -65,6 +82,15 @@ def _policy():
     if policy is None:
         policy = _PersistedRoutePolicy()
     return policy
+
+
+def _process(process_id):
+    global process_factory
+    if process_factory is None:
+        import psutil
+
+        process_factory = psutil.Process
+    return process_factory(process_id)
 
 
 def _field(value, name, fallback=None):
@@ -88,6 +114,25 @@ def _process_id(request):
     return process_id
 
 
+def _normalized_process_name(process_name):
+    basename = ntpath.basename(process_name)
+    return ntpath.splitext(basename)[0].casefold()
+
+
+def _process_identity(request):
+    process_name = request.get("processName")
+    process_start_utc_ticks = request.get("processStartUtcTicks")
+    if (
+        not isinstance(process_name, str)
+        or not process_name.strip()
+        or isinstance(process_start_utc_ticks, bool)
+        or not isinstance(process_start_utc_ticks, int)
+        or process_start_utc_ticks <= 0
+    ):
+        return None
+    return process_name, process_start_utc_ticks
+
+
 def _route_session(request):
     process_id = _process_id(request)
     if process_id is None:
@@ -102,6 +147,30 @@ def _route_session(request):
         return None, {"ok": False, "error": "Active output session not found."}
     if ntpath.basename(process_name).casefold().startswith(PROTECTED_PREFIXES):
         return None, {"ok": False, "error": "Protected process cannot be routed."}
+
+    expected_identity = _process_identity(request)
+    if expected_identity is None:
+        return None, {"ok": False, "error": "Missing process identity."}
+
+    expected_name, expected_start_utc_ticks = expected_identity
+    try:
+        process = _process(process_id)
+        actual_name = process.name()
+        actual_start_utc_ticks = (
+            int(round(process.create_time() * 10000000))
+            + UNIX_EPOCH_UTC_TICKS
+        )
+    except Exception:
+        return None, {"ok": False, "error": "Process identity mismatch."}
+
+    if (
+        not isinstance(actual_name, str)
+        or _normalized_process_name(actual_name)
+        != _normalized_process_name(expected_name)
+        or abs(actual_start_utc_ticks - expected_start_utc_ticks)
+        > START_TIME_TOLERANCE_TICKS
+    ):
+        return None, {"ok": False, "error": "Process identity mismatch."}
     return process_id, None
 
 
@@ -133,7 +202,7 @@ def handle(request):
 
     command = request.get("command")
     if command == "health":
-        return {"ok": True, "value": {"version": "1.1.1"}}
+        return {"ok": True, "value": {"version": "1.1.2"}}
     if command == "list-devices":
         try:
             return {
@@ -163,11 +232,11 @@ def handle(request):
                 "value": _policy().get_route(process_id),
             }
         if command == "set-route":
-            _router().set_app_output_device(process_id=process_id, device=device_id)
+            _policy().set_route(process_id, device_id)
         elif command == "restore-route":
             _policy().restore_route(process_id, route)
         else:
-            _router().clear_app_output_device(process_id=process_id)
+            _policy().set_route(process_id, None)
     except Exception:
         return {"ok": False, "error": "Routing request failed."}
 

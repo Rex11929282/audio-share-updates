@@ -4,11 +4,25 @@ namespace AudioShare.Windows;
 
 public interface IExternalRoutingHelper
 {
-    Task<ApplicationRouteState> GetRouteAsync(int processId, CancellationToken token);
+    Task<ApplicationRouteState> GetRouteAsync(
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        CancellationToken token);
 
-    Task SetRouteAsync(int processId, string deviceId, CancellationToken token);
+    Task SetRouteAsync(
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        string deviceId,
+        CancellationToken token);
 
-    Task RestoreRouteAsync(int processId, ApplicationRouteState route, CancellationToken token);
+    Task RestoreRouteAsync(
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        ApplicationRouteState route,
+        CancellationToken token);
 }
 
 public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
@@ -31,8 +45,16 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
         var snapshots = new List<ApplicationRouteSnapshot>(plan.Commands.Count);
         foreach (var command in plan.Commands)
         {
-            var previousRoute = await helper.GetRouteAsync(command.ProcessId, token);
-            snapshots.Add(new ApplicationRouteSnapshot(command.ProcessId, command.ProcessName, previousRoute));
+            var previousRoute = await helper.GetRouteAsync(
+                command.ProcessId,
+                command.ProcessStartUtcTicks,
+                command.ProcessName,
+                token);
+            snapshots.Add(new ApplicationRouteSnapshot(
+                command.ProcessId,
+                command.ProcessStartUtcTicks,
+                command.ProcessName,
+                previousRoute));
         }
 
         var ownedSnapshots = new List<ApplicationRouteSnapshot>(snapshots.Count);
@@ -42,7 +64,12 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
             {
                 var command = plan.Commands[index];
                 ownedSnapshots.Add(snapshots[index]);
-                await helper.SetRouteAsync(command.ProcessId, command.TargetDeviceId, token);
+                await helper.SetRouteAsync(
+                    command.ProcessId,
+                    command.ProcessStartUtcTicks,
+                    command.ProcessName,
+                    command.TargetDeviceId,
+                    token);
             }
         }
         catch (Exception exception)
@@ -109,7 +136,12 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
         {
             try
             {
-                await helper.RestoreRouteAsync(snapshot.ProcessId, snapshot.PreviousRoute, CancellationToken.None);
+                await helper.RestoreRouteAsync(
+                    snapshot.ProcessId,
+                    snapshot.ProcessStartUtcTicks,
+                    snapshot.ProcessName,
+                    snapshot.PreviousRoute,
+                    CancellationToken.None);
             }
             catch (Exception exception)
             {

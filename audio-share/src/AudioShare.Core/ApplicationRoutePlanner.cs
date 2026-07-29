@@ -31,7 +31,11 @@ public static class ApplicationRoutePlanner
                     ? inputDeviceId
                     : auxDeviceId;
 
-                return new ApplicationRouteCommand(session.ProcessId, session.ProcessName, targetDeviceId);
+                return new ApplicationRouteCommand(
+                    session.ProcessId,
+                    session.ProcessStartUtcTicks,
+                    session.ProcessName,
+                    targetDeviceId);
             })
             .ToArray();
 

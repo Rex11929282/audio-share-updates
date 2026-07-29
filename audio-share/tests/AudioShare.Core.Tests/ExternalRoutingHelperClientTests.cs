@@ -13,7 +13,7 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task CheckHealthAsync_RejectsChangedHelperBeforeLaunch()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}");
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}");
         fixture.WriteManifestWithWrongHash();
 
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
@@ -26,7 +26,7 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task CheckHealthAsync_ReturnsUnavailableWhenHelperTimesOut()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}", FixtureBehavior.Timeout);
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}", FixtureBehavior.Timeout);
 
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
 
@@ -38,7 +38,7 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task CheckHealthAsync_CancellationKillsStartedHelper()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}", FixtureBehavior.Timeout);
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}", FixtureBehavior.Timeout);
         using var cancellation = new CancellationTokenSource();
         var task = fixture.CreateClient().CheckHealthAsync(cancellation.Token);
 
@@ -54,7 +54,12 @@ public sealed class ExternalRoutingHelperClientTests
     {
         using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":null}", FixtureBehavior.BlockStdin);
         using var cancellation = new CancellationTokenSource();
-        var task = fixture.CreateClient().SetRouteAsync(41, new string('x', 1024 * 1024), cancellation.Token);
+        var task = fixture.CreateClient().SetRouteAsync(
+            41,
+            638893440000000000,
+            "chrome",
+            new string('x', 1024 * 1024),
+            cancellation.Token);
 
         await fixture.WaitForLaunchAsync();
         cancellation.Cancel();
@@ -66,7 +71,7 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task CheckHealthAsync_ReturnsUnavailableWhenHelperExitsNonzero()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}", FixtureBehavior.NonzeroExit);
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}", FixtureBehavior.NonzeroExit);
 
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
 
@@ -77,7 +82,7 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task CheckHealthAsync_ReturnsUnavailableWhenHelperWritesExtraStdout()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}", FixtureBehavior.ExtraStdout);
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}", FixtureBehavior.ExtraStdout);
 
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
 
@@ -139,19 +144,20 @@ public sealed class ExternalRoutingHelperClientTests
             "{\"ok\":true,\"value\":{\"consoleDeviceId\":null,\"multimediaDeviceId\":\"previous-device\"}}");
         var client = fixture.CreateClient();
         var previousRoute = new ApplicationRouteState(null, "previous-device");
+        const long processStartUtcTicks = 638893440000000000;
 
-        var route = await client.GetRouteAsync(41, CancellationToken.None);
-        await client.SetRouteAsync(41, "device-a", CancellationToken.None);
-        await client.RestoreRouteAsync(41, previousRoute, CancellationToken.None);
+        var route = await client.GetRouteAsync(41, processStartUtcTicks, "chrome", CancellationToken.None);
+        await client.SetRouteAsync(41, processStartUtcTicks, "chrome", "device-a", CancellationToken.None);
+        await client.RestoreRouteAsync(41, processStartUtcTicks, "chrome", previousRoute, CancellationToken.None);
 
         Assert.Equal(previousRoute, route);
         Assert.Collection(
             fixture.Requests,
-            request => AssertRouteRequest(request, "get-route", 41, null),
-            request => AssertRouteRequest(request, "set-route", 41, "device-a"),
+            request => AssertRouteRequest(request, "get-route", 41, processStartUtcTicks, "chrome", null),
+            request => AssertRouteRequest(request, "set-route", 41, processStartUtcTicks, "chrome", "device-a"),
             request =>
             {
-                AssertRouteRequest(request, "restore-route", 41, null);
+                AssertRouteRequest(request, "restore-route", 41, processStartUtcTicks, "chrome", null);
                 Assert.Equal(JsonValueKind.Null, request.GetProperty("consoleDeviceId").ValueKind);
                 Assert.Equal("previous-device", request.GetProperty("multimediaDeviceId").GetString());
             });
@@ -167,7 +173,11 @@ public sealed class ExternalRoutingHelperClientTests
         using var fixture = HelperFixture.Create($"{{\"ok\":true,\"value\":{value}}}");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => fixture.CreateClient().GetRouteAsync(41, CancellationToken.None));
+            () => fixture.CreateClient().GetRouteAsync(
+                41,
+                638893440000000000,
+                "chrome",
+                CancellationToken.None));
 
         Assert.Contains("route state", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -175,7 +185,7 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task CheckHealthAsync_LaunchesThePackagedPythonDirectlyWithoutAShell()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}");
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}");
 
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
 
@@ -185,10 +195,18 @@ public sealed class ExternalRoutingHelperClientTests
         Assert.Single(fixture.Requests);
     }
 
-    private static void AssertRouteRequest(JsonElement request, string command, int processId, string? deviceId)
+    private static void AssertRouteRequest(
+        JsonElement request,
+        string command,
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        string? deviceId)
     {
         Assert.Equal(command, request.GetProperty("command").GetString());
         Assert.Equal(processId, request.GetProperty("processId").GetInt32());
+        Assert.Equal(processStartUtcTicks, request.GetProperty("processStartUtcTicks").GetInt64());
+        Assert.Equal(processName, request.GetProperty("processName").GetString());
         if (deviceId is null)
         {
             Assert.False(request.TryGetProperty("deviceId", out _));
@@ -236,7 +254,7 @@ public sealed class ExternalRoutingHelperClientTests
                     processPath,
                     launcherProcessPath,
                 }));
-            WriteManifest(FileHash(HelperPath), "1.1.1");
+            WriteManifest(FileHash(HelperPath), "1.1.2");
         }
 
         public string HelperPath { get; }
@@ -289,7 +307,7 @@ public sealed class ExternalRoutingHelperClientTests
 
         public void WriteManifestWithWrongHash()
         {
-            WriteManifest(new string('0', 64), "1.1.1");
+            WriteManifest(new string('0', 64), "1.1.2");
         }
 
         public void Dispose()

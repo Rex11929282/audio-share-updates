@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$routerVersion = '1.1.1'
+$routerVersion = '1.1.2'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $sourceDirectory = Join-Path $projectRoot 'router-helper'
 $helperSourcePath = Join-Path $sourceDirectory 'audio_share_router_helper.py'

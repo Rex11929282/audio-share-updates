@@ -73,9 +73,16 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
         return devices;
     }
 
-    public async Task<ApplicationRouteState> GetRouteAsync(int processId, CancellationToken token)
+    public async Task<ApplicationRouteState> GetRouteAsync(
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        CancellationToken token)
     {
-        var (_, value) = await InvokeAsync(new { command = "get-route", processId }, token);
+        ArgumentException.ThrowIfNullOrWhiteSpace(processName);
+        var (_, value) = await InvokeAsync(
+            new { command = "get-route", processId, processStartUtcTicks, processName },
+            token);
         if (value.ValueKind != JsonValueKind.Object)
         {
             throw new InvalidOperationException("Helper response has an invalid route state.");
@@ -86,22 +93,35 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
             ReadRouteDeviceId(value, "multimediaDeviceId"));
     }
 
-    public async Task SetRouteAsync(int processId, string deviceId, CancellationToken token)
+    public async Task SetRouteAsync(
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        string deviceId,
+        CancellationToken token)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processName);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
-        await InvokeAsync(new { command = "set-route", processId, deviceId }, token);
+        await InvokeAsync(
+            new { command = "set-route", processId, processStartUtcTicks, processName, deviceId },
+            token);
     }
 
     public async Task RestoreRouteAsync(
         int processId,
+        long processStartUtcTicks,
+        string processName,
         ApplicationRouteState route,
         CancellationToken token)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processName);
         await InvokeAsync(
             new
             {
                 command = "restore-route",
                 processId,
+                processStartUtcTicks,
+                processName,
                 consoleDeviceId = route.ConsoleDeviceId,
                 multimediaDeviceId = route.MultimediaDeviceId,
             },

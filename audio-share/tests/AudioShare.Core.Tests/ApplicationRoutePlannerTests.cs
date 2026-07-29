@@ -44,6 +44,8 @@ public sealed class ApplicationRoutePlannerTests
 
         Assert.Equal([10, 20], plan.Commands.Select(command => command.ProcessId));
         Assert.Equal(2, plan.Commands.Count);
+        Assert.Equal(100, plan.Commands[0].ProcessStartUtcTicks);
+        Assert.Equal(200, plan.Commands[1].ProcessStartUtcTicks);
         Assert.Equal("input-id", plan.Commands[1].TargetDeviceId);
     }
 
