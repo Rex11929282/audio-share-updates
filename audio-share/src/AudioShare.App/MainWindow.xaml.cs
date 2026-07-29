@@ -24,9 +24,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
 
-#if REQUIRE_VOICEMOD
         ProcessStatuses.Add(new ProcessStatus("Voicemod", "Voicemod"));
-#endif
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
 
         Loaded += MainWindow_Loaded;
