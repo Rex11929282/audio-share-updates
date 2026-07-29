@@ -1,135 +1,66 @@
 # Audio Share Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Goal:** Build a Windows utility that finds applications currently playing audio and helps the user share selected ones through the existing Voicemeeter B1 Discord route without returning Discord playback to callers.
 
-**Goal:** Build a Windows desktop utility that routes selected active applications to Voicemeeter Input so their audio reaches Discord B1 without routing Discord playback back to callers.
+**Architecture:** A WPF application enumerates active WASAPI sessions, keeps a local list of selected applications, and opens Windows Volume Mixer for the user to set a selected application's output to `Voicemeeter Input`. It never writes a Windows audio policy or changes any Voicemeeter, Voicemod, or Discord setting.
 
-**Architecture:** A WPF application enumerates WASAPI audio sessions and exposes share toggles. A native Windows audio-policy adapter applies a per-application render endpoint override to `Voicemeeter Input`; the app records only overrides it creates and restores them on unshare or normal exit.
-
-**Tech Stack:** .NET 8 SDK, WPF, NAudio for audio-session enumeration, xUnit, Windows Core Audio COM interop.
+**Tech Stack:** .NET 8, WPF, NAudio, xUnit.
 
 ## Global Constraints
 
 - Target Windows 10 LTSC 2021 build 19044 x64.
-- Use the existing `Voicemeeter Input (VB-Audio Voicemeeter VAIO)` render endpoint and existing Discord B1 configuration.
-- Never route a Discord process.
-- Do not install, remove, enable, or disable audio drivers.
-- Restore only endpoint overrides created by this utility.
-- Detect but never automatically start, restart, or reconfigure Voicemod or Voicemeeter Banana.
+- Preserve the existing audio chain: Discord/general playback uses `Voicemeeter AUX Input` to A1 only; music uses the main Voicemeeter input to A1 and B1; Voicemod microphone uses B1.
+- Discord is never selectable.
+- Do not install, remove, enable, disable, start, restart, or reconfigure audio drivers or audio applications.
+- Do not write, clear, restore, or otherwise automate a Windows per-application playback endpoint.
 
----
+## Task 1: Buildable Solution
 
-## File Structure
+- [x] Create the .NET 8 WPF solution with Core, Windows, App, and test projects.
+- [x] Add NAudio discovery dependencies and test infrastructure.
+- [x] Verify the solution builds and tests run.
 
-- `audio-share/AudioShare.sln`: solution root.
-- `audio-share/src/AudioShare.App/`: WPF executable and composition root.
-- `audio-share/src/AudioShare.Core/`: session models, discovery, route coordination, and endpoint-policy abstraction.
-- `audio-share/src/AudioShare.Windows/`: Core Audio and per-app endpoint-policy COM adapters.
-- `audio-share/tests/AudioShare.Core.Tests/`: unit tests for selection, exclusion, restoration, and failures.
-- `audio-share/README.md`: setup and operating instructions.
+## Task 2: Audio Session Discovery
 
-### Task 1: Prepare the Buildable Windows Solution
+- [x] Define active audio-session models and deterministic filtering.
+- [x] Enumerate active render sessions through WASAPI.
+- [x] Exclude system/no-process sessions and deduplicate processes.
 
-**Files:**
-- Create: `audio-share/AudioShare.sln`
-- Create: `audio-share/src/AudioShare.Core/AudioShare.Core.csproj`
-- Create: `audio-share/src/AudioShare.Windows/AudioShare.Windows.csproj`
-- Create: `audio-share/src/AudioShare.App/AudioShare.App.csproj`
-- Create: `audio-share/tests/AudioShare.Core.Tests/AudioShare.Core.Tests.csproj`
-- Create: `audio-share/Directory.Packages.props`
-
-**Interfaces:**
-- Produces a .NET 8 x64 WPF application and xUnit test project.
-
-- [ ] Install the official .NET 8 SDK x64 and verify `dotnet --list-sdks` reports an `8.0.x` SDK.
-- [ ] Create the solution and four projects with `net8.0-windows10.0.19041.0`, `UseWPF=true` only in the app project, and project references `App -> Core, Windows`, `Windows -> Core`, `Tests -> Core`.
-- [ ] Pin `NAudio` and `Microsoft.NET.Test.Sdk`, `xunit`, and `xunit.runner.visualstudio` in `Directory.Packages.props`.
-- [ ] Run `dotnet test audio-share/AudioShare.sln`; expected result: zero tests, successful build.
-
-### Task 2: Define and Test Route Coordination
+## Task 3: Safe Local Selection State
 
 **Files:**
-- Create: `audio-share/src/AudioShare.Core/AudioSession.cs`
-- Create: `audio-share/src/AudioShare.Core/IAudioSessionDiscovery.cs`
-- Create: `audio-share/src/AudioShare.Core/IProcessEndpointRouter.cs`
-- Create: `audio-share/src/AudioShare.Core/RouteCoordinator.cs`
-- Create: `audio-share/tests/AudioShare.Core.Tests/RouteCoordinatorTests.cs`
+- Modify: `audio-share/src/AudioShare.Core/RouteCoordinator.cs`
+- Modify: `audio-share/tests/AudioShare.Core.Tests/RouteCoordinatorTests.cs`
 
-**Interfaces:**
-- `AudioSession(int ProcessId, string ProcessName, string DisplayName, bool HasAudio)`.
-- `IProcessEndpointRouter.SetEndpointAsync(int processId, string endpointId, CancellationToken token)`.
-- `IProcessEndpointRouter.ClearEndpointAsync(int processId, CancellationToken token)`.
-- `RouteCoordinator.ShareAsync(AudioSession session, CancellationToken token)` and `UnshareAsync(int processId, CancellationToken token)`.
+- [ ] Write failing tests proving Discord cannot be selected and normal applications only change local selection state.
+- [ ] Remove endpoint-routing dependencies from `RouteCoordinator` and implement minimal local select/unselect state.
+- [ ] Run focused and full tests.
 
-- [ ] Write failing xUnit tests that assert `discord.exe` is rejected, a selected process receives the Voicemeeter endpoint ID, and unshare clears only that process override.
-- [ ] Run `dotnet test ... --filter RouteCoordinatorTests`; expected result: compile failure because the coordinator does not exist.
-- [ ] Implement `RouteCoordinator` with a case-insensitive Discord process-name denylist, a `HashSet<int>` of tool-created routes, and exception-to-status conversion.
-- [ ] Run the focused tests; expected result: all pass.
-
-### Task 3: Enumerate Active Windows Audio Sessions
+## Task 4: Windows Volume Mixer Launcher
 
 **Files:**
-- Create: `audio-share/src/AudioShare.Windows/WasapiAudioSessionDiscovery.cs`
-- Modify: `audio-share/src/AudioShare.Windows/AudioShare.Windows.csproj`
-- Create: `audio-share/tests/AudioShare.Core.Tests/AudioSessionFilteringTests.cs`
+- Create: `audio-share/src/AudioShare.Windows/VolumeMixerLauncher.cs`
+- Create: `audio-share/tests/AudioShare.Core.Tests/VolumeMixerLauncherTests.cs`
 
-**Interfaces:**
-- `IAudioSessionDiscovery.GetActiveSessionsAsync(CancellationToken token)` returns active, non-system process sessions with a valid process ID.
+- [ ] Write a failing test for the exact `ms-settings:apps-volume` URI.
+- [ ] Implement a launcher that opens that URI with the shell and has no audio-policy code.
+- [ ] Run all tests and manually confirm the settings page opens without changing the Discord endpoint.
 
-- [ ] Add failing tests for filtering system/no-process sessions and deduplicating multiple sessions from one process.
-- [ ] Implement the pure filtering function in Core, then make `WasapiAudioSessionDiscovery` use NAudio `MMDeviceEnumerator` and `AudioSessionManager2` to gather render sessions.
-- [ ] Run all tests; expected result: session filtering tests and route coordinator tests pass.
-
-### Task 4: Implement and Verify Per-Process Endpoint Policy
+## Task 5: WPF Selector and Audio Health
 
 **Files:**
-- Create: `audio-share/src/AudioShare.Windows/ProcessEndpointRouter.cs`
-- Create: `audio-share/src/AudioShare.Windows/AudioEndpointLocator.cs`
-- Create: `audio-share/src/AudioShare.Windows/Interop/AudioPolicyConfig.cs`
-- Create: `audio-share/tests/AudioShare.Core.Tests/RouteCoordinatorFailureTests.cs`
-
-**Interfaces:**
-- `AudioEndpointLocator.FindVoicemeeterInputAsync()` returns the active render endpoint ID whose friendly name equals `Voicemeeter Input (VB-Audio Voicemeeter VAIO)`.
-- `ProcessEndpointRouter` implements `IProcessEndpointRouter` through Windows per-app audio endpoint policy COM calls.
-
-- [ ] Write failing coordinator tests for unavailable target endpoint and native routing failure; assert the prior share state remains unchanged and an error status is returned.
-- [ ] Implement COM interop using the Windows per-app endpoint policy interface, scoped to the selected executable/app identity; set the render endpoint for all three roles and clear it on unshare.
-- [ ] Add a manual verification command that routes a test media process to Voicemeeter Input, confirms it appears in Voicemeeter, then clears the override.
-- [ ] Run all automated tests and the manual route/restore check; expected result: success with no change to Discord output endpoint.
-
-### Task 5: Build the WPF Selector UI
-
-**Files:**
-- Create: `audio-share/src/AudioShare.App/App.xaml`
-- Create: `audio-share/src/AudioShare.App/MainWindow.xaml`
+- Modify: `audio-share/src/AudioShare.App/`
+- Create: `audio-share/src/AudioShare.App/AudioChainHealth.cs`
 - Create: `audio-share/src/AudioShare.App/MainWindowViewModel.cs`
-- Create: `audio-share/src/AudioShare.App/SessionRowViewModel.cs`
-- Create: `audio-share/src/AudioShare.App/Services/RefreshLoop.cs`
 
-**Interfaces:**
-- `MainWindowViewModel.RefreshCommand`, `ToggleShareCommand`, and `ObservableCollection<SessionRowViewModel> Sessions`.
-- `SessionRowViewModel` shows display name, process name, active status, shared status, and an error message.
+- [ ] Show active sessions with refresh and local share toggles.
+- [ ] When a selected row is toggled on, open Volume Mixer and explain that the user must choose `Voicemeeter Input` there.
+- [ ] Mark Discord rows as excluded and non-selectable.
+- [ ] Show live status for `Voicemod` and `voicemeeterpro` without starting or changing either process.
+- [ ] Verify the app launches and discovery works while Chrome or NetEase plays audio.
 
-- [ ] Add view-model tests for Discord rows being non-selectable and an unsuccessful route showing its error text.
-- [ ] Create the UI: header, refresh button, Voicemeeter availability status, and session rows with share toggles; use a 2-second refresh interval only while the window is open.
-- [ ] Bind toggles to `RouteCoordinator` and disable them while their route action is in progress.
-- [ ] Add `AudioChainHealth` using process names `Voicemod` and `voicemeeterpro`; refresh its two indicators with the existing 2-second refresh loop and show an actionable stopped-process message without changing any system setting.
-- [ ] Run `dotnet test` and launch the app; expected result: Chrome/NetEase rows appear during playback, Discord is visible only as excluded, and both health indicators change within three seconds after their process exits.
+## Task 6: Operating Instructions
 
-### Task 6: Restore Routes and Document Operation
-
-**Files:**
-- Modify: `audio-share/src/AudioShare.App/MainWindowViewModel.cs`
-- Create: `audio-share/src/AudioShare.App/Services/RouteRestorer.cs`
-- Create: `audio-share/README.md`
-
-- [ ] Write a failing test that calls `RestoreAllAsync` after two shared processes and verifies only those two overrides are cleared.
-- [ ] Implement normal-window-close restoration and process-exit cleanup; do not attempt restoration after a crash because endpoint state is intentionally persisted for the user to control manually.
-- [ ] Document prerequisites, the exact Discord B1 input and physical output settings, how to select Chrome/NetEase, and how to recover with the refresh/unshare controls.
-- [ ] Run `dotnet test audio-share/AudioShare.sln` and manually verify: select Chrome, select NetEase, start a Discord call, confirm remote audio is not returned, unshare both, and confirm audio returns to physical playback.
-
-## Self-Review
-
-- Spec coverage: Tasks 2-6 cover discovery, selection, Discord exclusion, target verification, route restoration, errors, and manual end-to-end validation.
-- Scope: tab capture, recording, driver management, and gain controls remain excluded.
-- Type consistency: all routing UI actions use `RouteCoordinator`; Windows-specific COM code is isolated behind `IProcessEndpointRouter`.
+- [ ] Document the exact safe operating sequence and the existing Discord/Voicemeeter layout.
+- [ ] State explicitly that the app records selection only; Windows Volume Mixer performs the endpoint change.
+- [ ] Run `dotnet test audio-share/AudioShare.sln` and a manual safe smoke test.
