@@ -1,17 +1,9 @@
 import json
+import ntpath
 import sys
 
 
-PROTECTED = {
-    "discord",
-    "discord.exe",
-    "voicemod",
-    "voicemod.exe",
-    "voicemeeter",
-    "voicemeeter.exe",
-    "voicemeeterpro",
-    "voicemeeterpro.exe",
-}
+PROTECTED_PREFIXES = ("discord", "voicemod", "voicemeeter")
 ROUTE_COMMANDS = {"get-route", "set-route", "clear-route"}
 router = None
 
@@ -58,7 +50,7 @@ def _route_session(request):
     process_name = _field(session, "process_name", "")
     if not isinstance(process_name, str) or not process_name.strip():
         return None, {"ok": False, "error": "Active output session not found."}
-    if process_name.lower() in PROTECTED:
+    if ntpath.basename(process_name).casefold().startswith(PROTECTED_PREFIXES):
         return None, {"ok": False, "error": "Protected process cannot be routed."}
     return process_id, None
 

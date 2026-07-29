@@ -82,6 +82,28 @@ def test_set_route_rejects_discord_without_calling_router(helper):
 
 
 @pytest.mark.parametrize(
+    "process_name",
+    [
+        "DiscordCanary.exe",
+        "VoicemodBeta.exe",
+        "Voicemeeter8.exe",
+        "VoicemeeterPro64.exe",
+    ],
+)
+def test_set_route_rejects_protected_name_variants_without_calling_router(helper, process_name):
+    module, router = helper
+    router.sessions = [Session(8, process_name)]
+
+    assert module.handle({"command": "set-route", "processId": 8, "deviceId": "input"}) == {
+        "ok": False,
+        "error": "Protected process cannot be routed.",
+    }
+    assert router.get_calls == []
+    assert router.set_calls == []
+    assert router.clear_calls == []
+
+
+@pytest.mark.parametrize(
     "payload,error",
     [
         (None, "Malformed request."),

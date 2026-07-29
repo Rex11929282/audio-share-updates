@@ -62,3 +62,14 @@ BLOCKED: the required pytest command cannot start because the registered Python 
 ## Corrected Status
 
 DONE: the formal Task 3 pytest suite now passes with no helper behavior changes.
+
+## Protected Name Variant Correction
+
+1. Added parametrized tests for `DiscordCanary.exe`, `VoicemodBeta.exe`, `Voicemeeter8.exe`, and `VoicemeeterPro64.exe`.
+2. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q -k protected_name_variants`
+   - Red result: failed 4 because each variant was accepted and reached a route write.
+3. Replaced exact protected-name matching with a case-insensitive executable-base-name prefix check for `discord`, `voicemod`, and `voicemeeter`.
+4. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
+   - Green result: passed 14, failed 0 in 0.09s.
+5. `git diff --check`
+   - Result: exit 0; no whitespace errors.
