@@ -126,9 +126,10 @@ public sealed class ExternalRoutingHelperClientTests
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
 
         Assert.True(result.IsAvailable);
-        Assert.False(string.Equals("cmd", fixture.ParentProcessName, StringComparison.OrdinalIgnoreCase));
-        Assert.False(string.Equals("powershell", fixture.ParentProcessName, StringComparison.OrdinalIgnoreCase));
+        Assert.False(string.Equals("cmd.exe", Path.GetFileName(fixture.ParentExecutablePath), StringComparison.OrdinalIgnoreCase));
+        Assert.False(string.Equals("powershell.exe", Path.GetFileName(fixture.ParentExecutablePath), StringComparison.OrdinalIgnoreCase));
         Assert.Equal(["-I", fixture.HelperPath], fixture.CommandLineArguments);
+        Assert.Single(fixture.Requests);
     }
 
     private static void AssertRequest(JsonElement request, string command, int processId, string? deviceId)
@@ -185,7 +186,7 @@ public sealed class ExternalRoutingHelperClientTests
 
         public bool WasLaunched => File.Exists(processPath);
 
-        public string ParentProcessName => ReadProcessValue("parentName");
+        public string ParentExecutablePath => ReadProcessValue("parentExecutablePath");
 
         public IReadOnlyList<string> CommandLineArguments => JsonSerializer.Deserialize<string[]>(ReadProcessValue("arguments"))!;
 
@@ -228,16 +229,20 @@ public sealed class ExternalRoutingHelperClientTests
                 "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup></Project>");
             File.WriteAllText(Path.Combine(fixtureRoot, "Program.cs"), """
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 var configuration = JsonSerializer.Deserialize<FixtureConfiguration>(
     await File.ReadAllTextAsync(args[1]),
     new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
-var request = await Console.In.ReadLineAsync() ?? string.Empty;
-await File.AppendAllTextAsync(configuration.CapturePath, request + Environment.NewLine);
+string? request;
+while ((request = await Console.In.ReadLineAsync()) is not null)
+{
+    await File.AppendAllTextAsync(configuration.CapturePath, request + Environment.NewLine);
+}
 await File.WriteAllTextAsync(
     configuration.ProcessPath,
-    JsonSerializer.Serialize(new { parentName = Process.GetCurrentProcess().ProcessName, arguments = args }));
+    JsonSerializer.Serialize(new { parentExecutablePath = GetParentExecutablePath(), arguments = args }));
 if (configuration.Behavior == "Timeout")
 {
     await Task.Delay(TimeSpan.FromSeconds(6));
@@ -252,6 +257,43 @@ if (configuration.Behavior == "ExtraStdout")
 if (configuration.Behavior == "NonzeroExit")
 {
     Environment.Exit(1);
+}
+
+static string GetParentExecutablePath()
+{
+    var status = NtQueryInformationProcess(
+        Process.GetCurrentProcess().Handle,
+        0,
+        out var information,
+        Marshal.SizeOf<ProcessBasicInformation>(),
+        out _);
+    if (status != 0)
+    {
+        throw new InvalidOperationException($"Could not query the fixture parent process: 0x{status:X8}.");
+    }
+
+    using var parent = Process.GetProcessById(checked((int)information.InheritedFromUniqueProcessId));
+    return parent.MainModule?.FileName
+        ?? throw new InvalidOperationException("Could not read the fixture parent executable path.");
+}
+
+[DllImport("ntdll.dll")]
+static extern int NtQueryInformationProcess(
+    IntPtr processHandle,
+    int processInformationClass,
+    out ProcessBasicInformation processInformation,
+    int processInformationLength,
+    out int returnLength);
+
+[StructLayout(LayoutKind.Sequential)]
+struct ProcessBasicInformation
+{
+    public IntPtr Reserved1;
+    public IntPtr PebBaseAddress;
+    public IntPtr Reserved2_0;
+    public IntPtr Reserved2_1;
+    public IntPtr UniqueProcessId;
+    public IntPtr InheritedFromUniqueProcessId;
 }
 
 public sealed record FixtureConfiguration(string Response, string Behavior, string CapturePath, string ProcessPath);
