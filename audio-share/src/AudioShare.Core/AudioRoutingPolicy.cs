@@ -15,6 +15,11 @@ public static class AudioRoutingPolicy
     {
         ArgumentNullException.ThrowIfNull(selectedSessions);
 
+        if (selectedSessions.Any(session => IsProtectedProcess(session.ProcessName)))
+        {
+            throw new ArgumentException("Protected processes cannot be configured for sharing.", nameof(selectedSessions));
+        }
+
         return selectedSessions.Count == 0
             ? "No application is selected. Nothing will be shared."
             : "Open Windows Volume Mixer and manually set each selected application to Voicemeeter Input. " +

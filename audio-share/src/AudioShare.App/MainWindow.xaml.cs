@@ -121,6 +121,7 @@ public partial class MainWindow : Window
 
         EmptyStateText.Visibility = Applications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyStateText.Text = "目前沒有偵測到正在播放音訊的程式。";
+        UpdateRoutingSetupState();
     }
 
     private async void ApplicationSelectionChanged(object sender, RoutedEventArgs e)
@@ -153,12 +154,8 @@ public partial class MainWindow : Window
             ErrorPanel.Visibility = Visibility.Collapsed;
             if (!shouldShare)
             {
-                InstructionText.Text = "已取消此程式的本機選取。";
                 return;
             }
-
-            VolumeMixerLauncher.Open();
-            InstructionText.Text = "在 Windows 音量混音器中，將此程式的輸出選為 Voicemeeter Input.";
         }
         catch (OperationCanceledException) when (isClosing)
         {
@@ -173,17 +170,32 @@ public partial class MainWindow : Window
             if (!isClosing)
             {
                 checkBox.IsEnabled = true;
+                UpdateRoutingSetupState();
             }
         }
     }
 
-    private void OpenVolumeMixerButton_Click(object sender, RoutedEventArgs e)
+    private void UpdateRoutingSetupState()
     {
+        var selected = routeCoordinator.GetSelectedSessions(Applications.Select(row => row.Session));
+        SetupSelectedButton.IsEnabled = selected.Count > 0;
+        InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
+    }
+
+    private void SetupSelectedButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = routeCoordinator.GetSelectedSessions(Applications.Select(row => row.Session));
+        if (selected.Count == 0)
+        {
+            UpdateRoutingSetupState();
+            return;
+        }
+
         try
         {
             VolumeMixerLauncher.Open();
             ErrorPanel.Visibility = Visibility.Collapsed;
-            InstructionText.Text = "請在 Windows 音量混音器中手動將程式輸出選為 Voicemeeter Input。";
+            InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         }
         catch (Exception exception)
         {

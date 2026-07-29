@@ -31,4 +31,12 @@ public sealed class AudioRoutingPolicyTests
         Assert.Contains("Voicemeeter Input", instruction, StringComparison.Ordinal);
         Assert.Contains("Windows Volume Mixer", instruction, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void GetSetupInstruction_WithProtectedOnlySessions_Throws()
+    {
+        var discord = new AudioSession(20, 200, "discord.exe", "Discord", true);
+
+        Assert.Throws<ArgumentException>(() => AudioRoutingPolicy.GetSetupInstruction([discord]));
+    }
 }

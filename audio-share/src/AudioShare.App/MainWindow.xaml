@@ -74,7 +74,16 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Background="#1D5FBF" Foreground="White" BorderBrush="#1D5FBF" Click="OpenVolumeMixerButton_Click" Content="開啟 Windows 音量混音器" />
+            <Button x:Name="SetupSelectedButton"
+                    Grid.Column="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    IsEnabled="False"
+                    Background="#1D5FBF"
+                    Foreground="White"
+                    BorderBrush="#1D5FBF"
+                    Click="SetupSelectedButton_Click"
+                    Content="Set up selected apps" />
         </Grid>
 
         <Border Grid.Row="2" Padding="20" Background="White" BorderBrush="#DCE3EC" BorderThickness="1" CornerRadius="10">
