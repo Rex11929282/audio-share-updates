@@ -2,9 +2,9 @@ using AudioShare.Core;
 
 namespace AudioShare.Engine;
 
-public interface ISelectedAudioSourceFactory
+public interface ISelectedProcessSourceFactory
 {
-    IAudioSource Create(AudioSession session, AudioFormat format);
+    Task<IAudioSource> CreateAsync(AudioSession session, CancellationToken cancellationToken);
 }
 
 public sealed class SelectedSourceEngine : IAsyncDisposable
@@ -15,7 +15,7 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
         "discord.exe",
     };
 
-    private readonly ISelectedAudioSourceFactory sourceFactory;
+    private readonly ISelectedProcessSourceFactory sourceFactory;
     private readonly IAudioOutputWriter writer;
     private readonly IAudioSource? microphoneSource;
     private readonly SelectedSourceEngineOptions options;
@@ -23,7 +23,7 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
     private readonly Dictionary<ProcessIdentity, IAudioSource> activeSources = [];
 
     public SelectedSourceEngine(
-        ISelectedAudioSourceFactory sourceFactory,
+        ISelectedProcessSourceFactory sourceFactory,
         IAudioOutputWriter writer,
         IAudioSource? microphoneSource,
         SelectedSourceEngineOptions options)
@@ -38,9 +38,18 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(selectedSessions);
         cancellationToken.ThrowIfCancellationRequested();
+        if (selectedSessions.Any(session => session is null))
+        {
+            throw new ArgumentException("Selected sessions cannot contain null.", nameof(selectedSessions));
+        }
 
         var selectedByIdentity = selectedSessions
-            .Where(session => !DeniedProcessNames.Contains(session.ProcessName))
+            .Where(session => session.HasAudio && !DeniedProcessNames.Contains(session.ProcessName))
+            .Select(session =>
+            {
+                ValidateSession(session);
+                return session;
+            })
             .ToDictionary(ProcessIdentity.From);
 
         foreach (var identity in activeSources.Keys.Except(selectedByIdentity.Keys).ToArray())
@@ -55,7 +64,9 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             if (!activeSources.ContainsKey(identity))
             {
-                activeSources.Add(identity, sourceFactory.Create(session, options.Format));
+                var source = await sourceFactory.CreateAsync(session, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                activeSources.Add(identity, source ?? throw new InvalidOperationException("The source factory returned null."));
             }
         }
     }
@@ -63,13 +74,17 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
     public async Task MixOnceAsync(CancellationToken cancellationToken)
     {
         var frames = new List<AudioFrame>(activeSources.Count);
-        foreach (var source in activeSources.Values)
+        foreach (var (identity, source) in activeSources.ToArray())
         {
             var frame = await source.ReadAsync(cancellationToken);
             if (frame is not null)
             {
                 frames.Add(frame);
+                continue;
             }
+
+            activeSources.Remove(identity);
+            await source.DisposeAsync();
         }
 
         var microphoneFrame = options.IncludeMicrophone && microphoneSource is not null
@@ -100,5 +115,15 @@ public sealed class SelectedSourceEngine : IAsyncDisposable
     {
         public static ProcessIdentity From(AudioSession session) =>
             new(session.ProcessId, session.ProcessStartUtcTicks, session.ProcessName.ToUpperInvariant());
+    }
+
+    private static void ValidateSession(AudioSession session)
+    {
+        if (session.ProcessId <= 0 ||
+            session.ProcessStartUtcTicks <= 0 ||
+            string.IsNullOrWhiteSpace(session.ProcessName))
+        {
+            throw new ArgumentException("Selected sessions must have a valid process identity.", nameof(session));
+        }
     }
 }
