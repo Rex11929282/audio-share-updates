@@ -216,6 +216,28 @@ def test_missing_active_session_is_rejected(helper):
     assert router.clear_calls == []
 
 
+def test_main_sanitizes_active_session_discovery_failure(helper, monkeypatch):
+    module, router = helper
+    stdout = io.StringIO()
+
+    def fail_session_discovery():
+        raise RuntimeError("untrusted router detail")
+
+    monkeypatch.setattr(router, "list_app_sessions", fail_session_discovery)
+    monkeypatch.setattr(
+        module.sys,
+        "stdin",
+        io.StringIO('{"command":"clear-route","processId":7}\n'),
+    )
+    monkeypatch.setattr(module.sys, "stdout", stdout)
+
+    assert module.main() == 0
+    assert json.loads(stdout.getvalue()) == {
+        "ok": False,
+        "error": "Router unavailable.",
+    }
+
+
 @pytest.mark.parametrize(
     "command,extra",
     [

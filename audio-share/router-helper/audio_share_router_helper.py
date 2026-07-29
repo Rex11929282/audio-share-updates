@@ -292,7 +292,10 @@ def handle(request):
         if route is None:
             return {"ok": False, "error": "Invalid route state."}
 
-    route_session, error = _route_session(request)
+    try:
+        route_session, error = _route_session(request)
+    except Exception:
+        return {"ok": False, "error": "Router unavailable."}
     if error is not None:
         return error
     process_id, expected_name, expected_start_utc_ticks = route_session

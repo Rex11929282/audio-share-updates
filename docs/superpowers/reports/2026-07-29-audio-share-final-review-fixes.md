@@ -46,3 +46,21 @@ Final commands and results:
    - Build succeeded with 0 warnings and 0 errors.
 
 No live routing test, application launch, or Windows audio route write was performed.
+
+## Active-Session Discovery Error Handling (2026-07-30)
+
+- `handle()` now converts unexpected active-session discovery failures from `_route_session()` into the sanitized `Router unavailable.` protocol response.
+- The Python regression invokes `main()` with a failing active-session enumeration and verifies one structured JSON response with a zero exit code, preventing a traceback or nonzero helper exit from that path.
+
+Verification:
+
+1. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
+   - Passed 35, failed 0.
+2. `dotnet test .\audio-share\AudioShare.sln --configuration Debug --no-restore --filter "FullyQualifiedName~ApplicationRoutePlannerTests|FullyQualifiedName~ApplicationRouteExecutorTests|FullyQualifiedName~ExternalRoutingHelperClientTests"`
+   - Passed 40, failed 0, skipped 0.
+3. `dotnet test .\audio-share\AudioShare.sln --configuration Debug --no-restore`
+   - Passed 111, failed 0, skipped 0.
+4. `dotnet build .\audio-share\AudioShare.sln --configuration Release --no-restore`
+   - Succeeded with 0 warnings and 0 errors.
+
+No live routing test, application launch, or Windows audio route write was performed.
