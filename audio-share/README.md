@@ -6,6 +6,8 @@
 
 This build contains the tested selected-source mixer core. It does not install a virtual microphone driver and does not yet capture live application audio. It cannot be used as a Discord input until the separately signed driver and Windows process-loopback adapter are released.
 
+Audio Share does not change an application's Windows output device; the user must choose the device manually in Windows Volume Mixer.
+
 ## Before Using
 
 Keep the existing working audio chain:

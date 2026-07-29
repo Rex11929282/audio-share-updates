@@ -20,6 +20,15 @@ public sealed class ReleaseUpdateParserTests
     }
 
     [Fact]
+    public void Readme_StatesThatWindowsDeviceAssignmentsRemainManual()
+    {
+        var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
+        var readme = File.ReadAllText(readmePath);
+
+        Assert.Contains("does not change an application's Windows output device", readme, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PublishScriptCopiesEveryBundledNoticeIntoTheArchiveSource()
     {
         var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "scripts", "publish-release.ps1"));
