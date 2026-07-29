@@ -24,12 +24,17 @@ public sealed class SelectedAudioMixer
             {
                 throw new ArgumentException("Every source frame must use the requested format.", nameof(selectedProcessFrames));
             }
+
+            if (frames.Count > 1 && frame.Samples.Length != frames[0].Samples.Length)
+            {
+                throw new ArgumentException("Every source frame must have the same sample length.", nameof(selectedProcessFrames));
+            }
         }
 
         var samples = frames.Count == 0 ? [] : new float[frames[0].Samples.Length];
         foreach (var frame in frames)
         {
-            for (var index = 0; index < samples.Length && index < frame.Samples.Length; index++)
+            for (var index = 0; index < samples.Length; index++)
             {
                 samples[index] += frame.Samples[index];
             }

@@ -54,11 +54,22 @@ public sealed class RouteCoordinator
         return selectedProcesses.ContainsKey(ProcessIdentity.From(session));
     }
 
-    public IReadOnlyList<AudioSession> GetSelectedSessions(IEnumerable<AudioSession> activeSessions) =>
-        activeSessions
+    public IReadOnlyList<AudioSession> GetSelectedSessions(IEnumerable<AudioSession> activeSessions)
+    {
+        ArgumentNullException.ThrowIfNull(activeSessions);
+
+        var sessions = activeSessions.ToArray();
+        if (sessions.Any(session => session is null))
+        {
+            throw new ArgumentException("Active sessions cannot contain null elements.", nameof(activeSessions));
+        }
+
+        return sessions
+            .Where(session => session.HasAudio)
             .Where(session => !DeniedProcessNames.Contains(session.ProcessName))
             .Where(IsSelected)
             .ToArray();
+    }
 
     private readonly record struct ProcessIdentity(int ProcessId, long ProcessStartUtcTicks, string ProcessName)
     {

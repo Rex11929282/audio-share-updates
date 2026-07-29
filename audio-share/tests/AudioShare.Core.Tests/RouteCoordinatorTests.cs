@@ -38,13 +38,45 @@ public sealed class RouteCoordinatorTests
         var coordinator = new RouteCoordinator();
         var chrome = new AudioSession(10, 100, "chrome.exe", "Chrome", true);
         var discord = new AudioSession(11, 101, "discord.exe", "Discord", true);
+        var silent = new AudioSession(12, 102, "silent.exe", "Silent App", false);
 
         await coordinator.ShareAsync(chrome, CancellationToken.None);
         await coordinator.ShareAsync(discord, CancellationToken.None);
+        await coordinator.ShareAsync(silent, CancellationToken.None);
 
-        var selected = coordinator.GetSelectedSessions([chrome, discord]);
+        var selected = coordinator.GetSelectedSessions([chrome, discord, silent]);
 
         Assert.Equal([chrome], selected);
+    }
+
+    [Fact]
+    public void GetSelectedSessions_RejectsNullInput()
+    {
+        var coordinator = new RouteCoordinator();
+
+        Assert.Throws<ArgumentNullException>(() => coordinator.GetSelectedSessions(null!));
+    }
+
+    [Fact]
+    public void GetSelectedSessions_RejectsNullElements()
+    {
+        var coordinator = new RouteCoordinator();
+
+        Assert.Throws<ArgumentException>(() => coordinator.GetSelectedSessions([null!]));
+    }
+
+    [Fact]
+    public async Task GetSelectedSessions_DoesNotReturnPidReusedProcess()
+    {
+        var coordinator = new RouteCoordinator();
+        var selected = new AudioSession(400, 4000, "app.exe", "Original App", true);
+        var reused = new AudioSession(400, 5000, "app.exe", "Replacement App", true);
+
+        await coordinator.ShareAsync(selected, CancellationToken.None);
+
+        var result = coordinator.GetSelectedSessions([reused]);
+
+        Assert.Empty(result);
     }
 
     [Fact]
