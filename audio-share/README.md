@@ -21,8 +21,8 @@ Keep the existing working audio chain:
 
 1. Start Voicemod and Voicemeeter Banana.
 2. Start playing audio in Chrome, NetEase Cloud Music, or another application.
-3. Open Audio Share and select that application.
-4. Windows Volume Mixer opens. Set that application's output to `Voicemeeter Input`.
+3. Open Audio Share and select that application. Selection only stores your intent.
+4. Click `Set up selected apps` to open Windows Volume Mixer, then set that application's output to `Voicemeeter Input`.
 5. Keep Discord excluded. It must remain on AUX/headphones so callers never hear themselves.
 
 The selection checkmark is only stored inside Audio Share. Clearing it does not change the application's Windows output device. Change the device in Windows Volume Mixer whenever you need to stop sharing.
