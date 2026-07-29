@@ -82,17 +82,17 @@ def test_set_route_rejects_discord_without_calling_router(helper):
 
 
 @pytest.mark.parametrize(
-    "request,error",
+    "payload,error",
     [
         (None, "Malformed request."),
         ({"command": "get-route"}, "Missing processId."),
         ({"command": "set-route", "processId": 4}, "Missing deviceId."),
     ],
 )
-def test_malformed_request_is_rejected(helper, request, error):
+def test_malformed_request_is_rejected(helper, payload, error):
     module, _ = helper
 
-    assert module.handle(request) == {"ok": False, "error": error}
+    assert module.handle(payload) == {"ok": False, "error": error}
 
 
 def test_missing_active_session_is_rejected(helper):

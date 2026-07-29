@@ -48,3 +48,17 @@
 ## Status
 
 BLOCKED: the required pytest command cannot start because the registered Python 3.12 executable is missing, and the available Python 3.12 runtime does not include pytest. No dependency was installed.
+
+## Pytest Collection Correction
+
+1. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
+   - Red result: collection failed because `request` is reserved in `@pytest.mark.parametrize`.
+2. Renamed the test-only parametrized argument from `request` to `payload`.
+3. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
+   - Green result: passed 10, failed 0 in 0.12s.
+4. `git diff --check`
+   - Result: exit 0; no whitespace errors.
+
+## Corrected Status
+
+DONE: the formal Task 3 pytest suite now passes with no helper behavior changes.
