@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     private bool isRoutingOperation;
     private bool isClosing;
     private bool experimentalRoutingAvailable;
-    private bool hasSuccessfulRoutingTransaction;
+    private bool hasOwnedRoutingTransaction;
 
     public MainWindow()
     {
@@ -197,7 +197,7 @@ public partial class MainWindow : Window
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
         ApplyRoutingButton.IsEnabled = CanApplyRouting(selected);
-        RestoreRoutingButton.IsEnabled = hasSuccessfulRoutingTransaction &&
+        RestoreRoutingButton.IsEnabled = hasOwnedRoutingTransaction &&
                                          experimentalRoutingAvailable &&
                                          !isRefreshing &&
                                          !isRoutingOperation;
@@ -209,7 +209,7 @@ public partial class MainWindow : Window
     private bool CanApplyRouting(IReadOnlyCollection<AudioSession> selected) =>
         selected.Count > 0 &&
         experimentalRoutingAvailable &&
-        !hasSuccessfulRoutingTransaction &&
+        !hasOwnedRoutingTransaction &&
         !isRefreshing &&
         !isRoutingOperation &&
         !string.IsNullOrWhiteSpace(inputDeviceId) &&
@@ -234,17 +234,13 @@ public partial class MainWindow : Window
         try
         {
             var devices = await routingHelper.ListOutputDevicesAsync(lifetimeCancellation.Token);
-            var inputMatches = devices
-                .Where(device => string.Equals(device.Name, "Voicemeeter Input", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            var auxMatches = devices
-                .Where(device => string.Equals(device.Name, "Voicemeeter AUX Input", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
+            var inputMatches = ExternalAudioDeviceSelector.FindMatches(devices, "Voicemeeter Input");
+            var auxMatches = ExternalAudioDeviceSelector.FindMatches(devices, "Voicemeeter AUX Input");
 
-            if (inputMatches.Length != 1 || auxMatches.Length != 1)
+            if (inputMatches.Count != 1 || auxMatches.Count != 1)
             {
                 experimentalRoutingStatus = "Experimental routing unavailable: expected exactly one endpoint named " +
-                                            $"Voicemeeter Input (found {inputMatches.Length}) and Voicemeeter AUX Input (found {auxMatches.Length}).";
+                                            $"Voicemeeter Input (found {inputMatches.Count}) and Voicemeeter AUX Input (found {auxMatches.Count}).";
                 UpdateRoutingSetupState();
                 return;
             }
@@ -252,7 +248,7 @@ public partial class MainWindow : Window
             inputDeviceId = inputMatches[0].Id;
             auxDeviceId = auxMatches[0].Id;
             experimentalRoutingAvailable = true;
-            experimentalRoutingStatus = hasSuccessfulRoutingTransaction
+            experimentalRoutingStatus = hasOwnedRoutingTransaction
                 ? "Experimental routing is active for this app run. Restore this routing before applying another transaction."
                 : "Experimental routing is available. Apply remains explicit and reversible.";
         }
@@ -288,7 +284,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            hasSuccessfulRoutingTransaction = false;
+            hasOwnedRoutingTransaction = false;
             SetExperimentalRoutingUnavailable($"Planning failed: {exception.Message}");
             ShowError("Experimental audio routing was not applied.", null);
             return;
@@ -310,13 +306,20 @@ public partial class MainWindow : Window
             var result = await routeExecutor.ApplyAsync(plan, lifetimeCancellation.Token);
             if (!result.Succeeded)
             {
-                hasSuccessfulRoutingTransaction = false;
+                hasOwnedRoutingTransaction = result.HasPendingTransaction;
+                if (result.HasPendingTransaction)
+                {
+                    experimentalRoutingStatus = $"Apply failed: {result.Message} Restore remains available for the owned route transaction.";
+                    ShowError("Experimental audio routing was not fully recovered. Use Restore to retry the owned transaction.", null);
+                    return;
+                }
+
                 SetExperimentalRoutingUnavailable($"Apply failed: {result.Message}");
                 ShowError("Experimental audio routing was not applied and has been disabled until the next refresh.", null);
                 return;
             }
 
-            hasSuccessfulRoutingTransaction = true;
+            hasOwnedRoutingTransaction = result.HasPendingTransaction;
             experimentalRoutingStatus = "Experimental routing was applied. Restore this routing before applying another transaction.";
             ErrorPanel.Visibility = Visibility.Collapsed;
         }
@@ -325,7 +328,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            hasSuccessfulRoutingTransaction = false;
+            hasOwnedRoutingTransaction = false;
             SetExperimentalRoutingUnavailable($"Apply failed: {exception.Message}");
             ShowError("Experimental audio routing was not applied and has been disabled until the next refresh.", null);
         }
@@ -338,7 +341,7 @@ public partial class MainWindow : Window
 
     private async void RestoreRoutingButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!hasSuccessfulRoutingTransaction || !experimentalRoutingAvailable || isRoutingOperation)
+        if (!hasOwnedRoutingTransaction || !experimentalRoutingAvailable || isRoutingOperation)
         {
             UpdateRoutingSetupState();
             return;
@@ -358,12 +361,20 @@ public partial class MainWindow : Window
             var result = await routeExecutor.RestoreAsync(lifetimeCancellation.Token);
             if (!result.Succeeded)
             {
+                hasOwnedRoutingTransaction = result.HasPendingTransaction;
+                if (result.HasPendingTransaction)
+                {
+                    experimentalRoutingStatus = $"Restore incomplete: {result.Message} Retry Restore for the remaining owned routes.";
+                    ShowError("Experimental audio routing was only partially restored. Retry Restore.", null);
+                    return;
+                }
+
                 SetExperimentalRoutingUnavailable($"Restore failed: {result.Message}");
                 ShowError("Experimental audio routing could not be restored and has been disabled until the next refresh.", null);
                 return;
             }
 
-            hasSuccessfulRoutingTransaction = false;
+            hasOwnedRoutingTransaction = false;
             experimentalRoutingStatus = "Experimental routing was restored. No route transaction is retained.";
             ErrorPanel.Visibility = Visibility.Collapsed;
         }

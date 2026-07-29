@@ -4,17 +4,17 @@ namespace AudioShare.Windows;
 
 public interface IExternalRoutingHelper
 {
-    Task<string?> GetRouteAsync(int processId, CancellationToken token);
+    Task<ApplicationRouteState> GetRouteAsync(int processId, CancellationToken token);
 
     Task SetRouteAsync(int processId, string deviceId, CancellationToken token);
 
-    Task ClearRouteAsync(int processId, CancellationToken token);
+    Task RestoreRouteAsync(int processId, ApplicationRouteState route, CancellationToken token);
 }
 
 public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
 {
     private readonly IExternalRoutingHelper helper;
-    private IReadOnlyList<ApplicationRouteSnapshot>? latestSuccessfulTransaction;
+    private IReadOnlyList<ApplicationRouteSnapshot>? pendingTransaction;
 
     public ApplicationRouteExecutor(IExternalRoutingHelper helper)
     {
@@ -25,84 +25,103 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
     {
         if (plan.Commands.Count == 0)
         {
-            return new ApplicationRouteExecutionResult(false, "Application route plan is empty.", []);
+            return new ApplicationRouteExecutionResult(false, false, "Application route plan is empty.", []);
         }
 
         var snapshots = new List<ApplicationRouteSnapshot>(plan.Commands.Count);
         foreach (var command in plan.Commands)
         {
-            var previousDeviceId = await helper.GetRouteAsync(command.ProcessId, token);
-            snapshots.Add(new ApplicationRouteSnapshot(command.ProcessId, command.ProcessName, previousDeviceId));
+            var previousRoute = await helper.GetRouteAsync(command.ProcessId, token);
+            snapshots.Add(new ApplicationRouteSnapshot(command.ProcessId, command.ProcessName, previousRoute));
         }
 
-        var changedSnapshots = new List<ApplicationRouteSnapshot>(snapshots.Count);
+        var ownedSnapshots = new List<ApplicationRouteSnapshot>(snapshots.Count);
         try
         {
             for (var index = 0; index < plan.Commands.Count; index++)
             {
                 var command = plan.Commands[index];
+                ownedSnapshots.Add(snapshots[index]);
                 await helper.SetRouteAsync(command.ProcessId, command.TargetDeviceId, token);
-                changedSnapshots.Add(snapshots[index]);
             }
         }
         catch (Exception exception)
         {
-            var recoveryFailures = new List<string>();
-            foreach (var snapshot in changedSnapshots.AsEnumerable().Reverse())
-            {
-                try
-                {
-                    await RestoreSnapshotAsync(snapshot, CancellationToken.None);
-                }
-                catch (Exception recoveryException)
-                {
-                    recoveryFailures.Add($"Process {snapshot.ProcessId}: {recoveryException.Message}");
-                }
-            }
-
-            var message = recoveryFailures.Count == 0
+            var recovery = await RestoreSnapshotsAsync(ownedSnapshots);
+            pendingTransaction = recovery.FailedSnapshots.Count == 0
+                ? null
+                : recovery.FailedSnapshots;
+            var message = recovery.Messages.Count == 0
                 ? exception.Message
-                : $"{exception.Message} Recovery failed: {string.Join("; ", recoveryFailures)}";
-            return new ApplicationRouteExecutionResult(false, message, snapshots);
+                : $"{exception.Message} Recovery failed: {string.Join("; ", recovery.Messages)}";
+            return new ApplicationRouteExecutionResult(
+                false,
+                pendingTransaction is not null,
+                message,
+                snapshots);
         }
 
-        latestSuccessfulTransaction = snapshots.ToArray();
-        return new ApplicationRouteExecutionResult(true, null, snapshots);
+        pendingTransaction = snapshots.ToArray();
+        return new ApplicationRouteExecutionResult(true, true, null, snapshots);
     }
 
     public async Task<ApplicationRouteExecutionResult> RestoreAsync(CancellationToken token)
     {
-        if (latestSuccessfulTransaction is null)
+        if (pendingTransaction is null)
         {
-            return new ApplicationRouteExecutionResult(false, "No successful application route transaction exists.", []);
+            return new ApplicationRouteExecutionResult(
+                false,
+                false,
+                "No application route transaction requires recovery.",
+                []);
         }
 
         if (token.IsCancellationRequested)
         {
-            return new ApplicationRouteExecutionResult(false, "Restore was canceled before recovery began.", []);
+            return new ApplicationRouteExecutionResult(
+                false,
+                true,
+                "Restore was canceled before recovery began.",
+                pendingTransaction);
         }
 
-        try
+        var snapshots = pendingTransaction;
+        var recovery = await RestoreSnapshotsAsync(snapshots);
+        if (recovery.FailedSnapshots.Count > 0)
         {
-            foreach (var snapshot in latestSuccessfulTransaction.Reverse())
+            pendingTransaction = recovery.FailedSnapshots;
+            return new ApplicationRouteExecutionResult(
+                false,
+                true,
+                $"Restore failed: {string.Join("; ", recovery.Messages)}",
+                pendingTransaction);
+        }
+
+        pendingTransaction = null;
+        return new ApplicationRouteExecutionResult(true, false, null, snapshots);
+    }
+
+    private async Task<RecoveryResult> RestoreSnapshotsAsync(IReadOnlyList<ApplicationRouteSnapshot> snapshots)
+    {
+        var failedSnapshots = new List<ApplicationRouteSnapshot>();
+        var messages = new List<string>();
+        foreach (var snapshot in snapshots.Reverse())
+        {
+            try
             {
-                await RestoreSnapshotAsync(snapshot, CancellationToken.None);
+                await helper.RestoreRouteAsync(snapshot.ProcessId, snapshot.PreviousRoute, CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                failedSnapshots.Insert(0, snapshot);
+                messages.Add($"Process {snapshot.ProcessId}: {exception.Message}");
             }
         }
-        catch (Exception exception)
-        {
-            return new ApplicationRouteExecutionResult(false, exception.Message, latestSuccessfulTransaction);
-        }
 
-        var snapshots = latestSuccessfulTransaction;
-        latestSuccessfulTransaction = null;
-        return new ApplicationRouteExecutionResult(true, null, snapshots);
+        return new RecoveryResult(failedSnapshots, messages);
     }
 
-    private Task RestoreSnapshotAsync(ApplicationRouteSnapshot snapshot, CancellationToken token)
-    {
-        return snapshot.PreviousDeviceId is null
-            ? helper.ClearRouteAsync(snapshot.ProcessId, token)
-            : helper.SetRouteAsync(snapshot.ProcessId, snapshot.PreviousDeviceId, token);
-    }
+    private sealed record RecoveryResult(
+        IReadOnlyList<ApplicationRouteSnapshot> FailedSnapshots,
+        IReadOnlyList<string> Messages);
 }

@@ -4,8 +4,9 @@ import sys
 
 
 PROTECTED_PREFIXES = ("discord", "voicemod", "voicemeeter")
-ROUTE_COMMANDS = {"get-route", "set-route", "clear-route"}
+ROUTE_COMMANDS = {"get-route", "set-route", "clear-route", "restore-route"}
 router = None
+policy = None
 
 
 def _router():
@@ -15,6 +16,55 @@ def _router():
 
         router = winappaudiorouter
     return router
+
+
+class _PersistedRoutePolicy:
+    def __init__(self):
+        from pycaw.constants import EDataFlow, ERole
+        from winappaudiorouter.com import com_initialized
+        from winappaudiorouter.device_ids import pack_render_device_id, unpack_device_id
+        from winappaudiorouter.policy_config import PolicyConfigFactory
+
+        self._com_initialized = com_initialized
+        self._factory = PolicyConfigFactory
+        self._pack_device_id = pack_render_device_id
+        self._unpack_device_id = unpack_device_id
+        self._flow = EDataFlow.eRender.value
+        self._roles = {
+            "consoleDeviceId": ERole.eConsole.value,
+            "multimediaDeviceId": ERole.eMultimedia.value,
+        }
+
+    def get_route(self, process_id):
+        route = {}
+        with self._com_initialized():
+            with self._factory() as factory:
+                for name, role in self._roles.items():
+                    packed_device_id = factory.get_persisted_default_endpoint(
+                        process_id=process_id,
+                        flow=self._flow,
+                        role=role,
+                    )
+                    route[name] = self._unpack_device_id(packed_device_id)
+        return route
+
+    def restore_route(self, process_id, route):
+        with self._com_initialized():
+            with self._factory() as factory:
+                for name, role in self._roles.items():
+                    factory.set_persisted_default_endpoint(
+                        process_id=process_id,
+                        flow=self._flow,
+                        role=role,
+                        packed_device_id=self._pack_device_id(route[name]),
+                    )
+
+
+def _policy():
+    global policy
+    if policy is None:
+        policy = _PersistedRoutePolicy()
+    return policy
 
 
 def _field(value, name, fallback=None):
@@ -63,6 +113,20 @@ def _device_value(device):
     }
 
 
+def _route_state(request):
+    route = {}
+    for name in ("consoleDeviceId", "multimediaDeviceId"):
+        if name not in request:
+            return None
+        value = request[name]
+        if value is not None and (
+            not isinstance(value, str) or not value.strip()
+        ):
+            return None
+        route[name] = value
+    return route
+
+
 def handle(request):
     if not isinstance(request, dict):
         return {"ok": False, "error": "Malformed request."}
@@ -86,16 +150,22 @@ def handle(request):
             device_id = request.get("deviceId")
             if not isinstance(device_id, str) or not device_id.strip():
                 return {"ok": False, "error": "Missing deviceId."}
+        if command == "restore-route":
+            route = _route_state(request)
+            if route is None:
+                return {"ok": False, "error": "Invalid route state."}
         process_id, error = _route_session(request)
         if error is not None:
             return error
         if command == "get-route":
             return {
                 "ok": True,
-                "value": _router().get_app_output_device(process_id=process_id).get(process_id),
+                "value": _policy().get_route(process_id),
             }
         if command == "set-route":
             _router().set_app_output_device(process_id=process_id, device=device_id)
+        elif command == "restore-route":
+            _policy().restore_route(process_id, route)
         else:
             _router().clear_app_output_device(process_id=process_id)
     except Exception:

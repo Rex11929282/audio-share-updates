@@ -2,6 +2,7 @@ namespace AudioShare.Core;
 
 public sealed record ApplicationRouteExecutionResult(
     bool Succeeded,
+    bool HasPendingTransaction,
     string? Message,
     IReadOnlyList<ApplicationRouteSnapshot> Snapshots);
 

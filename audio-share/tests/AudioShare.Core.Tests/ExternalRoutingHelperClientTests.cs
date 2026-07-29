@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using AudioShare.Core;
 using AudioShare.Windows;
 
 namespace AudioShare.Core.Tests;
@@ -120,30 +121,55 @@ public sealed class ExternalRoutingHelperClientTests
     [Fact]
     public async Task ListOutputDevicesAsync_MapsHelperDeviceValues()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":[{\"id\":\"device-a\",\"name\":\"Headphones\"}]}");
+        using var fixture = HelperFixture.Create(
+            "{\"ok\":true,\"value\":[{\"id\":\"{0.0.0.00000000}.{AUX}\",\"name\":\"Voicemeeter AUX Input (VB-Audio Voicemeeter AUX VAIO)\"}]}");
 
         var devices = await fixture.CreateClient().ListOutputDevicesAsync(CancellationToken.None);
 
-        Assert.Equal([new ExternalAudioDevice("device-a", "Headphones")], devices);
+        Assert.Equal(
+            [new ExternalAudioDevice("{0.0.0.00000000}.{AUX}", "Voicemeeter AUX Input (VB-Audio Voicemeeter AUX VAIO)")],
+            devices);
         Assert.Equal("list-devices", fixture.Requests.Single().GetProperty("command").GetString());
     }
 
     [Fact]
-    public async Task RouteMethods_SendOnlyTheirMappedJsonRequests()
+    public async Task RouteMethods_MapDualRoleStateAndSendOnlyTheirMappedJsonRequests()
     {
-        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":\"previous-device\"}");
+        using var fixture = HelperFixture.Create(
+            "{\"ok\":true,\"value\":{\"consoleDeviceId\":null,\"multimediaDeviceId\":\"previous-device\"}}");
         var client = fixture.CreateClient();
+        var previousRoute = new ApplicationRouteState(null, "previous-device");
 
         var route = await client.GetRouteAsync(41, CancellationToken.None);
         await client.SetRouteAsync(41, "device-a", CancellationToken.None);
-        await client.ClearRouteAsync(41, CancellationToken.None);
+        await client.RestoreRouteAsync(41, previousRoute, CancellationToken.None);
 
-        Assert.Equal("previous-device", route);
+        Assert.Equal(previousRoute, route);
         Assert.Collection(
             fixture.Requests,
-            request => AssertRequest(request, "get-route", 41, null),
-            request => AssertRequest(request, "set-route", 41, "device-a"),
-            request => AssertRequest(request, "clear-route", 41, null));
+            request => AssertRouteRequest(request, "get-route", 41, null),
+            request => AssertRouteRequest(request, "set-route", 41, "device-a"),
+            request =>
+            {
+                AssertRouteRequest(request, "restore-route", 41, null);
+                Assert.Equal(JsonValueKind.Null, request.GetProperty("consoleDeviceId").ValueKind);
+                Assert.Equal("previous-device", request.GetProperty("multimediaDeviceId").GetString());
+            });
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"single-device\"")]
+    [InlineData("{\"consoleDeviceId\":null}")]
+    [InlineData("{\"consoleDeviceId\":7,\"multimediaDeviceId\":null}")]
+    public async Task GetRouteAsync_RejectsMalformedDualRoleState(string value)
+    {
+        using var fixture = HelperFixture.Create($"{{\"ok\":true,\"value\":{value}}}");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.CreateClient().GetRouteAsync(41, CancellationToken.None));
+
+        Assert.Contains("route state", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -159,7 +185,7 @@ public sealed class ExternalRoutingHelperClientTests
         Assert.Single(fixture.Requests);
     }
 
-    private static void AssertRequest(JsonElement request, string command, int processId, string? deviceId)
+    private static void AssertRouteRequest(JsonElement request, string command, int processId, string? deviceId)
     {
         Assert.Equal(command, request.GetProperty("command").GetString());
         Assert.Equal(processId, request.GetProperty("processId").GetInt32());

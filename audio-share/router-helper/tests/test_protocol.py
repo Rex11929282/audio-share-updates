@@ -50,11 +50,58 @@ class RecordingRouter:
         self.clear_calls.append(process_id)
 
 
+class RecordingPolicy:
+    def __init__(self):
+        self.routes = {}
+        self.get_calls = []
+        self.restore_calls = []
+
+    def get_route(self, process_id):
+        self.get_calls.append(process_id)
+        return self.routes.get(
+            process_id,
+            {"consoleDeviceId": None, "multimediaDeviceId": None},
+        )
+
+    def restore_route(self, process_id, route):
+        self.restore_calls.append((process_id, route))
+
+
+class RecordingPolicyFactory:
+    def __init__(self, routes=None):
+        self.routes = routes or {}
+        self.get_calls = []
+        self.set_calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
+
+    def get_persisted_default_endpoint(self, *, process_id, flow, role):
+        self.get_calls.append((process_id, flow, role))
+        return self.routes.get(role)
+
+    def set_persisted_default_endpoint(
+        self,
+        *,
+        process_id,
+        flow,
+        role,
+        packed_device_id,
+    ):
+        self.set_calls.append((process_id, flow, role, packed_device_id))
+
+
 @pytest.fixture
 def helper(monkeypatch):
     module = importlib.import_module("audio_share_router_helper")
     router = RecordingRouter()
+    policy = RecordingPolicy()
     monkeypatch.setattr(module, "router", router)
+    monkeypatch.setattr(module, "policy", policy, raising=False)
+    router.policy = policy
     return module, router
 
 
@@ -140,15 +187,109 @@ def test_list_devices_returns_json_safe_values(helper):
     assert json.loads(json.dumps(response)) == response
 
 
-def test_get_route_uses_the_active_session_pid(helper):
+def test_get_route_returns_console_and_multimedia_roles_for_the_active_session(helper):
     module, router = helper
     router.sessions = [Session(9, "chrome.exe")]
+    router.policy.routes[9] = {
+        "consoleDeviceId": "previous-console",
+        "multimediaDeviceId": "previous-multimedia",
+    }
 
     assert module.handle({"command": "get-route", "processId": 9}) == {
         "ok": True,
-        "value": "previous-device",
+        "value": {
+            "consoleDeviceId": "previous-console",
+            "multimediaDeviceId": "previous-multimedia",
+        },
     }
-    assert router.get_calls == [9]
+    assert router.policy.get_calls == [9]
+
+
+def test_restore_route_writes_console_and_multimedia_roles_exactly(helper):
+    module, router = helper
+    router.sessions = [Session(9, "chrome.exe")]
+    route = {
+        "consoleDeviceId": None,
+        "multimediaDeviceId": "previous-multimedia",
+    }
+
+    assert module.handle({"command": "restore-route", "processId": 9, **route}) == {
+        "ok": True,
+        "value": None,
+    }
+    assert router.policy.restore_calls == [(9, route)]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"command": "restore-route", "processId": 9},
+        {
+            "command": "restore-route",
+            "processId": 9,
+            "consoleDeviceId": 7,
+            "multimediaDeviceId": None,
+        },
+        {
+            "command": "restore-route",
+            "processId": 9,
+            "consoleDeviceId": None,
+            "multimediaDeviceId": "",
+        },
+    ],
+)
+def test_restore_route_rejects_malformed_role_state(helper, payload):
+    module, router = helper
+    router.sessions = [Session(9, "chrome.exe")]
+
+    assert module.handle(payload) == {
+        "ok": False,
+        "error": "Invalid route state.",
+    }
+    assert router.policy.restore_calls == []
+
+
+def test_persisted_route_policy_reads_console_and_multimedia_roles(helper):
+    module, _ = helper
+    factory = RecordingPolicyFactory({10: "packed-console", 20: "packed-multimedia"})
+    policy = module._PersistedRoutePolicy.__new__(module._PersistedRoutePolicy)
+    policy._com_initialized = lambda: factory
+    policy._factory = lambda: factory
+    policy._unpack_device_id = lambda value: value.removeprefix("packed-") if value else None
+    policy._flow = 5
+    policy._roles = {"consoleDeviceId": 10, "multimediaDeviceId": 20}
+
+    route = policy.get_route(9)
+
+    assert route == {
+        "consoleDeviceId": "console",
+        "multimediaDeviceId": "multimedia",
+    }
+    assert factory.get_calls == [(9, 5, 10), (9, 5, 20)]
+
+
+def test_persisted_route_policy_restores_each_role_including_default(helper):
+    module, _ = helper
+    factory = RecordingPolicyFactory()
+    policy = module._PersistedRoutePolicy.__new__(module._PersistedRoutePolicy)
+    policy._com_initialized = lambda: factory
+    policy._factory = lambda: factory
+    policy._pack_device_id = lambda value: f"packed-{value}" if value else None
+    policy._flow = 5
+    policy._roles = {"consoleDeviceId": 10, "multimediaDeviceId": 20}
+
+    policy.restore_route(
+        9,
+        {
+            "consoleDeviceId": None,
+            "multimediaDeviceId": "multimedia",
+        },
+    )
+
+    assert factory.set_calls == [
+        (9, 5, 10, None),
+        (9, 5, 20, "packed-multimedia"),
+    ]
 
 
 def test_main_reads_one_request_and_writes_one_json_response(helper, monkeypatch):

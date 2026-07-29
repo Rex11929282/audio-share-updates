@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using AudioShare.Core;
 
 namespace AudioShare.Windows;
 
@@ -72,15 +73,17 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
         return devices;
     }
 
-    public async Task<string?> GetRouteAsync(int processId, CancellationToken token)
+    public async Task<ApplicationRouteState> GetRouteAsync(int processId, CancellationToken token)
     {
         var (_, value) = await InvokeAsync(new { command = "get-route", processId }, token);
-        return value.ValueKind switch
+        if (value.ValueKind != JsonValueKind.Object)
         {
-            JsonValueKind.Null => null,
-            JsonValueKind.String => value.GetString(),
-            _ => throw new InvalidOperationException("Helper response has an invalid route."),
-        };
+            throw new InvalidOperationException("Helper response has an invalid route state.");
+        }
+
+        return new ApplicationRouteState(
+            ReadRouteDeviceId(value, "consoleDeviceId"),
+            ReadRouteDeviceId(value, "multimediaDeviceId"));
     }
 
     public async Task SetRouteAsync(int processId, string deviceId, CancellationToken token)
@@ -89,9 +92,20 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
         await InvokeAsync(new { command = "set-route", processId, deviceId }, token);
     }
 
-    public async Task ClearRouteAsync(int processId, CancellationToken token)
+    public async Task RestoreRouteAsync(
+        int processId,
+        ApplicationRouteState route,
+        CancellationToken token)
     {
-        await InvokeAsync(new { command = "clear-route", processId }, token);
+        await InvokeAsync(
+            new
+            {
+                command = "restore-route",
+                processId,
+                consoleDeviceId = route.ConsoleDeviceId,
+                multimediaDeviceId = route.MultimediaDeviceId,
+            },
+            token);
     }
 
     private async Task<(RoutingHelperManifest Manifest, JsonElement Value)> InvokeAsync(object request, CancellationToken token)
@@ -280,5 +294,20 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
 
             return value.Clone();
         }
+    }
+
+    private static string? ReadRouteDeviceId(JsonElement route, string propertyName)
+    {
+        if (!route.TryGetProperty(propertyName, out var value))
+        {
+            throw new InvalidOperationException("Helper response has an invalid route state.");
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String when !string.IsNullOrWhiteSpace(value.GetString()) => value.GetString(),
+            _ => throw new InvalidOperationException("Helper response has an invalid route state."),
+        };
     }
 }
