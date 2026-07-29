@@ -2,6 +2,10 @@
 
 `Audio Share` helps you find applications that are currently playing audio and prepare them for sharing in Discord. It does not change Windows audio routing, Voicemeeter, Voicemod, or Discord settings.
 
+## Selected-Source Engine
+
+This build contains the tested selected-source mixer core. It does not install a virtual microphone driver and does not yet capture live application audio. It cannot be used as a Discord input until the separately signed driver and Windows process-loopback adapter are released.
+
 ## Before Using
 
 Keep the existing working audio chain:

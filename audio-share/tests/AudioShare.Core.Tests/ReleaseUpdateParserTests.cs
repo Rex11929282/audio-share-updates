@@ -7,6 +7,15 @@ namespace AudioShare.Core.Tests;
 public sealed class ReleaseUpdateParserTests
 {
     [Fact]
+    public void DocumentsSelectedSourceEnginePhaseOneBoundary()
+    {
+        var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
+        var readme = File.ReadAllText(readmePath);
+
+        Assert.Contains("does not install a virtual microphone driver", readme);
+    }
+
+    [Fact]
     public void PublishScriptCopiesEveryBundledNoticeIntoTheArchiveSource()
     {
         var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "scripts", "publish-release.ps1"));
