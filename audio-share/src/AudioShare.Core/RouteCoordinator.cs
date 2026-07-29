@@ -10,7 +10,7 @@ public sealed class RouteCoordinator
         "discord.exe",
     };
 
-    private readonly ConcurrentDictionary<int, byte> selectedProcessIds = [];
+    private readonly ConcurrentDictionary<ProcessIdentity, byte> selectedProcesses = [];
 
     public Task<RouteResult> ShareAsync(AudioSession session, CancellationToken token)
     {
@@ -22,32 +22,43 @@ public sealed class RouteCoordinator
             return Task.FromResult(RouteResult.Failed("Discord cannot be shared."));
         }
 
-        selectedProcessIds.TryAdd(session.ProcessId, 0);
+        selectedProcesses.TryAdd(ProcessIdentity.From(session), 0);
         return Task.FromResult(RouteResult.Success());
     }
 
-    public Task<RouteResult> UnshareAsync(int processId, CancellationToken token)
+    public Task<RouteResult> UnshareAsync(AudioSession session, CancellationToken token)
     {
+        ArgumentNullException.ThrowIfNull(session);
         token.ThrowIfCancellationRequested();
-        selectedProcessIds.TryRemove(processId, out _);
+        selectedProcesses.TryRemove(ProcessIdentity.From(session), out _);
         return Task.FromResult(RouteResult.Success());
     }
 
-    public void RemoveSelectionsAbsentFrom(IEnumerable<int> activeProcessIds)
+    public void RemoveSelectionsAbsentFrom(IEnumerable<AudioSession> activeSessions)
     {
-        ArgumentNullException.ThrowIfNull(activeProcessIds);
-        var activeProcessIdSet = activeProcessIds.ToHashSet();
+        ArgumentNullException.ThrowIfNull(activeSessions);
+        var activeProcessSet = activeSessions.Select(ProcessIdentity.From).ToHashSet();
 
-        foreach (var processId in selectedProcessIds.Keys)
+        foreach (var process in selectedProcesses.Keys)
         {
-            if (!activeProcessIdSet.Contains(processId))
+            if (!activeProcessSet.Contains(process))
             {
-                selectedProcessIds.TryRemove(processId, out _);
+                selectedProcesses.TryRemove(process, out _);
             }
         }
     }
 
-    public bool IsSelected(int processId) => selectedProcessIds.ContainsKey(processId);
+    public bool IsSelected(AudioSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return selectedProcesses.ContainsKey(ProcessIdentity.From(session));
+    }
+
+    private readonly record struct ProcessIdentity(int ProcessId, string ProcessName)
+    {
+        public static ProcessIdentity From(AudioSession session) =>
+            new(session.ProcessId, session.ProcessName.ToUpperInvariant());
+    }
 }
 
 public sealed record RouteResult(bool Succeeded, string? Message)

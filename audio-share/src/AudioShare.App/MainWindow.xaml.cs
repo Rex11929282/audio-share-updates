@@ -108,7 +108,7 @@ public partial class MainWindow : Window
 
     private void UpdateApplications(IReadOnlyList<AudioSession> sessions)
     {
-        routeCoordinator.RemoveSelectionsAbsentFrom(sessions.Select(session => session.ProcessId));
+        routeCoordinator.RemoveSelectionsAbsentFrom(sessions);
         Applications.Clear();
 
         foreach (var session in sessions)
@@ -117,7 +117,7 @@ public partial class MainWindow : Window
             Applications.Add(new AudioApplicationRow(
                 session,
                 isDiscord,
-                !isDiscord && routeCoordinator.IsSelected(session.ProcessId)));
+                !isDiscord && routeCoordinator.IsSelected(session)));
         }
 
         EmptyStateText.Visibility = Applications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -132,7 +132,7 @@ public partial class MainWindow : Window
         }
 
         var shouldShare = checkBox.IsChecked == true;
-        if (routeCoordinator.IsSelected(row.Session.ProcessId) == shouldShare)
+        if (routeCoordinator.IsSelected(row.Session) == shouldShare)
         {
             return;
         }
@@ -142,9 +142,9 @@ public partial class MainWindow : Window
         {
             var result = shouldShare
                 ? await routeCoordinator.ShareAsync(row.Session, lifetimeCancellation.Token)
-                : await routeCoordinator.UnshareAsync(row.Session.ProcessId, lifetimeCancellation.Token);
+                : await routeCoordinator.UnshareAsync(row.Session, lifetimeCancellation.Token);
 
-            row.IsSelected = routeCoordinator.IsSelected(row.Session.ProcessId);
+            row.IsSelected = routeCoordinator.IsSelected(row.Session);
             if (!result.Succeeded)
             {
                 ShowError(result.Message ?? "無法更新本機選取狀態。", null);
@@ -166,7 +166,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            row.IsSelected = routeCoordinator.IsSelected(row.Session.ProcessId);
+            row.IsSelected = routeCoordinator.IsSelected(row.Session);
             ShowError("無法更新本機選取或開啟 Windows 音量混音器。", exception);
         }
         finally

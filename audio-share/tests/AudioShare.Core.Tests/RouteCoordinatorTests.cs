@@ -16,7 +16,7 @@ public sealed class RouteCoordinatorTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("Discord cannot be shared.", result.Message);
-        Assert.False(coordinator.IsSelected(discord.ProcessId));
+        Assert.False(coordinator.IsSelected(discord));
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed class RouteCoordinatorTests
 
         Assert.True(result.Succeeded);
         Assert.Null(result.Message);
-        Assert.True(coordinator.IsSelected(session.ProcessId));
+        Assert.True(coordinator.IsSelected(session));
     }
 
     [Fact]
@@ -41,15 +41,15 @@ public sealed class RouteCoordinatorTests
 
         await coordinator.ShareAsync(first, CancellationToken.None);
         await coordinator.ShareAsync(second, CancellationToken.None);
-        var result = await coordinator.UnshareAsync(first.ProcessId, CancellationToken.None);
+        var result = await coordinator.UnshareAsync(first, CancellationToken.None);
 
         Assert.True(result.Succeeded);
-        Assert.False(coordinator.IsSelected(first.ProcessId));
-        Assert.True(coordinator.IsSelected(second.ProcessId));
+        Assert.False(coordinator.IsSelected(first));
+        Assert.True(coordinator.IsSelected(second));
     }
 
     [Fact]
-    public async Task RemoveSelectionsAbsentFrom_RemovesOnlySelectedPidsMissingFromActivePids()
+    public async Task RemoveSelectionsAbsentFrom_RemovesOnlySelectedProcessesMissingFromActiveSessions()
     {
         var coordinator = new RouteCoordinator();
         var inactive = new AudioSession(400, "chrome.exe", "Chrome", true);
@@ -58,9 +58,23 @@ public sealed class RouteCoordinatorTests
         await coordinator.ShareAsync(inactive, CancellationToken.None);
         await coordinator.ShareAsync(active, CancellationToken.None);
 
-        coordinator.RemoveSelectionsAbsentFrom([active.ProcessId]);
+        coordinator.RemoveSelectionsAbsentFrom([active]);
 
-        Assert.False(coordinator.IsSelected(inactive.ProcessId));
-        Assert.True(coordinator.IsSelected(active.ProcessId));
+        Assert.False(coordinator.IsSelected(inactive));
+        Assert.True(coordinator.IsSelected(active));
+    }
+
+    [Fact]
+    public async Task RemoveSelectionsAbsentFrom_DeselectsAppWhenPidIsReusedByADifferentProcess()
+    {
+        var coordinator = new RouteCoordinator();
+        var selected = new AudioSession(400, "app-a.exe", "App A", true);
+        var reused = new AudioSession(400, "app-b.exe", "App B", true);
+
+        await coordinator.ShareAsync(selected, CancellationToken.None);
+
+        coordinator.RemoveSelectionsAbsentFrom([reused]);
+
+        Assert.False(coordinator.IsSelected(reused));
     }
 }
