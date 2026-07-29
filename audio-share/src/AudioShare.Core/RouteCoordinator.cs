@@ -54,10 +54,10 @@ public sealed class RouteCoordinator
         return selectedProcesses.ContainsKey(ProcessIdentity.From(session));
     }
 
-    private readonly record struct ProcessIdentity(int ProcessId, string ProcessName)
+    private readonly record struct ProcessIdentity(int ProcessId, long ProcessStartUtcTicks, string ProcessName)
     {
         public static ProcessIdentity From(AudioSession session) =>
-            new(session.ProcessId, session.ProcessName.ToUpperInvariant());
+            new(session.ProcessId, session.ProcessStartUtcTicks, session.ProcessName.ToUpperInvariant());
     }
 }
 

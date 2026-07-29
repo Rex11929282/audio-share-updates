@@ -43,8 +43,10 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
                         }
 
                         using var process = Process.GetProcessById(processId);
+                        var processStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
                         candidates.Add(new AudioSessionCandidate(
                             processId,
+                            processStartUtcTicks,
                             process.ProcessName,
                             session.DisplayName,
                             IsActive: true,

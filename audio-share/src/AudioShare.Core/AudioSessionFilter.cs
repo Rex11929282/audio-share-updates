@@ -21,6 +21,7 @@ public static class AudioSessionFilter
                 .First())
             .Select(candidate => new AudioSession(
                 candidate.ProcessId,
+                candidate.ProcessStartUtcTicks,
                 candidate.ProcessName,
                 string.IsNullOrWhiteSpace(candidate.DisplayName)
                     ? candidate.ProcessName

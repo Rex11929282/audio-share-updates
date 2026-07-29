@@ -10,7 +10,7 @@ public sealed class RouteCoordinatorTests
     public async Task ShareAsync_RejectsDiscordWithoutSelectingIt(string processName)
     {
         var coordinator = new RouteCoordinator();
-        var discord = new AudioSession(100, processName, "Discord", true);
+        var discord = new AudioSession(100, 1000, processName, "Discord", true);
 
         var result = await coordinator.ShareAsync(discord, CancellationToken.None);
 
@@ -23,7 +23,7 @@ public sealed class RouteCoordinatorTests
     public async Task ShareAsync_SelectsANormalAppLocally()
     {
         var coordinator = new RouteCoordinator();
-        var session = new AudioSession(200, "cloudmusic.exe", "NetEase Cloud Music", true);
+        var session = new AudioSession(200, 2000, "cloudmusic.exe", "NetEase Cloud Music", true);
 
         var result = await coordinator.ShareAsync(session, CancellationToken.None);
 
@@ -36,8 +36,8 @@ public sealed class RouteCoordinatorTests
     public async Task UnshareAsync_RemovesOnlyTheLocalSelection()
     {
         var coordinator = new RouteCoordinator();
-        var first = new AudioSession(300, "chrome.exe", "Chrome", true);
-        var second = new AudioSession(301, "cloudmusic.exe", "NetEase Cloud Music", true);
+        var first = new AudioSession(300, 3000, "chrome.exe", "Chrome", true);
+        var second = new AudioSession(301, 3010, "cloudmusic.exe", "NetEase Cloud Music", true);
 
         await coordinator.ShareAsync(first, CancellationToken.None);
         await coordinator.ShareAsync(second, CancellationToken.None);
@@ -52,8 +52,8 @@ public sealed class RouteCoordinatorTests
     public async Task RemoveSelectionsAbsentFrom_RemovesOnlySelectedProcessesMissingFromActiveSessions()
     {
         var coordinator = new RouteCoordinator();
-        var inactive = new AudioSession(400, "chrome.exe", "Chrome", true);
-        var active = new AudioSession(401, "cloudmusic.exe", "NetEase Cloud Music", true);
+        var inactive = new AudioSession(400, 4000, "chrome.exe", "Chrome", true);
+        var active = new AudioSession(401, 4010, "cloudmusic.exe", "NetEase Cloud Music", true);
 
         await coordinator.ShareAsync(inactive, CancellationToken.None);
         await coordinator.ShareAsync(active, CancellationToken.None);
@@ -65,16 +65,17 @@ public sealed class RouteCoordinatorTests
     }
 
     [Fact]
-    public async Task RemoveSelectionsAbsentFrom_DeselectsAppWhenPidIsReusedByADifferentProcess()
+    public async Task RemoveSelectionsAbsentFrom_DeselectsAppWhenPidIsReusedByTheSameProcess()
     {
         var coordinator = new RouteCoordinator();
-        var selected = new AudioSession(400, "app-a.exe", "App A", true);
-        var reused = new AudioSession(400, "app-b.exe", "App B", true);
+        var selected = new AudioSession(400, 4000, "app.exe", "Original App", true);
+        var reused = new AudioSession(400, 5000, "app.exe", "Replacement App", true);
 
         await coordinator.ShareAsync(selected, CancellationToken.None);
 
         coordinator.RemoveSelectionsAbsentFrom([reused]);
 
+        Assert.False(coordinator.IsSelected(selected));
         Assert.False(coordinator.IsSelected(reused));
     }
 }
