@@ -47,4 +47,20 @@ public sealed class RouteCoordinatorTests
         Assert.False(coordinator.IsSelected(first.ProcessId));
         Assert.True(coordinator.IsSelected(second.ProcessId));
     }
+
+    [Fact]
+    public async Task RemoveSelectionsAbsentFrom_RemovesOnlySelectedPidsMissingFromActivePids()
+    {
+        var coordinator = new RouteCoordinator();
+        var inactive = new AudioSession(400, "chrome.exe", "Chrome", true);
+        var active = new AudioSession(401, "cloudmusic.exe", "NetEase Cloud Music", true);
+
+        await coordinator.ShareAsync(inactive, CancellationToken.None);
+        await coordinator.ShareAsync(active, CancellationToken.None);
+
+        coordinator.RemoveSelectionsAbsentFrom([active.ProcessId]);
+
+        Assert.False(coordinator.IsSelected(inactive.ProcessId));
+        Assert.True(coordinator.IsSelected(active.ProcessId));
+    }
 }

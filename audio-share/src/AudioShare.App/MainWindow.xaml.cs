@@ -108,6 +108,7 @@ public partial class MainWindow : Window
 
     private void UpdateApplications(IReadOnlyList<AudioSession> sessions)
     {
+        routeCoordinator.RemoveSelectionsAbsentFrom(sessions.Select(session => session.ProcessId));
         Applications.Clear();
 
         foreach (var session in sessions)

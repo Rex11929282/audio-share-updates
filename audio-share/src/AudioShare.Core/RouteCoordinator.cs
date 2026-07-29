@@ -33,6 +33,20 @@ public sealed class RouteCoordinator
         return Task.FromResult(RouteResult.Success());
     }
 
+    public void RemoveSelectionsAbsentFrom(IEnumerable<int> activeProcessIds)
+    {
+        ArgumentNullException.ThrowIfNull(activeProcessIds);
+        var activeProcessIdSet = activeProcessIds.ToHashSet();
+
+        foreach (var processId in selectedProcessIds.Keys)
+        {
+            if (!activeProcessIdSet.Contains(processId))
+            {
+                selectedProcessIds.TryRemove(processId, out _);
+            }
+        }
+    }
+
     public bool IsSelected(int processId) => selectedProcessIds.ContainsKey(processId);
 }
 
