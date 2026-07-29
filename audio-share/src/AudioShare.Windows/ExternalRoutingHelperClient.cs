@@ -136,10 +136,19 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
         {
             await process.WaitForExitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
-            process.Kill(entireProcessTree: true);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
             await process.WaitForExitAsync(CancellationToken.None);
+            if (token.IsCancellationRequested)
+            {
+                throw;
+            }
+
             throw new InvalidOperationException("Routing helper timed out after 5 seconds.");
         }
 

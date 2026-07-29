@@ -35,6 +35,20 @@ public sealed class ExternalRoutingHelperClientTests
     }
 
     [Fact]
+    public async Task CheckHealthAsync_CancellationKillsStartedHelper()
+    {
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}", FixtureBehavior.Timeout);
+        using var cancellation = new CancellationTokenSource();
+        var task = fixture.CreateClient().CheckHealthAsync(cancellation.Token);
+
+        await fixture.WaitForLaunchAsync();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        Assert.True(await fixture.WaitForHelperExitAsync(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
     public async Task CheckHealthAsync_ReturnsUnavailableWhenHelperExitsNonzero()
     {
         using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.1\"}}", FixtureBehavior.NonzeroExit);
@@ -126,8 +140,7 @@ public sealed class ExternalRoutingHelperClientTests
         var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
 
         Assert.True(result.IsAvailable);
-        Assert.False(string.Equals("cmd.exe", Path.GetFileName(fixture.ParentExecutablePath), StringComparison.OrdinalIgnoreCase));
-        Assert.False(string.Equals("powershell.exe", Path.GetFileName(fixture.ParentExecutablePath), StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(fixture.PythonPath, fixture.ParentExecutablePath, ignoreCase: true);
         Assert.Equal(["-I", fixture.HelperPath], fixture.CommandLineArguments);
         Assert.Single(fixture.Requests);
     }
@@ -161,6 +174,7 @@ public sealed class ExternalRoutingHelperClientTests
         private readonly string root;
         private readonly string capturePath;
         private readonly string processPath;
+        private readonly string parentProcessPath;
 
         private HelperFixture(string response, FixtureBehavior behavior)
         {
@@ -169,6 +183,7 @@ public sealed class ExternalRoutingHelperClientTests
             HelperPath = Path.Combine(root, "audio_share_router_helper.py");
             capturePath = Path.Combine(root, "requests.jsonl");
             processPath = Path.Combine(root, "process.json");
+            parentProcessPath = Path.Combine(root, "parent-process.json");
             CopyFakePython(root);
             File.WriteAllText(
                 HelperPath,
@@ -178,17 +193,44 @@ public sealed class ExternalRoutingHelperClientTests
                     behavior = behavior.ToString(),
                     capturePath,
                     processPath,
+                    parentProcessPath,
                 }));
             WriteManifest(FileHash(HelperPath), "1.1.1");
         }
 
         public string HelperPath { get; }
 
+        public string PackageDirectory => root;
+
+        public string PythonPath => Path.Combine(root, "python.exe");
+
         public bool WasLaunched => File.Exists(processPath);
 
-        public string ParentExecutablePath => ReadProcessValue("parentExecutablePath");
+        public string ParentExecutablePath => ReadParentProcessValue("parentExecutablePath");
 
         public IReadOnlyList<string> CommandLineArguments => JsonSerializer.Deserialize<string[]>(ReadProcessValue("arguments"))!;
+
+        public async Task WaitForLaunchAsync()
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+            while (!WasLaunched && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            Assert.True(WasLaunched);
+        }
+
+        public async Task<bool> WaitForHelperExitAsync(TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (IsHelperRunning() && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            return !IsHelperRunning();
+        }
 
         public IReadOnlyList<JsonElement> Requests => !File.Exists(capturePath)
             ? []
@@ -211,6 +253,22 @@ public sealed class ExternalRoutingHelperClientTests
 
         public void Dispose()
         {
+            if (WasLaunched)
+            {
+                try
+                {
+                    using var process = Process.GetProcessById(ReadProcessInt32("processId"));
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit();
+                    }
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
             Directory.Delete(root, recursive: true);
         }
 
@@ -232,9 +290,30 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
+if (args[0] == "--observe-parent")
+{
+    await File.WriteAllTextAsync(
+        args[1],
+        JsonSerializer.Serialize(new { parentExecutablePath = GetParentExecutablePath() }));
+    return;
+}
 var configuration = JsonSerializer.Deserialize<FixtureConfiguration>(
     await File.ReadAllTextAsync(args[1]),
     new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+using (var observer = new Process
+{
+    StartInfo = new ProcessStartInfo
+    {
+        FileName = Environment.ProcessPath!,
+        UseShellExecute = false,
+    },
+})
+{
+    observer.StartInfo.ArgumentList.Add("--observe-parent");
+    observer.StartInfo.ArgumentList.Add(configuration.ParentProcessPath);
+    observer.Start();
+    await observer.WaitForExitAsync();
+}
 string? request;
 while ((request = await Console.In.ReadLineAsync()) is not null)
 {
@@ -242,7 +321,7 @@ while ((request = await Console.In.ReadLineAsync()) is not null)
 }
 await File.WriteAllTextAsync(
     configuration.ProcessPath,
-    JsonSerializer.Serialize(new { parentExecutablePath = GetParentExecutablePath(), arguments = args }));
+    JsonSerializer.Serialize(new { processId = Environment.ProcessId, parentExecutablePath = GetParentExecutablePath(), arguments = args }));
 if (configuration.Behavior == "Timeout")
 {
     await Task.Delay(TimeSpan.FromSeconds(6));
@@ -296,7 +375,7 @@ struct ProcessBasicInformation
     public IntPtr InheritedFromUniqueProcessId;
 }
 
-public sealed record FixtureConfiguration(string Response, string Behavior, string CapturePath, string ProcessPath);
+public sealed record FixtureConfiguration(string Response, string Behavior, string CapturePath, string ProcessPath, string ParentProcessPath);
 """);
 
             using var process = new Process
@@ -351,6 +430,31 @@ public sealed record FixtureConfiguration(string Response, string Behavior, stri
         {
             using var document = JsonDocument.Parse(File.ReadAllText(processPath));
             return document.RootElement.GetProperty(propertyName).GetRawText().Trim('"');
+        }
+
+        private string ReadParentProcessValue(string propertyName)
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(parentProcessPath));
+            return document.RootElement.GetProperty(propertyName).GetString()!;
+        }
+
+        private int ReadProcessInt32(string propertyName)
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(processPath));
+            return document.RootElement.GetProperty(propertyName).GetInt32();
+        }
+
+        private bool IsHelperRunning()
+        {
+            try
+            {
+                using var process = Process.GetProcessById(ReadProcessInt32("processId"));
+                return !process.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
         }
 
     }
