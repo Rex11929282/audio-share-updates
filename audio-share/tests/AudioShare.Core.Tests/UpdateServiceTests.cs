@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using AudioShare.App;
 using AudioShare.Core;
@@ -6,6 +8,17 @@ namespace AudioShare.Core.Tests;
 
 public sealed class UpdateServiceTests
 {
+    [Fact]
+    public async Task TreatsGitHubLatestReleaseNotFoundAsNoUpdate()
+    {
+        using var client = new HttpClient(new StaticResponseHandler(HttpStatusCode.NotFound));
+        var service = new UpdateService(client);
+
+        var update = await service.CheckForUpdateAsync();
+
+        Assert.Null(update);
+    }
+
     [Fact]
     public void DoesNotOfferMatchingReleaseForInstalledAssemblyVersion()
     {
@@ -37,6 +50,24 @@ public sealed class UpdateServiceTests
         Assert.True(restartIndex > retryLoopIndex);
     }
 
+    [Fact]
+    public void ReplacementScriptSignalsFailureWhenAllReplacementAttemptsFail()
+    {
+        var script = GetReplacementScript();
+
+        Assert.Contains("$ReplacementSucceeded = $false", script);
+        Assert.Contains("$ReplacementSucceeded = $true", script);
+        Assert.Contains("Start-Process -FilePath $TargetPath -ArgumentList '--update-failed'", script);
+    }
+
+    [Fact]
+    public void RecognizesUpdateFailureRestartSignal()
+    {
+        Assert.True(UpdateService.IsUpdateFailedRestart(["--update-failed"]));
+        Assert.False(UpdateService.IsUpdateFailedRestart([]));
+        Assert.Contains("上一個更新未完成", UpdateService.UpdateFailedRestartNotice);
+    }
+
     private static Version GetCurrentVersion(Assembly assembly)
     {
         var method = typeof(UpdateService).GetMethod("GetCurrentVersion", BindingFlags.NonPublic | BindingFlags.Static);
@@ -60,4 +91,10 @@ public sealed class UpdateServiceTests
           ]
         }
         """;
+
+    private sealed class StaticResponseHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(statusCode));
+    }
 }

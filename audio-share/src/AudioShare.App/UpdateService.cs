@@ -13,11 +13,34 @@ public sealed class UpdateService
 {
     private const string LatestReleaseUrl = "https://api.github.com/repos/Rex11929282/audio-share-updates/releases/latest";
     private static readonly Version CurrentVersion = GetCurrentVersion(typeof(UpdateService).Assembly);
+    private readonly HttpClient? client;
+
+    public const string UpdateFailureSignal = "--update-failed";
+    public const string UpdateFailedRestartNotice = "上一個更新未完成，已保留原本程式並重新啟動。";
+
+    public UpdateService()
+    {
+    }
+
+    public UpdateService(HttpClient client)
+    {
+        this.client = client;
+    }
+
+    public static bool IsUpdateFailedRestart(IEnumerable<string> arguments) =>
+        arguments.Any(argument => string.Equals(argument, UpdateFailureSignal, StringComparison.Ordinal));
 
     public async Task<ReleaseUpdate?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
     {
-        using var client = CreateClient();
-        var releaseJson = await client.GetStringAsync(LatestReleaseUrl, cancellationToken);
+        using var ownedClient = client is null ? CreateClient() : null;
+        using var response = await (ownedClient ?? client!).GetAsync(LatestReleaseUrl, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        var releaseJson = await response.Content.ReadAsStringAsync(cancellationToken);
         return ReleaseUpdateParser.TryParseNewerRelease(releaseJson, CurrentVersion);
     }
 
@@ -33,10 +56,11 @@ public sealed class UpdateService
         var packagePath = Path.Combine(updateDirectory, ReleaseUpdateParser.PackageAssetName);
         var checksumPath = Path.Combine(updateDirectory, ReleaseUpdateParser.ChecksumAssetName);
 
-        using (var client = CreateClient())
+        using (var ownedClient = client is null ? CreateClient() : null)
         {
-            await File.WriteAllBytesAsync(packagePath, await client.GetByteArrayAsync(update.AssetUrl, cancellationToken), cancellationToken);
-            await File.WriteAllBytesAsync(checksumPath, await client.GetByteArrayAsync(update.Sha256Url, cancellationToken), cancellationToken);
+            var httpClient = ownedClient ?? client!;
+            await File.WriteAllBytesAsync(packagePath, await httpClient.GetByteArrayAsync(update.AssetUrl, cancellationToken), cancellationToken);
+            await File.WriteAllBytesAsync(checksumPath, await httpClient.GetByteArrayAsync(update.Sha256Url, cancellationToken), cancellationToken);
         }
 
         if (!HasMatchingChecksum(packagePath, await File.ReadAllTextAsync(checksumPath, cancellationToken)))
@@ -91,12 +115,14 @@ public sealed class UpdateService
         $StagedPath = "$TargetPath.audioshare-update-new"
         $BackupPath = "$TargetPath.audioshare-update-backup"
         $MaximumAttempts = 5
+        $ReplacementSucceeded = $false
 
         for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
             try {
                 Copy-Item -LiteralPath $SourcePath -Destination $StagedPath -Force
                 [System.IO.File]::Replace($StagedPath, $TargetPath, $BackupPath, $true)
                 Remove-Item -LiteralPath $BackupPath -Force -ErrorAction SilentlyContinue
+                $ReplacementSucceeded = $true
                 break
             }
             catch {
@@ -105,7 +131,12 @@ public sealed class UpdateService
             }
         }
 
-        Start-Process -FilePath $TargetPath
+        if ($ReplacementSucceeded) {
+            Start-Process -FilePath $TargetPath
+        }
+        else {
+            Start-Process -FilePath $TargetPath -ArgumentList '--update-failed'
+        }
         """;
 
     private static HttpClient CreateClient()

@@ -18,6 +18,16 @@ public partial class App : Application
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         mainWindow.Show();
+        if (UpdateService.IsUpdateFailedRestart(e.Args))
+        {
+            MessageBox.Show(
+                mainWindow,
+                UpdateService.UpdateFailedRestartNotice,
+                "Audio Share 更新",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
         _ = CheckForUpdatesAsync(mainWindow);
     }
 
