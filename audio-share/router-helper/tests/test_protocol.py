@@ -28,15 +28,30 @@ class Session:
 
 
 @dataclass
-class ProcessInfo:
+class ProcessIdentityLease:
     process_name: str
-    create_time_seconds: float
+    start_utc_ticks: int
+    events: list | None = None
+    active: bool = False
+
+    def __enter__(self):
+        self.active = True
+        if self.events is not None:
+            self.events.append("lease-enter")
+        return self
+
+    def __exit__(self, *_):
+        if self.events is not None:
+            self.events.append("lease-exit")
+        self.active = False
 
     def name(self):
+        assert self.active
         return self.process_name
 
-    def create_time(self):
-        return self.create_time_seconds
+    def create_time_utc_ticks(self):
+        assert self.active
+        return self.start_utc_ticks
 
 
 class RecordingRouter:
@@ -124,8 +139,8 @@ def helper(monkeypatch):
     monkeypatch.setattr(module, "policy", policy, raising=False)
     monkeypatch.setattr(
         module,
-        "process_factory",
-        lambda _: ProcessInfo("chrome.exe", PROCESS_CREATE_TIME_SECONDS),
+        "process_identity_lease_factory",
+        lambda _: ProcessIdentityLease("chrome.exe", PROCESS_START_UTC_TICKS),
         raising=False,
     )
     router.policy = policy
@@ -235,8 +250,11 @@ def test_route_identity_mismatch_never_reads_or_writes(
     router.sessions = [Session(7, "chrome.exe")]
     monkeypatch.setattr(
         module,
-        "process_factory",
-        lambda _: ProcessInfo("chrome.exe", create_time_seconds),
+        "process_identity_lease_factory",
+        lambda _: ProcessIdentityLease(
+            "chrome.exe",
+            int(round(create_time_seconds * 10000000)) + module.UNIX_EPOCH_UTC_TICKS,
+        ),
         raising=False,
     )
     request = {
@@ -256,6 +274,101 @@ def test_route_identity_mismatch_never_reads_or_writes(
     assert router.policy.restore_calls == []
     assert router.set_calls == []
     assert router.clear_calls == []
+
+
+@pytest.mark.parametrize(
+    "command,extra,expected_policy_call",
+    [
+        ("get-route", {}, "get"),
+        ("set-route", {"deviceId": "input"}, "set"),
+        (
+            "restore-route",
+            {
+                "consoleDeviceId": None,
+                "multimediaDeviceId": "previous-multimedia",
+            },
+            "restore",
+        ),
+    ],
+)
+def test_process_identity_lease_is_held_through_policy_operation(
+    helper,
+    monkeypatch,
+    command,
+    extra,
+    expected_policy_call,
+):
+    module, router = helper
+    router.sessions = [Session(9, "chrome.exe")]
+    events = []
+    lease = ProcessIdentityLease("chrome.exe", PROCESS_START_UTC_TICKS, events)
+
+    class LeaseCheckingPolicy(RecordingPolicy):
+        def get_route(self, process_id):
+            assert lease.active
+            events.append("get")
+            return super().get_route(process_id)
+
+        def set_route(self, process_id, device_id):
+            assert lease.active
+            events.append("set")
+            super().set_route(process_id, device_id)
+
+        def restore_route(self, process_id, route):
+            assert lease.active
+            events.append("restore")
+            super().restore_route(process_id, route)
+
+    policy = LeaseCheckingPolicy()
+    monkeypatch.setattr(module, "policy", policy)
+    monkeypatch.setattr(module, "process_identity_lease_factory", lambda _: lease)
+
+    response = module.handle(
+        {
+            "command": command,
+            "processId": 9,
+            "processName": "chrome.exe",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+            **extra,
+        }
+    )
+
+    assert response["ok"] is True
+    assert events == ["lease-enter", expected_policy_call, "lease-exit"]
+    assert lease.active is False
+
+
+def test_process_identity_lease_is_released_when_policy_operation_fails(
+    helper,
+    monkeypatch,
+):
+    module, router = helper
+    router.sessions = [Session(9, "chrome.exe")]
+    events = []
+    lease = ProcessIdentityLease("chrome.exe", PROCESS_START_UTC_TICKS, events)
+
+    class FailingPolicy(RecordingPolicy):
+        def set_route(self, process_id, device_id):
+            assert lease.active
+            events.append("set")
+            raise RuntimeError("raw policy detail")
+
+    monkeypatch.setattr(module, "policy", FailingPolicy())
+    monkeypatch.setattr(module, "process_identity_lease_factory", lambda _: lease)
+
+    response = module.handle(
+        {
+            "command": "set-route",
+            "processId": 9,
+            "processName": "chrome.exe",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+            "deviceId": "input",
+        }
+    )
+
+    assert response == {"ok": False, "error": "Routing request failed."}
+    assert events == ["lease-enter", "set", "lease-exit"]
+    assert lease.active is False
 
 
 def test_list_devices_returns_json_safe_values(helper):
@@ -423,7 +536,7 @@ def test_persisted_route_policy_set_attempts_both_roles_and_aggregates_failures(
 
     with pytest.raises(
         RuntimeError,
-        match="consoleDeviceId.*multimediaDeviceId",
+        match="Console and Multimedia role routing failed",
     ):
         policy.set_route(9, "input")
 
@@ -445,7 +558,7 @@ def test_persisted_route_policy_restore_attempts_both_roles_and_aggregates_failu
 
     with pytest.raises(
         RuntimeError,
-        match="consoleDeviceId.*multimediaDeviceId",
+        match="Console and Multimedia role routing failed",
     ):
         policy.restore_route(
             9,
@@ -459,6 +572,39 @@ def test_persisted_route_policy_restore_attempts_both_roles_and_aggregates_failu
         (9, 5, 10, None),
         (9, 5, 20, "packed-multimedia"),
     ]
+
+
+def test_role_failures_are_sanitized_and_preserved_in_protocol_response(
+    helper,
+    monkeypatch,
+):
+    module, router = helper
+    router.sessions = [Session(9, "chrome.exe")]
+    factory = RecordingPolicyFactory(set_failures=(10, 20))
+    policy = module._PersistedRoutePolicy.__new__(module._PersistedRoutePolicy)
+    policy._com_initialized = lambda: factory
+    policy._factory = lambda: factory
+    policy._pack_device_id = lambda value: f"packed-{value}"
+    policy._flow = 5
+    policy._roles = {"consoleDeviceId": 10, "multimediaDeviceId": 20}
+    monkeypatch.setattr(module, "policy", policy)
+
+    response = module.handle(
+        {
+            "command": "set-route",
+            "processId": 9,
+            "processName": "chrome.exe",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+            "deviceId": "input",
+        }
+    )
+
+    assert response == {
+        "ok": False,
+        "error": "Console and Multimedia role routing failed.",
+    }
+    assert "role 10 failed" not in response["error"]
+    assert "role 20 failed" not in response["error"]
 
 
 def test_main_reads_one_request_and_writes_one_json_response(helper, monkeypatch):

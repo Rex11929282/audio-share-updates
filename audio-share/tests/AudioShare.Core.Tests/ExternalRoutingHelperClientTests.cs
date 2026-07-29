@@ -183,6 +183,23 @@ public sealed class ExternalRoutingHelperClientTests
     }
 
     [Fact]
+    public async Task SetRouteAsync_PreservesSanitizedAggregatedRoleError()
+    {
+        using var fixture = HelperFixture.Create(
+            "{\"ok\":false,\"error\":\"Console and Multimedia role routing failed.\"}");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.CreateClient().SetRouteAsync(
+                41,
+                638893440000000000,
+                "chrome",
+                "device-a",
+                CancellationToken.None));
+
+        Assert.Equal("Console and Multimedia role routing failed.", exception.Message);
+    }
+
+    [Fact]
     public async Task CheckHealthAsync_LaunchesThePackagedPythonDirectlyWithoutAShell()
     {
         using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}");
