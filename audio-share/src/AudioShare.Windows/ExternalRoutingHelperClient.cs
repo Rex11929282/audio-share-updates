@@ -125,28 +125,23 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
             throw new InvalidOperationException("Packaged routing helper could not be started.");
         }
 
-        await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request, JsonOptions));
-        process.StandardInput.Close();
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
-
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(HelperTimeout);
+        var stdinTask = WriteRequestAsync(process.StandardInput, JsonSerializer.Serialize(request, JsonOptions));
         try
         {
+            await stdinTask.WaitAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-
-            await process.WaitForExitAsync(CancellationToken.None);
+            await TerminateAndReapAsync(process);
+            await ObserveCompletionAsync(stdinTask);
             if (token.IsCancellationRequested)
             {
-                throw;
+                token.ThrowIfCancellationRequested();
             }
 
             throw new InvalidOperationException("Routing helper timed out after 5 seconds.");
@@ -160,6 +155,40 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
         }
 
         return (manifest, ParseResponse(stdout));
+    }
+
+    private static async Task WriteRequestAsync(StreamWriter input, string request)
+    {
+        await input.WriteLineAsync(request);
+        await input.FlushAsync();
+        input.Close();
+    }
+
+    private static async Task TerminateAndReapAsync(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException) when (process.HasExited)
+        {
+        }
+        catch (System.ComponentModel.Win32Exception) when (process.HasExited)
+        {
+        }
+
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    private static async Task ObserveCompletionAsync(Task task)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception)
+        {
+        }
     }
 
     private async Task<RoutingHelperManifest> ValidatePackageAsync(CancellationToken token)
