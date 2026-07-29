@@ -47,12 +47,23 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
         }
         catch (Exception exception)
         {
+            var recoveryFailures = new List<string>();
             foreach (var snapshot in changedSnapshots.AsEnumerable().Reverse())
             {
-                await RestoreSnapshotAsync(snapshot, CancellationToken.None);
+                try
+                {
+                    await RestoreSnapshotAsync(snapshot, CancellationToken.None);
+                }
+                catch (Exception recoveryException)
+                {
+                    recoveryFailures.Add($"Process {snapshot.ProcessId}: {recoveryException.Message}");
+                }
             }
 
-            return new ApplicationRouteExecutionResult(false, exception.Message, snapshots);
+            var message = recoveryFailures.Count == 0
+                ? exception.Message
+                : $"{exception.Message} Recovery failed: {string.Join("; ", recoveryFailures)}";
+            return new ApplicationRouteExecutionResult(false, message, snapshots);
         }
 
         latestSuccessfulTransaction = snapshots.ToArray();

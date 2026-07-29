@@ -68,3 +68,33 @@
 ### Concerns
 
 - The prior cancellation concern is resolved for helper calls that honor cancellation tokens. Recovery can still fail only when the helper itself throws independently of cancellation.
+
+## Compensation Continuation Fix
+
+### Changed Paths
+
+- `audio-share/src/AudioShare.Windows/ApplicationRouteExecutor.cs`
+- `audio-share/tests/AudioShare.Core.Tests/ApplicationRouteExecutorTests.cs`
+- `.superpowers/sdd/task-2-report.md`
+
+### Test Added
+
+- `ApplyAsync_WhenLaterCompensationFails_ContinuesRestoringEarlierSnapshots`
+
+### Commands And Results
+
+1. `dotnet test .\audio-share\AudioShare.sln --configuration Debug --filter FullyQualifiedName~ApplicationRouteExecutorTests`
+   - Red result: exit 1; a later compensation `InvalidOperationException` escaped rollback before the earlier snapshot could be restored.
+   - Green result: passed 7, failed 0.
+2. `dotnet test .\audio-share\AudioShare.sln --configuration Debug`
+   - Result: passed 77, failed 0, skipped 0.
+
+### Self-Review
+
+- `ApplyAsync` catches every compensation failure, records the process ID and error, then continues through all earlier successful writes in reverse order.
+- Compensation retains `CancellationToken.None` for every restore write.
+- A recovery failure returns a failed `ApplicationRouteExecutionResult` with `Recovery failed` details instead of escaping from rollback.
+
+### Concerns
+
+- If a helper restore fails, its route remains unrecovered and is reported in the result; all other eligible prior writes are still attempted.

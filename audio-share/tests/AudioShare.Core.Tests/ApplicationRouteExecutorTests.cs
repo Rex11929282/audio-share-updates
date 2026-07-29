@@ -38,6 +38,28 @@ public sealed class ApplicationRouteExecutorTests
     }
 
     [Fact]
+    public async Task ApplyAsync_WhenLaterCompensationFails_ContinuesRestoringEarlierSnapshots()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var helper = new RecordingHelper(
+            new Dictionary<int, string?> { [1] = "old-input", [2] = "old-aux", [3] = null },
+            failOnSetCall: "set:2:old-aux",
+            cancelAfterSetProcessId: 2,
+            cancellation: cancellation);
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([
+            new(1, "chrome.exe", "input"),
+            new(2, "cloudmusic.exe", "aux"),
+            new(3, "game.exe", "input")]);
+
+        var result = await executor.ApplyAsync(plan, cancellation.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Recovery failed", result.Message);
+        Assert.Contains("set:1:old-input", helper.Calls);
+    }
+
+    [Fact]
     public async Task ApplyAsync_ReadsEverySnapshotBeforeTheFirstWrite()
     {
         var helper = new RecordingHelper(new Dictionary<int, string?> { [1] = "old-input", [2] = "old-aux" });
@@ -93,17 +115,20 @@ public sealed class ApplicationRouteExecutorTests
     {
         private readonly IReadOnlyDictionary<int, string?> routes;
         private readonly int? failOnSetProcessId;
+        private readonly string? failOnSetCall;
         private readonly int? cancelAfterSetProcessId;
         private readonly CancellationTokenSource? cancellation;
 
         public RecordingHelper(
             IReadOnlyDictionary<int, string?> routes,
             int? failOnSetProcessId = null,
+            string? failOnSetCall = null,
             int? cancelAfterSetProcessId = null,
             CancellationTokenSource? cancellation = null)
         {
             this.routes = routes;
             this.failOnSetProcessId = failOnSetProcessId;
+            this.failOnSetCall = failOnSetCall;
             this.cancelAfterSetProcessId = cancelAfterSetProcessId;
             this.cancellation = cancellation;
         }
@@ -120,7 +145,8 @@ public sealed class ApplicationRouteExecutorTests
         {
             Calls.Add($"set:{processId}:{deviceId}");
             token.ThrowIfCancellationRequested();
-            if (processId == failOnSetProcessId && deviceId is "aux")
+            if ((processId == failOnSetProcessId && deviceId is "aux") ||
+                $"set:{processId}:{deviceId}" == failOnSetCall)
             {
                 throw new InvalidOperationException("Route write failed.");
             }
