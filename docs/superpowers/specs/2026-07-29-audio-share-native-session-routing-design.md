@@ -2,14 +2,14 @@
 
 ## Goal
 
-Let the user share audio only from explicitly selected, currently playing applications on Windows 10. A selected application is routed to `Voicemeeter Input`; every other discovered playback application is routed to `Voicemeeter AUX Input`. The rule applies only to the current process lifetime and expires when that process exits.
+Let the user share audio only from explicitly selected, currently playing applications on Windows 10. A selected application identity is routed to `Voicemeeter Input`; every other discovered playback application identity is routed to `Voicemeeter AUX Input`. Selecting Chrome affects all concurrently running Chrome audio processes because Windows stores an output preference by application identity rather than PID.
 
 ## Constraints
 
 - Keep the existing working bus isolation: `Voicemeeter Input` may feed B1, while `Voicemeeter AUX Input` feeds A1 only.
 - Never route Discord, Voicemod, or Voicemeeter itself to the share bus.
 - Do not change the global default playback device, audio drivers, or Discord's microphone configuration.
-- Do not persist executable-name routing rules. A restarted application must be selected again.
+- Route applications by the Windows executable/application identity. The app must show that all matching processes are affected.
 - The feature must work on the user's current Windows 10 19044 system without installing or redistributing third-party routing utilities.
 - Windows does not expose a documented, stable Win10 API for this kind of per-application endpoint routing. The native router is therefore experimental and remains disabled until a local compatibility probe succeeds.
 
@@ -27,7 +27,7 @@ Let the user share audio only from explicitly selected, currently playing applic
 4. The router resolves the currently active `Voicemeeter Input` and `Voicemeeter AUX Input` endpoints.
 5. It sends selected processes to Input and every discovered, unselected process to AUX.
 6. It shows each changed process, target endpoint, and rollback status.
-7. When a process exits, the rule expires. A newly launched process is not routed until it appears in a new scan and the user explicitly applies again.
+7. The user presses `Restore this routing` to return the identities changed by the latest transaction to their previous endpoints. A later instance of the same executable follows the active Windows application rule until it is restored or changed by a later explicit Apply.
 
 ## Safety Model
 
@@ -41,15 +41,15 @@ Before a route command, the router snapshots the previous endpoint preference fo
 
 No global default device is read or written. If either Voicemeeter endpoint is absent, ambiguous, inactive, or fails the compatibility probe, the router makes no change and explains the reason.
 
-### Session-Only Ownership
+### Application-Identity Ownership
 
-Route ownership is bound to a discovered process instance, not a saved `.exe` rule. A timer may only remove expired ownership records; it must never apply a route to a reused PID or an unseen process. Selecting an application is intent only until the user explicitly confirms Apply.
+Route ownership is bound to the Windows application identity used by its persisted output preference, not a PID. The UI must state this before confirmation and list every active matching process. Selecting an application is intent only until the user explicitly confirms Apply. Audio Share never applies a route to an application identity that was not in that confirmation.
 
 ## Architecture
 
 ### Core
 
-The existing `AudioRoutingPolicy` remains the pure protected-process gate. A new pure route-plan builder receives discovered sessions, checked session identifiers, and resolved endpoint identifiers. It emits deterministic commands, rejects protected targets, and is unit tested without Windows audio hardware.
+The existing `AudioRoutingPolicy` remains the pure protected-process gate. A new pure route-plan builder receives discovered sessions, checked application identities, and resolved endpoint identifiers. It emits deterministic commands, rejects protected targets, and is unit tested without Windows audio hardware.
 
 ### Windows Adapter
 
@@ -70,14 +70,14 @@ The WPF app adds a clearly labelled experimental routing section. It shows selec
 ## Verification
 
 1. Unit tests prove selected sessions map to Input, unselected sessions map to AUX, and protected sessions cannot map to Input.
-2. Unit tests cover duplicate selections, stale process identities, endpoint lookup failures, partial apply rollback, and explicit restore.
+2. Unit tests cover duplicate application identities, multiple active processes for one executable, endpoint lookup failures, partial apply rollback, and explicit restore.
 3. Build and all existing tests pass with the native feature disabled.
 4. On the user's machine, run the compatibility probe only; it must not alter routing.
 5. Only after an explicit user confirmation, run a controlled live test with one non-Discord music app and verify: music reaches B1, Discord friend audio remains audible locally, and friend audio never reaches B1.
 
 ## Non-Goals
 
-- Persisting rules across application restarts.
+- PID-specific routing or isolation between concurrent instances of the same executable.
 - Capturing a process's audio directly.
 - Automatically downloading third-party tools or drivers.
 - Reconfiguring Voicemeeter, Voicemod, Discord, or Windows global playback settings.
