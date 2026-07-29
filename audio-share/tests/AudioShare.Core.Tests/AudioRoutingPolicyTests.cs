@@ -39,4 +39,19 @@ public sealed class AudioRoutingPolicyTests
 
         Assert.Throws<ArgumentException>(() => AudioRoutingPolicy.GetSetupInstruction([discord]));
     }
+
+    [Fact]
+    public void GetRouteConfirmationText_NamesSelectedAppsAndExplainsIdentityScopeAndExclusions()
+    {
+        var selected = new AudioSession(10, 100, "chrome.exe", "Chrome", true);
+        var text = AudioRoutingPolicy.GetRouteConfirmationText([selected], 1, 2);
+
+        Assert.Contains("Chrome", text, StringComparison.Ordinal);
+        Assert.Contains("all active processes of the same application identity", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Discord", text, StringComparison.Ordinal);
+        Assert.Contains("Voicemod", text, StringComparison.Ordinal);
+        Assert.Contains("Voicemeeter", text, StringComparison.Ordinal);
+        Assert.Contains("1", text, StringComparison.Ordinal);
+        Assert.Contains("2", text, StringComparison.Ordinal);
+    }
 }
