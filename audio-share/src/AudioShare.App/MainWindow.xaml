@@ -1,12 +1,124 @@
-﻿<Window x:Class="AudioShare.App.MainWindow"
+<Window x:Class="AudioShare.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:AudioShare.App"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="音訊分享"
+        Width="920"
+        Height="700"
+        MinWidth="720"
+        MinHeight="560"
+        Background="#F5F7FA"
+        FontFamily="Microsoft JhengHei UI"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </Window.Resources>
 
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="#162033" Text="音訊分享" />
+                <TextBlock Margin="0,5,0,0" Foreground="#526176" Text="選取要分享的音訊程式，再於 Windows 音量混音器完成輸出選擇。" />
+            </StackPanel>
+            <Button x:Name="RefreshButton" Grid.Column="1" VerticalAlignment="Center" Click="RefreshButton_Click" Content="重新整理" />
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ItemsControl ItemsSource="{Binding ProcessStatuses}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,12,0" Padding="14,10" Background="White" BorderBrush="#DCE3EC" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Foreground="#24324A" Text="{Binding DisplayName}" />
+                                <TextBlock Margin="0,3,0,0" Text="{Binding StatusText}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#9B5A12" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                    <Setter Property="Foreground" Value="#147A4B" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Background="#1D5FBF" Foreground="White" BorderBrush="#1D5FBF" Click="OpenVolumeMixerButton_Click" Content="開啟 Windows 音量混音器" />
+        </Grid>
+
+        <Border Grid.Row="2" Padding="20" Background="White" BorderBrush="#DCE3EC" BorderThickness="1" CornerRadius="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#24324A" Text="偵測到正在播放音訊的程式" />
+                <TextBlock x:Name="EmptyStateText" Grid.Row="1" Margin="0,8,0,4" Foreground="#718096" Text="正在偵測音訊工作階段..." />
+                <ListBox Grid.Row="2" Margin="0,6,0,0" ItemsSource="{Binding Applications}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,4,0,4" Padding="12" Background="#F8FAFC" BorderBrush="#E5EAF0" BorderThickness="1" CornerRadius="7">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding IsSelectable}" Checked="ApplicationSelectionChanged" Unchecked="ApplicationSelectionChanged" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock FontWeight="SemiBold" Foreground="#24324A" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Margin="0,3,0,0" FontSize="12" Foreground="#718096" Text="{Binding DetailText}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#526176" Text="{Binding SelectionStatus}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="3" Margin="0,18,0,0">
+            <Border Padding="12" Background="#FFF6E5" BorderBrush="#F0CF89" BorderThickness="1" CornerRadius="7">
+                <TextBlock Foreground="#76530C" TextWrapping="Wrap" Text="注意：本程式不會變更音訊路由；您必須在 Windows 音量混音器中手動將程式輸出選為 Voicemeeter Input。" />
+            </Border>
+            <TextBlock x:Name="InstructionText" Margin="2,12,2,0" Foreground="#1D5FBF" TextWrapping="Wrap" Text="選取一個程式後，系統會開啟 Windows 音量混音器。" />
+            <Border x:Name="ErrorPanel" Margin="0,10,0,0" Padding="10" Background="#FFF0F0" BorderBrush="#E9A2A2" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                <TextBlock x:Name="ErrorText" Foreground="#A12121" TextWrapping="Wrap" />
+            </Border>
+        </StackPanel>
     </Grid>
 </Window>
