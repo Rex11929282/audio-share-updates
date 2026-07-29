@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AudioShare.Core\AudioShare.Core.csproj" />
+    <ProjectReference Include="..\..\src\AudioShare.Windows\AudioShare.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>
