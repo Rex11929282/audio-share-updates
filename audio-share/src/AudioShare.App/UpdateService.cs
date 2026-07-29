@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using AudioShare.Core;
@@ -11,7 +12,7 @@ namespace AudioShare.App;
 public sealed class UpdateService
 {
     private const string LatestReleaseUrl = "https://api.github.com/repos/Rex11929282/audio-share-updates/releases/latest";
-    private static readonly Version CurrentVersion = new(1, 0, 0);
+    private static readonly Version CurrentVersion = GetCurrentVersion(typeof(UpdateService).Assembly);
 
     public async Task<ReleaseUpdate?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
     {
@@ -87,16 +88,35 @@ public sealed class UpdateService
         )
 
         Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
-        Copy-Item -LiteralPath $SourcePath -Destination $TargetPath -Force
+        $StagedPath = "$TargetPath.audioshare-update-new"
+        $BackupPath = "$TargetPath.audioshare-update-backup"
+        $MaximumAttempts = 5
+
+        for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
+            try {
+                Copy-Item -LiteralPath $SourcePath -Destination $StagedPath -Force
+                [System.IO.File]::Replace($StagedPath, $TargetPath, $BackupPath, $true)
+                Remove-Item -LiteralPath $BackupPath -Force -ErrorAction SilentlyContinue
+                break
+            }
+            catch {
+                Remove-Item -LiteralPath $StagedPath -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 500
+            }
+        }
+
         Start-Process -FilePath $TargetPath
         """;
 
     private static HttpClient CreateClient()
     {
         var client = new HttpClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("AudioShare/1.0.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"AudioShare/{CurrentVersion}");
         return client;
     }
+
+    private static Version GetCurrentVersion(Assembly assembly) =>
+        assembly.GetName().Version ?? new Version(0, 0);
 
     private static bool HasMatchingChecksum(string packagePath, string checksumText)
     {
