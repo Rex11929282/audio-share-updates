@@ -40,6 +40,15 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
+    public void ReplacementScriptReplacesTheExecutableAndThirdPartyNotices()
+    {
+        var script = GetReplacementScript();
+
+        Assert.Contains("$Files = @(\"AudioShare.App.exe\", \"ThirdPartyNotices.txt\")", script);
+        Assert.Contains("[System.IO.File]::Replace($StagedPath, $FileTargetPath, $BackupPath, $true)", script);
+    }
+
+    [Fact]
     public void ReplacementScriptRelaunchesTargetAfterReplacementAttempts()
     {
         var script = GetReplacementScript();

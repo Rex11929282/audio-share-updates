@@ -8,6 +8,8 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $projectFile = Join-Path $projectRoot 'src\AudioShare.App\AudioShare.App.csproj'
 $thirdPartyNoticesPath = Join-Path $projectRoot 'ThirdPartyNotices.txt'
+$dotNetRuntimeLicensePath = Join-Path $projectRoot 'DotNetRuntimeLicense.txt'
+$dotNetRuntimeThirdPartyNoticesPath = Join-Path $projectRoot 'DotNetRuntimeThirdPartyNotices.txt'
 $publishDirectory = Join-Path $OutputDirectory 'publish'
 $zipPath = Join-Path $OutputDirectory 'AudioShare-win-x64.zip'
 $checksumPath = Join-Path $OutputDirectory 'AudioShare-win-x64.zip.sha256'
@@ -26,6 +28,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Copy-Item -LiteralPath $thirdPartyNoticesPath -Destination $publishDirectory
+Copy-Item -LiteralPath $dotNetRuntimeLicensePath -Destination $publishDirectory
+Copy-Item -LiteralPath $dotNetRuntimeThirdPartyNoticesPath -Destination $publishDirectory
 Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $zipPath
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath $checksumPath -Value "$hash  AudioShare-win-x64.zip" -NoNewline

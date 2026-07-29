@@ -71,10 +71,10 @@ public sealed class UpdateService
         var extractedDirectory = Path.Combine(updateDirectory, "extracted");
         ZipFile.ExtractToDirectory(packagePath, extractedDirectory);
 
-        var replacementPath = Path.Combine(extractedDirectory, Path.GetFileName(executablePath));
-        if (!File.Exists(replacementPath))
+        var requiredFiles = new[] { "AudioShare.App.exe", "ThirdPartyNotices.txt" };
+        if (requiredFiles.Any(fileName => !File.Exists(Path.Combine(extractedDirectory, fileName))))
         {
-            throw new InvalidDataException("更新壓縮檔未包含預期的程式檔案。");
+            throw new InvalidDataException("更新壓縮檔未包含預期的程式或授權告知檔案。");
         }
 
         var scriptPath = Path.Combine(updateDirectory, "replace-and-restart.ps1");
@@ -93,7 +93,7 @@ public sealed class UpdateService
                 "-File",
                 scriptPath,
                 Process.GetCurrentProcess().Id.ToString(),
-                replacementPath,
+                extractedDirectory,
                 executablePath,
             },
         });
@@ -107,26 +107,49 @@ public sealed class UpdateService
     private static readonly string ReplacementScript = """
         param(
             [int]$ProcessId,
-            [string]$SourcePath,
+            [string]$SourceDirectory,
             [string]$TargetPath
         )
 
         Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
-        $StagedPath = "$TargetPath.audioshare-update-new"
-        $BackupPath = "$TargetPath.audioshare-update-backup"
+        $ApplicationDirectory = Split-Path -Parent $TargetPath
+        $Files = @("AudioShare.App.exe", "ThirdPartyNotices.txt")
         $MaximumAttempts = 5
         $ReplacementSucceeded = $false
 
         for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
+            $ReplacedFiles = [System.Collections.Generic.List[string]]::new()
             try {
-                Copy-Item -LiteralPath $SourcePath -Destination $StagedPath -Force
-                [System.IO.File]::Replace($StagedPath, $TargetPath, $BackupPath, $true)
-                Remove-Item -LiteralPath $BackupPath -Force -ErrorAction SilentlyContinue
+                foreach ($File in $Files) {
+                    $SourcePath = Join-Path $SourceDirectory $File
+                    $FileTargetPath = Join-Path $ApplicationDirectory $File
+                    $StagedPath = "$FileTargetPath.audioshare-update-new"
+                    $BackupPath = "$FileTargetPath.audioshare-update-backup"
+                    Copy-Item -LiteralPath $SourcePath -Destination $StagedPath -Force
+                    [System.IO.File]::Replace($StagedPath, $FileTargetPath, $BackupPath, $true)
+                    $ReplacedFiles.Add($File)
+                }
+
+                foreach ($File in $Files) {
+                    Remove-Item -LiteralPath (Join-Path $ApplicationDirectory "$File.audioshare-update-backup") -Force -ErrorAction SilentlyContinue
+                }
+
                 $ReplacementSucceeded = $true
                 break
             }
             catch {
-                Remove-Item -LiteralPath $StagedPath -Force -ErrorAction SilentlyContinue
+                foreach ($File in $ReplacedFiles) {
+                    $FileTargetPath = Join-Path $ApplicationDirectory $File
+                    $BackupPath = "$FileTargetPath.audioshare-update-backup"
+                    if (Test-Path -LiteralPath $BackupPath) {
+                        [System.IO.File]::Replace($BackupPath, $FileTargetPath, $null, $true)
+                    }
+                }
+
+                foreach ($File in $Files) {
+                    Remove-Item -LiteralPath (Join-Path $ApplicationDirectory "$File.audioshare-update-new") -Force -ErrorAction SilentlyContinue
+                }
+
                 Start-Sleep -Milliseconds 500
             }
         }

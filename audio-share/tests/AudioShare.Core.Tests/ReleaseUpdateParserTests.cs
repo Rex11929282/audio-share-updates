@@ -7,13 +7,17 @@ namespace AudioShare.Core.Tests;
 public sealed class ReleaseUpdateParserTests
 {
     [Fact]
-    public void PublishScriptCopiesThirdPartyNoticesIntoTheArchiveSource()
+    public void PublishScriptCopiesEveryBundledNoticeIntoTheArchiveSource()
     {
         var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "scripts", "publish-release.ps1"));
         var script = File.ReadAllText(scriptPath);
 
         Assert.Contains("ThirdPartyNotices.txt", script);
+        Assert.Contains("DotNetRuntimeLicense.txt", script);
+        Assert.Contains("DotNetRuntimeThirdPartyNotices.txt", script);
         Assert.Contains("Copy-Item -LiteralPath $thirdPartyNoticesPath -Destination $publishDirectory", script);
+        Assert.Contains("Copy-Item -LiteralPath $dotNetRuntimeLicensePath -Destination $publishDirectory", script);
+        Assert.Contains("Copy-Item -LiteralPath $dotNetRuntimeThirdPartyNoticesPath -Destination $publishDirectory", script);
     }
 
     [Fact]
