@@ -1,12 +1,18 @@
 param(
     [Parameter(Mandatory)]
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+
+    [Parameter(Mandatory)]
+    [string]$PythonEmbedZip,
+
+    [string]$HostPython
 )
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $projectFile = Join-Path $projectRoot 'src\AudioShare.App\AudioShare.App.csproj'
+$routerHelperBuildPath = Join-Path $projectRoot 'scripts\build-router-helper.ps1'
 $thirdPartyNoticesPath = Join-Path $projectRoot 'ThirdPartyNotices.txt'
 $dotNetRuntimeLicensePath = Join-Path $projectRoot 'DotNetRuntimeLicense.txt'
 $dotNetRuntimeThirdPartyNoticesPath = Join-Path $projectRoot 'DotNetRuntimeThirdPartyNotices.txt'
@@ -26,6 +32,16 @@ dotnet publish $projectFile --configuration Release --runtime win-x64 --self-con
 if ($LASTEXITCODE -ne 0) {
     throw 'dotnet publish failed.'
 }
+
+$helperBuildArguments = @{
+    OutputDirectory = $publishDirectory
+    PythonEmbedZip = $PythonEmbedZip
+}
+if (-not [string]::IsNullOrWhiteSpace($HostPython)) {
+    $helperBuildArguments.HostPython = $HostPython
+}
+
+& $routerHelperBuildPath @helperBuildArguments
 
 Copy-Item -LiteralPath $thirdPartyNoticesPath -Destination $publishDirectory
 Copy-Item -LiteralPath $dotNetRuntimeLicensePath -Destination $publishDirectory

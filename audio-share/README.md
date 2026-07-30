@@ -27,6 +27,18 @@ Keep the existing working audio chain:
 
 The selection checkmark is only stored inside Audio Share. Clearing it does not change the application's Windows output device. Change the device in Windows Volume Mixer whenever you need to stop sharing.
 
+## Experimental External Routing
+
+The experimental controls are disabled until a refresh verifies the integrity and health of the bundled routing helper and finds exactly one `Voicemeeter Input` share-bus endpoint and one `Voicemeeter AUX Input` local-only endpoint. Matching accepts either the canonical label or that label followed by the parenthesized Windows device description, such as `Voicemeeter Input (VB-Audio Voicemeeter VAIO)`. Substring and lookalike names are rejected, and routing always uses the matched endpoint's actual MMDevice ID. The helper is packaged with the release; Audio Share never downloads a routing runtime while it is running.
+
+Selecting applications and refreshing only discover state. They never write an audio route. `Apply selected audio routing` first shows the selected-to-Input and unselected-to-AUX process counts and requires an explicit confirmation. The transaction routes selected supported applications to `Voicemeeter Input` and other supported active applications to `Voicemeeter AUX Input`.
+
+Discord, Voicemod, Voicemeeter, and VoicemeeterPro are always excluded. Routing applies at application identity scope, so selecting an application such as Chrome affects all concurrently active Chrome audio processes. Every get, set, and restore request carries the discovered PID, executable name, and process start time. The helper opens a Windows process handle, validates the executable and start time through that held handle, and keeps it open until the policy read or write finishes so the PID cannot be reused during the operation. Before the first write, Audio Share snapshots both the Console and Multimedia route roles for every process. Each in-flight write is owned before waiting for the helper response, so cancellation or timeout triggers compensation even when the write outcome is ambiguous. After a successful Apply, use `Restore this routing` and confirm again to restore only the transaction created during the current app run.
+
+Console and Multimedia writes are attempted independently and report their failures together using sanitized role names; the helper client preserves that aggregate message for the UI. Recovery attempts every owned snapshot even if an earlier restore fails. Fully compensated failed or cancelled applies leave no transaction. If either role for a route cannot be recovered, Restore remains available for that unresolved snapshot and retries both roles without reapplying the route plan.
+
+The manual `Set up selected apps` workflow remains available when the helper is unavailable or when you prefer to manage devices yourself. Do not perform a live routing test without explicit user consent. After consent, test only one non-Discord music app and then restore it before testing anything else.
+
 ## Build And Run
 
 ```powershell

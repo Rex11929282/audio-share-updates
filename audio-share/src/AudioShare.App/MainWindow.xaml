@@ -122,9 +122,21 @@
 
         <StackPanel Grid.Row="3" Margin="0,18,0,0">
             <Border Padding="12" Background="#FFF6E5" BorderBrush="#F0CF89" BorderThickness="1" CornerRadius="7">
-                <TextBlock Foreground="#76530C" TextWrapping="Wrap" Text="注意：本程式不會變更音訊路由；您必須在 Windows 音量混音器中手動將程式輸出選為 Voicemeeter Input。" />
+                <TextBlock Foreground="#76530C" TextWrapping="Wrap" Text="注意：手動備援不會變更音訊路由；實驗性路由只會在明確確認後寫入。" />
             </Border>
             <TextBlock x:Name="InstructionText" Margin="2,12,2,0" Foreground="#1D5FBF" TextWrapping="Wrap" Text="選取一個程式後，系統會開啟 Windows 音量混音器。" />
+            <Border Margin="0,12,0,0" Padding="12" Background="#EEF6FF" BorderBrush="#A9C7ED" BorderThickness="1" CornerRadius="7">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ExperimentalRoutingStatusText" Margin="0,0,12,0" VerticalAlignment="Center" Foreground="#234B78" TextWrapping="Wrap" Text="Experimental routing is unavailable until refresh completes." />
+                    <Button x:Name="ApplyRoutingButton" Grid.Column="1" Margin="0,0,8,0" IsEnabled="False" Background="#1D5FBF" Foreground="White" BorderBrush="#1D5FBF" Click="ApplyRoutingButton_Click" Content="Apply selected audio routing" />
+                    <Button x:Name="RestoreRoutingButton" Grid.Column="2" IsEnabled="False" Click="RestoreRoutingButton_Click" Content="Restore this routing" />
+                </Grid>
+            </Border>
             <Border x:Name="ErrorPanel" Margin="0,10,0,0" Padding="10" Background="#FFF0F0" BorderBrush="#E9A2A2" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
                 <TextBlock x:Name="ErrorText" Foreground="#A12121" TextWrapping="Wrap" />
             </Border>
