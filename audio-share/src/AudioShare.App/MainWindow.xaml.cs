@@ -1194,6 +1194,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        var result = MessageBox.Show(
+            $"确定不再显示“{row.DisplayName}”吗？\n之后可在“设置”中恢复。",
+            "不再显示程序",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
         preferences = preferences.Exclude(row.Session.ProcessName);
         preferencesStore.Save(preferences);
         await RefreshApplicationsOnlyAsync();
