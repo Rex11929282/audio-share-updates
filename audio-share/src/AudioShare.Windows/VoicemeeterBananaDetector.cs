@@ -4,8 +4,19 @@ public sealed record VoicemeeterBananaEndpoints(
     ExternalAudioDevice Input,
     ExternalAudioDevice AuxInput);
 
+public sealed record VoicemeeterBananaEndpointHealth(bool HasInput, bool HasAux);
+
 public static class VoicemeeterBananaDetector
 {
+    public static VoicemeeterBananaEndpointHealth GetEndpointHealth(IEnumerable<ExternalAudioDevice> devices)
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+
+        return new VoicemeeterBananaEndpointHealth(
+            ExternalAudioDeviceSelector.FindMatches(devices, "Voicemeeter Input").Count == 1,
+            ExternalAudioDeviceSelector.FindMatches(devices, "Voicemeeter AUX Input").Count == 1);
+    }
+
     public static bool TryFindEndpoints(
         IEnumerable<ExternalAudioDevice> devices,
         out VoicemeeterBananaEndpoints? endpoints)

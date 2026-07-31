@@ -221,6 +221,18 @@
                                                 <TextBlock FontWeight="SemiBold" Foreground="#29425D" Text="{Binding Title}" />
                                             </StackPanel>
                                             <TextBlock Margin="14,3,0,0" FontSize="11" Foreground="#61798F" TextWrapping="Wrap" Text="{Binding Message}" />
+                                            <Button Margin="14,6,0,0" Padding="8,4" HorizontalAlignment="Left" Click="OpenDiscordVoiceVideoSettingsButton_Click" Content="打开语音和视频">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource UtilityButton}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Key}" Value="Discord">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>

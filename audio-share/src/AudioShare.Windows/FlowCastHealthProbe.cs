@@ -37,10 +37,16 @@ public sealed class FlowCastHealthProbe
         try
         {
             var devices = await routingHelper.ListOutputDevicesAsync(token);
+            var endpointHealth = VoicemeeterBananaDetector.GetEndpointHealth(devices);
             var hasEndpoints = VoicemeeterBananaDetector.TryFindEndpoints(devices, out var endpoints);
             return new FlowCastHealthProbeResult(
-                HealthSummary.Create(bananaRunning, hasDefaultPlayback, hasEndpoints, hasEndpoints, discordRunning),
-                true,
+                HealthSummary.Create(
+                    bananaRunning,
+                    hasDefaultPlayback,
+                    endpointHealth.HasInput,
+                    endpointHealth.HasAux,
+                    discordRunning),
+                hasEndpoints,
                 hasEndpoints ? "音频路由已就绪。" : "未检测到 Voicemeeter Banana 的必要音频设备。",
                 endpoints);
         }

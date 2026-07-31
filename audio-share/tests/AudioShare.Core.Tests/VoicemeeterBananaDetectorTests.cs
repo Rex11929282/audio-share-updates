@@ -33,4 +33,28 @@ public sealed class VoicemeeterBananaDetectorTests
         Assert.False(found);
         Assert.Null(endpoints);
     }
+
+    [Fact]
+    public void GetEndpointHealth_ReportsMissingInputWithoutHidingAuxHealth()
+    {
+        var health = VoicemeeterBananaDetector.GetEndpointHealth(
+        [
+            new ExternalAudioDevice("aux-id", "Voicemeeter AUX Input (VB-Audio Voicemeeter AUX VAIO)"),
+        ]);
+
+        Assert.False(health.HasInput);
+        Assert.True(health.HasAux);
+    }
+
+    [Fact]
+    public void GetEndpointHealth_ReportsMissingAuxWithoutHidingInputHealth()
+    {
+        var health = VoicemeeterBananaDetector.GetEndpointHealth(
+        [
+            new ExternalAudioDevice("input-id", "Voicemeeter Input (VB-Audio Voicemeeter VAIO)"),
+        ]);
+
+        Assert.True(health.HasInput);
+        Assert.False(health.HasAux);
+    }
 }

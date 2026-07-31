@@ -15,6 +15,7 @@ namespace AudioShare.App;
 public partial class MainWindow : Window
 {
     private const string VoicemeeterBananaDownloadUrl = "https://vb-audio.com/Voicemeeter/banana.htm";
+    private const string DiscordVoiceVideoSettingsUri = "discord://-/settings/voice";
     private static readonly TimeSpan ResetRecoveryRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan PassiveRefreshInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan SharingRefreshInterval = TimeSpan.FromSeconds(15);
@@ -229,6 +230,18 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             ShowError("无法打开 Voicemeeter Banana 官方下载页面。", exception);
+        }
+    }
+
+    private void OpenDiscordVoiceVideoSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(DiscordVoiceVideoSettingsUri) { UseShellExecute = true });
+        }
+        catch (Exception exception)
+        {
+            ShowError("无法打开 Discord 的“语音和视频”设置。", exception);
         }
     }
 

@@ -19,6 +19,22 @@ public sealed class HealthSummaryTests
     }
 
     [Fact]
+    public void Create_MissingAuxRequiresAttentionWhileInputStaysReady()
+    {
+        var summary = HealthSummary.Create(
+            bananaRunning: true,
+            hasDefaultPlayback: true,
+            hasInput: true,
+            hasAux: false,
+            discordRunning: false);
+
+        var input = Assert.Single(summary.Items.Where(item => item.Key == "Input"));
+        var aux = Assert.Single(summary.Items.Where(item => item.Key == "AUX"));
+        Assert.Equal(HealthState.Ready, input.State);
+        Assert.Equal(HealthState.Attention, aux.State);
+    }
+
+    [Fact]
     public void Create_RunningDiscordIsReadyAndRequestsManualB1Confirmation()
     {
         var summary = HealthSummary.Create(
