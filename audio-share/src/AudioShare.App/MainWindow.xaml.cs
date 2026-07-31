@@ -638,14 +638,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var selectedToInputCount = plan.Commands.Count(command => command.TargetDeviceId == inputDeviceId);
-        var unselectedToAuxCount = plan.Commands.Count - selectedToInputCount;
-        var confirmationText = AudioRoutingPolicy.GetRouteConfirmationText(selected, selectedToInputCount, unselectedToAuxCount) +
-                                (hasOwnedRoutingTransaction
-                                    ? "\n\n应用新选择前，会先清理本程序上一笔路由。"
-                                    : string.Empty) +
-                                $"\n\n音频路由状态：{experimentalRoutingStatus}\n\n现在应用此路由吗？";
-        if (MessageBox.Show(confirmationText, "应用音频路由", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        var confirmation = ShareConfirmation.Create(routableSessions, selected);
+        if (new ShareConfirmationWindow(this, confirmation).ShowDialog() != true)
         {
             return;
         }
@@ -694,21 +688,28 @@ public partial class MainWindow : Window
                 {
                     requiresAttention = true;
                     experimentalRoutingStatus = "分享路由未完全写入，已改回只自己听。";
-                    await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
-                    ShowError("路由验证失败，未开始分享。", null);
+                    var recovered = await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+                    ShowError(
+                        recovered ? "未开始分享，已恢复只自己听。" : "未开始分享，无法恢复只自己听，请重试。",
+                        null);
                     return;
                 }
             }
 
             if (!SetMainInputSharing(true))
             {
+                var recovered = await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+                ShowError(
+                    recovered ? "未开始分享，已恢复只自己听。" : "未开始分享，无法恢复只自己听，请重试。",
+                    null);
                 return;
             }
 
             sharingRouteState = SharingRouteState.Sharing;
             experimentalRoutingStatus = "音频路由已应用。更改勾选后再次应用即可替换；停止分享会让声音只在本机播放。";
-            AddActivity("已开始分享所选程序。");
+            AddActivity("分享已确认。");
             ErrorPanel.Visibility = Visibility.Collapsed;
+            MessageBox.Show(this, "分享已确认", "FlowCast", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (OperationCanceledException) when (isClosing)
         {

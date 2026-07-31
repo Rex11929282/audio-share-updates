@@ -1,0 +1,122 @@
+<Window x:Class="AudioShare.App.ShareConfirmationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="确认分享"
+        Width="520"
+        Height="550"
+        MinWidth="440"
+        MinHeight="440"
+        Background="#F4F8FC"
+        FontFamily="Microsoft YaHei UI"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Window.Resources>
+        <DropShadowEffect x:Key="SoftShadow" BlurRadius="16" ShadowDepth="5" Opacity="0.10" Color="#45678F" />
+        <Style x:Key="GlassCard" TargetType="Border">
+            <Setter Property="Background" Value="#D9FFFFFF" />
+            <Setter Property="BorderBrush" Value="#A8FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="20" />
+            <Setter Property="Effect" Value="{StaticResource SoftShadow}" />
+        </Style>
+        <Style x:Key="UtilityButton" TargetType="Button">
+            <Setter Property="Padding" Value="15,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Background" Value="#BFFFFFFF" />
+            <Setter Property="BorderBrush" Value="#B8D7E1EF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#29425D" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource UtilityButton}">
+            <Setter Property="Background" Value="#1976F3" />
+            <Setter Property="BorderBrush" Value="#5AA7FF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style x:Key="SessionList" TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+    </Window.Resources>
+
+    <Grid ClipToBounds="True">
+        <Rectangle>
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#F7FBFF" Offset="0" />
+                    <GradientStop Color="#EDF5FF" Offset="0.58" />
+                    <GradientStop Color="#F2FAF8" Offset="1" />
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+        <Ellipse Width="280" Height="250" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-125,-80,0" Opacity="0.25">
+            <Ellipse.Fill>
+                <RadialGradientBrush>
+                    <GradientStop Color="#A3DBFF" Offset="0" />
+                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
+
+        <Grid Margin="28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Margin="3,0,3,20">
+                <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="#172D45" Text="确认分享" />
+                <TextBlock Margin="0,5,0,0" Foreground="#687D94" Text="确认后才会更改音频路由。" />
+            </StackPanel>
+
+            <Grid Grid.Row="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="16" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource GlassCard}" Padding="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#147F95" Text="分享给朋友" />
+                        <ListBox Grid.Row="1" Margin="0,10,0,0" Style="{StaticResource SessionList}" ItemsSource="{Binding InputSessions}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Margin="0,3" Foreground="#29425D" Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+                <Border Grid.Row="2" Style="{StaticResource GlassCard}" Padding="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#4F6E8D" Text="仅自己听" />
+                        <ListBox Grid.Row="1" Margin="0,10,0,0" Style="{StaticResource SessionList}" ItemsSource="{Binding AuxSessions}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Margin="0,3" Foreground="#29425D" Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <StackPanel Grid.Row="2" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource UtilityButton}" Click="CancelButton_Click" Content="取消" />
+                <Button Style="{StaticResource PrimaryButton}" Click="ConfirmButton_Click" Content="确认分享" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

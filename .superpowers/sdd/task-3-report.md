@@ -1,75 +1,37 @@
-# Task 3 Report: Closed Audio Routing Helper
+# Task 3: Share Confirmation And Route Feedback
 
-## Changed Paths
+## RED
 
-- `audio-share/router-helper/audio_share_router_helper.py`
-- `audio-share/router-helper/requirements.in`
-- `audio-share/router-helper/THIRD_PARTY_NOTICES.txt`
-- `audio-share/router-helper/tests/test_protocol.py`
-- `.superpowers/sdd/task-3-report.md`
+Added `ShareConfirmationTests` for Chrome and NetEase Cloud Music, plus a duplicate selected Chrome audio-session case. The focused Release run failed with `CS0103` because `ShareConfirmation` did not exist.
 
-## Protocol
+## GREEN
 
-- Accepts exactly one JSON stdin line and emits exactly one JSON stdout line.
-- Allows only `health`, `list-devices`, `get-route`, `set-route`, and `clear-route`.
-- Resolves active output sessions by `processId` before each route operation.
-- Rejects missing, unnamed, and protected active sessions before calling route APIs.
-- Uses only `get_app_output_device`, `set_app_output_device`, and `clear_app_output_device` for routing operations.
-- Serializes output devices into primitive JSON values and does not perform a live route write during verification.
+Added a pure `ShareConfirmation` summary that identifies sessions by PID and process start time, keeps only audible sessions, and places each distinct session in either Input or AUX. Added an Apple-glass confirmation window that lists `分享给朋友` and `仅自己听` before any routing operation starts.
+
+`ApplyRoutingButton_Click` now returns immediately when the dialog is cancelled. It does not set `isRoutingOperation`, apply routes, change B1, or change the sharing state. After route verification and B1 enable both succeed, FlowCast displays `分享已确认`. Verification or B1 failure attempts the existing local-only recovery path and reports `未开始分享，已恢复只自己听` only when recovery succeeds.
 
 ## Tests
 
-- `test_unknown_command_is_rejected`
-- `test_set_route_rejects_discord_without_calling_router`
-- `test_malformed_request_is_rejected`
-- `test_missing_active_session_is_rejected`
-- `test_list_devices_returns_json_safe_values`
-- `test_get_route_uses_the_active_session_pid`
-- `test_main_reads_one_request_and_writes_one_json_response`
-- `test_main_reports_malformed_json_with_nonzero_exit`
+- Focused: `dotnet test audio-share/AudioShare.sln -c Release --no-restore --filter FullyQualifiedName~ShareConfirmationTests` -> 2/2 passed after implementation.
+- Full: `dotnet test audio-share/AudioShare.sln -c Release --no-restore` -> 155/155 passed.
+- `git diff --check` passed.
 
-## Commands And Results
+## Changed Paths
 
-1. `py -3.12 -m pytest .\audio-share\router-helper\tests -q`
-   - Blocked before test collection: the registered `3.12` launcher target `C:\Users\DIOWMOW\AppData\Local\Temp\cs2safecompanion-py-build\Python312\python.exe` cannot be created.
-2. `C:\Users\DIOWMOW\AppData\Roaming\uv\python\cpython-3.12.13-windows-x86_64-none\python.exe -m pytest .\audio-share\router-helper\tests -q`
-   - Blocked before test collection: `No module named pytest`.
-3. `C:\Users\DIOWMOW\AppData\Roaming\uv\python\cpython-3.12.13-windows-x86_64-none\python.exe -m py_compile .\audio-share\router-helper\audio_share_router_helper.py`
-   - Passed.
-4. Python 3.12 local fake-router harness covering the listed protocol behaviors
-   - Passed: `PASS: 10 protocol assertions`.
+- `audio-share/src/AudioShare.Core/ShareConfirmation.cs`
+- `audio-share/tests/AudioShare.Core.Tests/ShareConfirmationTests.cs`
+- `audio-share/src/AudioShare.App/ShareConfirmationWindow.xaml`
+- `audio-share/src/AudioShare.App/ShareConfirmationWindow.xaml.cs`
+- `audio-share/src/AudioShare.App/MainWindow.xaml.cs`
+- `.superpowers/sdd/task-3-report.md`
 
-## Scope Check
+## Self-Review
 
-- `requirements.in` contains exactly `winappaudiorouter==1.1.1`.
-- `THIRD_PARTY_NOTICES.txt` contains the full winappaudiorouter MIT notice.
-- No .NET, UI, packaging, or live audio routing changes were made.
+- The confirmation summary uses PID plus process start time rather than executable name and removes duplicate sessions.
+- Cancellation occurs before any routing or B1 state mutation.
+- Existing `SharingRecoveryScope` remains the recovery source; this task does not filter it through user exclusions.
+- No Task 4-7 work, volume controls, Voicemod dependency, automatic selection, or automatic sharing was added.
 
 ## Status
 
-BLOCKED: the required pytest command cannot start because the registered Python 3.12 executable is missing, and the available Python 3.12 runtime does not include pytest. No dependency was installed.
-
-## Pytest Collection Correction
-
-1. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
-   - Red result: collection failed because `request` is reserved in `@pytest.mark.parametrize`.
-2. Renamed the test-only parametrized argument from `request` to `payload`.
-3. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
-   - Green result: passed 10, failed 0 in 0.12s.
-4. `git diff --check`
-   - Result: exit 0; no whitespace errors.
-
-## Corrected Status
-
-DONE: the formal Task 3 pytest suite now passes with no helper behavior changes.
-
-## Protected Name Variant Correction
-
-1. Added parametrized tests for `DiscordCanary.exe`, `VoicemodBeta.exe`, `Voicemeeter8.exe`, and `VoicemeeterPro64.exe`.
-2. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q -k protected_name_variants`
-   - Red result: failed 4 because each variant was accepted and reached a route write.
-3. Replaced exact protected-name matching with a case-insensitive executable-base-name prefix check for `discord`, `voicemod`, and `voicemeeter`.
-4. `& '.\.venv-router-tests\Scripts\python.exe' -m pytest '.\audio-share\router-helper\tests' -q`
-   - Green result: passed 14, failed 0 in 0.09s.
-5. `git diff --check`
-   - Result: exit 0; no whitespace errors.
+Task 3 is implemented and verified. Ready for the requested commit.
