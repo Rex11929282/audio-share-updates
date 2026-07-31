@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private bool isRefreshing;
     private bool isRoutingOperation;
     private bool isClosing;
+    private bool closeAfterRouting;
     private bool experimentalRoutingAvailable;
     private bool hasOwnedRoutingTransaction;
     private bool voicemeeterBananaInstalled;
@@ -118,7 +119,14 @@ public partial class MainWindow : Window
         if (isRoutingOperation)
         {
             e.Cancel = true;
-            ShowError("请等待当前音频路由操作完成后再关闭。", null);
+            if (!closeAfterRouting)
+            {
+                closeAfterRouting = true;
+                _ = CloseAfterRoutingCompletesAsync();
+            }
+
+            experimentalRoutingStatus = "正在完成音频回复，完成后会自动关闭。";
+            UpdateRoutingSetupState();
             return;
         }
 
@@ -148,11 +156,16 @@ public partial class MainWindow : Window
                 UpdateRoutingSetupState();
             }
 
-            isClosing = true;
+            PrepareForClose();
             Close();
             return;
         }
 
+        PrepareForClose();
+    }
+
+    private void PrepareForClose()
+    {
         isClosing = true;
         motionController.Suspend();
         refreshTimer.Stop();
@@ -181,6 +194,25 @@ public partial class MainWindow : Window
         {
             refreshTimer.Start();
             await RefreshAsync(refreshRouting: false);
+        }
+    }
+
+    private async Task CloseAfterRoutingCompletesAsync()
+    {
+        while (isRoutingOperation && !isClosing)
+        {
+            await Task.Delay(100);
+        }
+
+        if (closeAfterRouting && !isClosing)
+        {
+            closeAfterRouting = false;
+            if (IsConfirmedLocalOnly())
+            {
+                PrepareForClose();
+            }
+
+            Close();
         }
     }
 
