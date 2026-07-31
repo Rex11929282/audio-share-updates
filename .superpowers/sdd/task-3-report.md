@@ -35,3 +35,13 @@ Added a pure `ShareConfirmation` summary that identifies sessions by PID and pro
 ## Status
 
 Task 3 is implemented and verified. Ready for the requested commit.
+
+## Review Fix
+
+The review found that an `ApplyAsync` failure without a pending transaction, and an exception after confirmation, could bypass the verified local-only recovery path. `RecoverFromShareStartFailureAsync` now handles all post-confirmation route-application, verification, B1, prior-transaction, and exception failures through `StopSharingAndKeepLocalOnlyAsync` before reporting the error. It only reports `未开始分享，已恢复只自己听。` after that verified recovery succeeds; otherwise it leaves FlowCast in an attention state with a clear recovery error.
+
+`ShareStartRecoveryPolicyTests` covers the recovery-result decision. Direct `MainWindow` interaction tests remain infeasible in the existing WPF test architecture, so the focused Core regression covers the shared recovery outcome while the route recovery itself continues to use the existing verified stop path.
+
+- Focused: `dotnet test audio-share/tests/AudioShare.Core.Tests/AudioShare.Core.Tests.csproj -c Release --filter "FullyQualifiedName~ShareStartRecoveryPolicyTests|FullyQualifiedName~ShareConfirmationTests|FullyQualifiedName~SharingRecoveryScopeTests" --no-restore` -> 5/5 passed.
+- Full: `dotnet test audio-share/AudioShare.sln -c Release --no-restore` -> 157/157 passed.
+- `git diff --check` passed.

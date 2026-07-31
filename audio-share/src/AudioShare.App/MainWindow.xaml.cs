@@ -654,10 +654,9 @@ public partial class MainWindow : Window
                 if (!restoreResult.Succeeded)
                 {
                     hasOwnedRoutingTransaction = restoreResult.HasPendingTransaction;
-                    experimentalRoutingStatus = restoreResult.HasPendingTransaction
-                        ? $"无法替换路由：{restoreResult.Message}。请先点击“停止分享，只自己听”。"
-                        : $"无法替换路由：{restoreResult.Message}";
-                    ShowError("上一笔音频路由未能清理，因此没有应用这次选择。", null);
+                    await RecoverFromShareStartFailureAsync(
+                        $"无法替换路由：{restoreResult.Message}",
+                        null);
                     return;
                 }
 
@@ -671,37 +670,21 @@ public partial class MainWindow : Window
                 if (!result.Succeeded)
                 {
                     hasOwnedRoutingTransaction = result.HasPendingTransaction;
-                    if (result.HasPendingTransaction)
-                    {
-                        experimentalRoutingStatus = $"应用失败：{result.Message}。仍可点击“停止分享，只自己听”处理本次路由。";
-                        ShowError("音频路由没有完全处理完成。请点击“停止分享，只自己听”重试。", null);
-                        return;
-                    }
-
-                    SetExperimentalRoutingUnavailable($"应用失败：{result.Message}");
-                    ShowError("未应用音频路由，功能会在下次重新检测后恢复。", null);
+                    await RecoverFromShareStartFailureAsync($"应用失败：{result.Message}", null);
                     return;
                 }
 
                 hasOwnedRoutingTransaction = result.HasPendingTransaction;
                 if (!await VerifyRoutePlanAsync(plan, lifetimeCancellation.Token))
                 {
-                    requiresAttention = true;
-                    experimentalRoutingStatus = "分享路由未完全写入，已改回只自己听。";
-                    var recovered = await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
-                    ShowError(
-                        recovered ? "未开始分享，已恢复只自己听。" : "未开始分享，无法恢复只自己听，请重试。",
-                        null);
+                    await RecoverFromShareStartFailureAsync("分享路由未完全写入", null);
                     return;
                 }
             }
 
             if (!SetMainInputSharing(true))
             {
-                var recovered = await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
-                ShowError(
-                    recovered ? "未开始分享，已恢复只自己听。" : "未开始分享，无法恢复只自己听，请重试。",
-                    null);
+                await RecoverFromShareStartFailureAsync("无法开启 B1 分享通道", null);
                 return;
             }
 
@@ -716,10 +699,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            SetMainInputSharing(false);
-            hasOwnedRoutingTransaction = false;
-            SetExperimentalRoutingUnavailable($"应用失败：{exception.Message}");
-            ShowError("未应用音频路由，功能会在下次重新检测后恢复。", null);
+            await RecoverFromShareStartFailureAsync($"应用失败：{exception.Message}", exception);
         }
         finally
         {
@@ -730,6 +710,38 @@ public partial class MainWindow : Window
             }
             UpdateRoutingSetupState();
         }
+    }
+
+    private async Task RecoverFromShareStartFailureAsync(string failureReason, Exception? exception)
+    {
+        bool recovered;
+        try
+        {
+            recovered = await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (isClosing)
+        {
+            throw;
+        }
+        catch (Exception recoveryException)
+        {
+            requiresAttention = true;
+            SetExperimentalRoutingUnavailable($"{failureReason}；恢复只自己听时出错：{recoveryException.Message}");
+            ShowError("未开始分享，无法恢复只自己听，请重试。", recoveryException);
+            return;
+        }
+
+        var outcome = ShareStartRecoveryPolicy.FromRecoveryResult(recovered);
+        requiresAttention = outcome.RequiresAttention;
+        if (outcome.LocalOnlyRecovered)
+        {
+            experimentalRoutingStatus = "未开始分享，已恢复只自己听。";
+            ShowError("未开始分享，已恢复只自己听。", null);
+            return;
+        }
+
+        SetExperimentalRoutingUnavailable($"{failureReason}；无法恢复只自己听。");
+        ShowError("未开始分享，无法恢复只自己听，请重试。", exception);
     }
 
     private async void RestoreRoutingButton_Click(object sender, RoutedEventArgs e)
