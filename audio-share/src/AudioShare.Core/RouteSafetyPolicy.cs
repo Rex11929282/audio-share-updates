@@ -13,4 +13,14 @@ public static class RouteSafetyPolicy
         bool hasRecoverySessions,
         bool hasOwnedRoutingTransaction) =>
         isSharing || hasRecoverySessions || hasOwnedRoutingTransaction;
+
+    public static bool RequiresReset(
+        bool isConfirmedLocalOnly,
+        bool isSharing,
+        bool hasRecoverySessions,
+        bool hasOwnedRoutingTransaction) =>
+        !isConfirmedLocalOnly && HasActiveResetGate(
+            isSharing,
+            hasRecoverySessions,
+            hasOwnedRoutingTransaction);
 }

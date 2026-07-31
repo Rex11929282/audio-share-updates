@@ -39,4 +39,24 @@ public sealed class RouteSafetyPolicyTests
             hasRecoverySessions: false,
             hasOwnedRoutingTransaction: false));
     }
+
+    [Fact]
+    public void ConfirmedLocalOnlyStateDoesNotResetAgainForActivePrograms()
+    {
+        Assert.False(RouteSafetyPolicy.RequiresReset(
+            isConfirmedLocalOnly: true,
+            isSharing: false,
+            hasRecoverySessions: true,
+            hasOwnedRoutingTransaction: false));
+    }
+
+    [Fact]
+    public void UnknownStateStillResetsForActivePrograms()
+    {
+        Assert.True(RouteSafetyPolicy.RequiresReset(
+            isConfirmedLocalOnly: false,
+            isSharing: false,
+            hasRecoverySessions: true,
+            hasOwnedRoutingTransaction: false));
+    }
 }

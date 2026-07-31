@@ -570,10 +570,15 @@ public partial class MainWindow : Window
         !string.IsNullOrWhiteSpace(auxDeviceId);
 
     private bool HasActiveResetGate() =>
-        RouteSafetyPolicy.HasActiveResetGate(
+        RouteSafetyPolicy.RequiresReset(
+            IsConfirmedLocalOnly(),
             sharingRouteState == SharingRouteState.Sharing,
             GetRecoverySessions().Count > 0,
             hasOwnedRoutingTransaction);
+
+    private bool IsConfirmedLocalOnly() =>
+        sharingRouteState == SharingRouteState.LocalOnly &&
+        sharingBusStatus is { IsMainInputShared: false, IsAuxShared: false };
 
     private async Task RefreshSharingRouteStateAsync()
     {
