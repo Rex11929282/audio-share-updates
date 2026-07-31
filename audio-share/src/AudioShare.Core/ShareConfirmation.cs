@@ -11,9 +11,8 @@ public sealed record ShareConfirmation(
         ArgumentNullException.ThrowIfNull(audibleSessions);
         ArgumentNullException.ThrowIfNull(selectedSessions);
 
-        var selected = selectedSessions
-            .Select(SessionIdentity.From)
-            .ToHashSet();
+        var selectedApplicationIdentities =
+            ApplicationRoutePlanner.GetSelectedApplicationIdentities(selectedSessions);
         var audible = audibleSessions
             .Where(session => session.HasAudio)
             .GroupBy(SessionIdentity.From)
@@ -21,8 +20,8 @@ public sealed record ShareConfirmation(
             .ToArray();
 
         return new ShareConfirmation(
-            audible.Where(session => selected.Contains(SessionIdentity.From(session))).ToArray(),
-            audible.Where(session => !selected.Contains(SessionIdentity.From(session))).ToArray());
+            audible.Where(session => selectedApplicationIdentities.Contains(session.ProcessName)).ToArray(),
+            audible.Where(session => !selectedApplicationIdentities.Contains(session.ProcessName)).ToArray());
     }
 
     private readonly record struct SessionIdentity(int ProcessId, long ProcessStartUtcTicks)

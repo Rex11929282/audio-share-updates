@@ -21,4 +21,22 @@ public sealed class RouteSafetyPolicyTests
     {
         Assert.True(RouteSafetyPolicy.ShouldStopSharing(true, true));
     }
+
+    [Fact]
+    public void DirectInputSharingRetainsResetGateAfterSourceClosureWithoutRouteRecoveryWork()
+    {
+        Assert.True(RouteSafetyPolicy.HasActiveResetGate(
+            isSharing: true,
+            hasRecoverySessions: false,
+            hasOwnedRoutingTransaction: false));
+    }
+
+    [Fact]
+    public void NoSharingStateOrRecoveryWorkHasNoResetGate()
+    {
+        Assert.False(RouteSafetyPolicy.HasActiveResetGate(
+            isSharing: false,
+            hasRecoverySessions: false,
+            hasOwnedRoutingTransaction: false));
+    }
 }

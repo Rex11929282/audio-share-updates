@@ -17,17 +17,17 @@ public sealed class ShareConfirmationTests
     }
 
     [Fact]
-    public void Create_UsesProcessAndStartTimeIdentityAndDoesNotDuplicateSelectedSessions()
+    public void Create_UsesTheSameProcessNameSelectionSemanticsAsTheRoutePlanner()
     {
         var chromeFirst = new AudioSession(1, 10, "chrome.exe", "Chrome", true);
-        var chromeSecond = new AudioSession(1, 11, "chrome.exe", "Chrome", true);
-        var cloudMusic = new AudioSession(2, 20, "cloudmusic.exe", "NetEase Cloud Music", true);
+        var chromeSecond = new AudioSession(2, 11, "Chrome.EXE", "Chrome", true);
+        var cloudMusic = new AudioSession(3, 20, "cloudmusic.exe", "NetEase Cloud Music", true);
 
         var summary = ShareConfirmation.Create(
             [chromeFirst, chromeFirst, chromeSecond, cloudMusic],
-            [chromeSecond, chromeSecond]);
+            [chromeSecond]);
 
-        Assert.Equal([chromeSecond], summary.InputSessions);
-        Assert.Equal([chromeFirst, cloudMusic], summary.AuxSessions);
+        Assert.Equal([chromeFirst, chromeSecond], summary.InputSessions);
+        Assert.Equal([cloudMusic], summary.AuxSessions);
     }
 }

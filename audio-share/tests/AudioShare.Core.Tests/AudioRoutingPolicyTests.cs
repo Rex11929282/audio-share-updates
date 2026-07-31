@@ -100,6 +100,12 @@ public sealed class AudioRoutingPolicyTests
         Assert.Equal(SharingRouteState.LocalOnly, state);
     }
 
+    [Fact]
+    public void SharingRouteState_Aggregate_ReturnsLocalOnlyWhenNoProgramsAreActive()
+    {
+        Assert.Equal(SharingRouteState.LocalOnly, SharingRouteState.Aggregate([]));
+    }
+
     [Theory]
     [InlineData("discord")]
     [InlineData("Discord.EXE")]

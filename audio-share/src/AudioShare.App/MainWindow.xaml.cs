@@ -554,7 +554,7 @@ public partial class MainWindow : Window
 
     private bool CanStopSharing() =>
         voicemeeterBananaInstalled &&
-        GetRecoverySessions().Count > 0 &&
+        HasActiveResetGate() &&
         experimentalRoutingAvailable &&
         (sharingRouteState == SharingRouteState.Sharing || requiresAttention) &&
         !isRoutingOperation &&
@@ -563,11 +563,17 @@ public partial class MainWindow : Window
 
     private bool CanResetToLocalOnly() =>
         voicemeeterBananaInstalled &&
-        GetRecoverySessions().Count > 0 &&
+        HasActiveResetGate() &&
         experimentalRoutingAvailable &&
         !isRoutingOperation &&
         !string.IsNullOrWhiteSpace(inputDeviceId) &&
         !string.IsNullOrWhiteSpace(auxDeviceId);
+
+    private bool HasActiveResetGate() =>
+        RouteSafetyPolicy.HasActiveResetGate(
+            sharingRouteState == SharingRouteState.Sharing,
+            GetRecoverySessions().Count > 0,
+            hasOwnedRoutingTransaction);
 
     private async Task RefreshSharingRouteStateAsync()
     {
@@ -585,11 +591,6 @@ public partial class MainWindow : Window
         }
 
         var routableSessions = GetRoutableActiveSessions();
-        if (routableSessions.Count == 0)
-        {
-            return;
-        }
-
         try
         {
             var routeStates = new List<SharingRouteState>(routableSessions.Count);
@@ -951,7 +952,8 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (!StopVerificationPolicy.IsComplete(status, routesVerified))
+        var resultingRouteState = StopVerificationPolicy.ResultingRouteState(status, routesVerified);
+        if (resultingRouteState != SharingRouteState.LocalOnly)
         {
             requiresAttention = true;
             sharingRouteState = SharingRouteState.Sharing;
@@ -964,6 +966,7 @@ public partial class MainWindow : Window
         sharingRecoveryScope.Clear();
 
         hasOwnedRoutingTransaction = false;
+        sharingRouteState = resultingRouteState;
         foreach (var session in GetRecoverySessions())
         {
             await routeCoordinator.UnshareAsync(session, token);

@@ -35,4 +35,24 @@ public sealed class StopVerificationPolicyTests
 
         Assert.True(StopVerificationPolicy.IsComplete(status, routesVerified: true));
     }
+
+    [Fact]
+    public void ResultingRouteState_IsLocalOnlyAfterVerifiedStop()
+    {
+        var status = new SharingBusStatus(false, false, 0.2f, 0.2f);
+
+        Assert.Same(
+            SharingRouteState.LocalOnly,
+            StopVerificationPolicy.ResultingRouteState(status, routesVerified: true));
+    }
+
+    [Fact]
+    public void ResultingRouteState_RemainsSharingWhenStopIsNotVerified()
+    {
+        var status = new SharingBusStatus(false, true, 0.2f, 0.2f);
+
+        Assert.Same(
+            SharingRouteState.Sharing,
+            StopVerificationPolicy.ResultingRouteState(status, routesVerified: true));
+    }
 }

@@ -18,9 +18,7 @@ public static class ApplicationRoutePlanner
             throw new ArgumentException("Protected processes cannot be routed.", nameof(active));
         }
 
-        var selectedApplicationIdentities = selected
-            .Select(session => session.ProcessName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selectedApplicationIdentities = GetSelectedApplicationIdentities(selected);
         var commands = active
             .GroupBy(session => session.ProcessId)
             .OrderBy(group => group.Key)
@@ -41,4 +39,9 @@ public static class ApplicationRoutePlanner
 
         return new ApplicationRoutePlan(commands);
     }
+
+    internal static HashSet<string> GetSelectedApplicationIdentities(IEnumerable<AudioSession> selected) =>
+        selected
+            .Select(session => session.ProcessName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

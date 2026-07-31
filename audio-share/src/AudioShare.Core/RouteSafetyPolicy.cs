@@ -7,4 +7,10 @@ public static class RouteSafetyPolicy
         // Session discovery can lag behind a route change; actual selection removal is checked separately.
         return wasSharing && endpointsChanged;
     }
+
+    public static bool HasActiveResetGate(
+        bool isSharing,
+        bool hasRecoverySessions,
+        bool hasOwnedRoutingTransaction) =>
+        isSharing || hasRecoverySessions || hasOwnedRoutingTransaction;
 }

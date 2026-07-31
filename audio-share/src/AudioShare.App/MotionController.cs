@@ -99,13 +99,15 @@ internal sealed class MotionController
     {
         SetVisual(target, 0, 0, translateY, scale);
         var storyboard = CreateStoryboard(target, duration, beginTime, 0, 1, translateY, 0, scale, 1);
-        Start(storyboard);
+        Start(storyboard, () => SetVisual(target, 1, 0, 0, 1));
     }
 
     private void Play(FrameworkElement target, TimeSpan duration, double translateX, double scale, double fromOpacity, double toOpacity)
     {
         SetVisual(target, fromOpacity, translateX, 0, scale);
-        Start(CreateStoryboard(target, duration, TimeSpan.Zero, fromOpacity, toOpacity, translateX, 0, scale, 1));
+        Start(
+            CreateStoryboard(target, duration, TimeSpan.Zero, fromOpacity, toOpacity, translateX, 0, scale, 1),
+            () => SetVisual(target, toOpacity, 0, 0, 1));
     }
 
     private Storyboard CreateStoryboard(
@@ -151,8 +153,17 @@ internal sealed class MotionController
         storyboard.Children.Add(animation);
     }
 
-    private void Start(Storyboard storyboard)
+    private void Start(Storyboard storyboard, Action applyFinalValues)
     {
+        EventHandler? completed = null;
+        completed = (_, _) =>
+        {
+            applyFinalValues();
+            storyboard.Completed -= completed;
+            storyboard.Remove(owner);
+            runningStoryboards.Remove(storyboard);
+        };
+        storyboard.Completed += completed;
         runningStoryboards.Add(storyboard);
         storyboard.Begin(owner, true);
     }
@@ -171,7 +182,7 @@ internal sealed class MotionController
     {
         foreach (var storyboard in runningStoryboards)
         {
-            storyboard.Stop(owner);
+            storyboard.Remove(owner);
         }
 
         runningStoryboards.Clear();
