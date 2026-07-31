@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private readonly FavoritePrograms favoritePrograms;
     private readonly FlowCastPreferencesStore preferencesStore = new();
     private FlowCastPreferences preferences;
+    private readonly MotionController motionController;
     private readonly List<string> activityLog = [];
     private IReadOnlyList<AudioSession> activeSessions = [];
     private string? inputDeviceId;
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
     private bool voicemeeterBananaInstalled;
     private bool requiresAttention;
     private bool pendingLocalOnlyReset;
+    private bool wasAttention;
     private int backgroundRefreshCount;
     private int backgroundRouteStateRefreshCount;
     private SharingRouteState sharingRouteState = SharingRouteState.Unknown;
@@ -67,6 +69,14 @@ public partial class MainWindow : Window
         healthProbe = new FlowCastHealthProbe(routingHelper);
         favoritePrograms = new FavoritePrograms(LoadFavoritePrograms());
         preferences = preferencesStore.Load();
+        motionController = new MotionController(
+            this,
+            LogoMark,
+            TopStatusCard,
+            B1MeterFill,
+            RouteFlowPath,
+            ApplicationListPanel,
+            preferences.ReduceMotion);
 
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
 
@@ -89,6 +99,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await RefreshAsync();
+        motionController.PlayLaunch();
         SetDefaultPlaybackToAux();
         SetMainInputSharing(false);
         await ResetToLocalOnlyAsync("已打开 FlowCast，正在重置为只自己听。");
@@ -143,6 +154,7 @@ public partial class MainWindow : Window
         }
 
         isClosing = true;
+        motionController.Suspend();
         refreshTimer.Stop();
         signalTimer.Stop();
         lifetimeCancellation.Cancel();
@@ -150,6 +162,15 @@ public partial class MainWindow : Window
 
     private async void MainWindow_StateChanged(object? sender, EventArgs e)
     {
+        if (WindowState == WindowState.Minimized)
+        {
+            motionController.Suspend();
+        }
+        else
+        {
+            motionController.Resume();
+        }
+
         if (WindowState == WindowState.Minimized && !CanStopSharing() && !stopSchedule.IsScheduled)
         {
             refreshTimer.Stop();
@@ -202,6 +223,7 @@ public partial class MainWindow : Window
 
         preferences = preferencesWindow.UpdatedPreferences;
         preferencesStore.Save(preferences);
+        motionController.SetReduceMotion(preferences.ReduceMotion);
         await RefreshApplicationsOnlyAsync();
     }
 
@@ -459,6 +481,13 @@ public partial class MainWindow : Window
             : sharingRouteState == SharingRouteState.Sharing
                 ? SharingRefreshInterval
                 : PassiveRefreshInterval;
+
+        if (requiresAttention && !wasAttention)
+        {
+            motionController.PlayStatusTransition();
+        }
+
+        wasAttention = requiresAttention;
     }
 
     private IReadOnlyList<AudioSession> GetSelectedSessions() =>
@@ -739,6 +768,7 @@ public partial class MainWindow : Window
             }
 
             sharingRouteState = SharingRouteState.Sharing;
+            motionController.PlayRouteFlow();
             experimentalRoutingStatus = "音频路由已应用。更改勾选后再次应用即可替换；停止分享会让声音只在本机播放。";
             AddActivity("分享已确认。");
             ErrorPanel.Visibility = Visibility.Collapsed;
@@ -943,6 +973,7 @@ public partial class MainWindow : Window
 
         experimentalRoutingStatus = "已停止分享。所有当前检测到的程序只会在本机播放。";
         requiresAttention = false;
+        motionController.PlayStatusTransition();
         stopSchedule.Cancel();
         AddActivity("已停止分享并取消勾选。");
         ErrorPanel.Visibility = Visibility.Collapsed;

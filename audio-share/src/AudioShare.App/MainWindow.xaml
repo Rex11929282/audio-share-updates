@@ -137,7 +137,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal">
-                    <Border Width="48" Height="48" Margin="0,0,12,0" Background="#BFFFFFFF" CornerRadius="15" Effect="{StaticResource SoftShadow}">
+                    <Border x:Name="LogoMark" Width="48" Height="48" Margin="0,0,12,0" Background="#BFFFFFFF" CornerRadius="15" Effect="{StaticResource SoftShadow}">
                         <Image Margin="8" Source="/Assets/flowcast-logo.png" Stretch="Uniform" />
                     </Border>
                     <StackPanel VerticalAlignment="Center">
@@ -154,7 +154,7 @@
                 </StackPanel>
             </Grid>
 
-            <Border Grid.Row="1" Style="{StaticResource GlassCard}" Padding="24" Margin="0,0,0,20">
+            <Border x:Name="TopStatusCard" Grid.Row="1" Style="{StaticResource GlassCard}" Padding="24" Margin="0,0,0,20">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -166,6 +166,7 @@
                             <Path Data="M 4,12 C 4,7 8,4 12,4 C 16,4 20,7 20,12 M 8,12 C 8,9 10,8 12,8 C 14,8 16,9 16,12 M 2,10 L 2,14 M 22,10 L 22,14" Stroke="#12AFC0" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                         </Viewbox>
                     </Border>
+                    <Path x:Name="RouteFlowPath" Grid.Column="1" Margin="18,0,28,0" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M 0,12 C 18,0 38,24 60,12 S 102,0 126,12" Stroke="#48CFC3" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.64" />
                     <StackPanel Grid.Column="1" Margin="18,0,20,0" VerticalAlignment="Center">
                         <TextBlock x:Name="FlowCastStatusText" FontSize="27" FontWeight="SemiBold" Foreground="#117F95" Text="正在确认分享状态" />
                         <TextBlock x:Name="FlowCastStatusHintText" Margin="0,5,0,0" FontSize="14" Foreground="#496C82" TextWrapping="Wrap" Text="正在检查当前程序。" />
@@ -190,7 +191,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Row="2" Style="{StaticResource GlassCard}" Padding="22" MinHeight="260">
+            <Border x:Name="ApplicationListPanel" Grid.Row="2" Style="{StaticResource GlassCard}" Padding="22" MinHeight="260">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

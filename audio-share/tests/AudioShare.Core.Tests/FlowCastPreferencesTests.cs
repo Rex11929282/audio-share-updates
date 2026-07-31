@@ -5,6 +5,12 @@ namespace AudioShare.Core.Tests;
 public sealed class FlowCastPreferencesTests
 {
     [Fact]
+    public void Empty_DisablesReduceMotionByDefault()
+    {
+        Assert.False(FlowCastPreferences.Empty.ReduceMotion);
+    }
+
+    [Fact]
     public void NormalizesExtensionsBeforePersistingExclusions()
     {
         var preferences = FlowCastPreferences.Empty.Exclude("Wallpaper64.exe");
