@@ -68,6 +68,43 @@ public sealed class VoicemeeterSharingBusService
         }
     }
 
+    public void DisableAuxInputSharing()
+    {
+        var loginResult = VBVMR_Login();
+        if (loginResult < 0)
+        {
+            throw new InvalidOperationException("Unable to connect to Voicemeeter Banana.");
+        }
+
+        try
+        {
+            var result = VBVMR_SetParameters("Strip[4].B1=0;");
+            if (result != 0)
+            {
+                throw new InvalidOperationException("Unable to disable Voicemeeter AUX B1 output.");
+            }
+
+            var timeout = Stopwatch.StartNew();
+            while (timeout.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                VBVMR_IsParametersDirty();
+                var auxResult = VBVMR_GetParameterFloat("Strip[4].B1", out var auxB1);
+                if (auxResult == 0 && Math.Abs(auxB1) < 0.01f)
+                {
+                    return;
+                }
+
+                Thread.Sleep(100);
+            }
+
+            throw new InvalidOperationException("Voicemeeter did not confirm AUX B1 was disabled within 5 seconds.");
+        }
+        finally
+        {
+            VBVMR_Logout();
+        }
+    }
+
     public SharingBusStatus GetStatus()
     {
         var loginResult = VBVMR_Login();

@@ -2,6 +2,24 @@
 
 ## Review Fix
 
+- Added an explicit `DisableAuxInputSharing` Voicemeeter operation and call it from the shared stop/local-only recovery path after disabling Input B1. The same path is used by stop retries.
+- Added a focused service contract test for the explicit AUX B1 operation and retained policy coverage proving stop success requires both B1 switches to be off.
+
+## Review Fix Verification
+
+- The previous review finding was that stop verification could reject an AUX B1 switch while the stop path had no explicit operation to close it. The stop path now actively closes AUX B1 before rereading status, so a retry can recover the same condition.
+
+## Review Fix Tests
+
+- Focused: `dotnet test audio-share/AudioShare.sln -c Release --no-restore --filter "FullyQualifiedName~StopVerificationPolicyTests|FullyQualifiedName~VoicemeeterSharingBusServiceContractTests"`.
+- Full: `dotnet test audio-share/AudioShare.sln -c Release --no-restore`.
+
+## Review Fix Scope
+
+- Changed only the Task 4 stop/recovery service, its MainWindow call site, the focused contract test, and this report. Tasks 5+ were not modified.
+
+## Previous Task Details
+
 - Updated `StopVerificationPolicy.IsComplete` to require both the main Input B1 and AUX B1 switches to be off, plus verified local-only routes.
 - Added a focused regression test proving an AUX B1 switch that remains on cannot report stop success.
 - Confirmed the stop flow rereads Voicemeeter status after applying local-only routes. When either B1 switch remains on, it keeps `requiresAttention`, retains the sharing recovery scope, preserves the retryable stop action, and returns failure before clearing routing state.

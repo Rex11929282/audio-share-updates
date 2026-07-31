@@ -817,6 +817,11 @@ public partial class MainWindow : Window
             return false;
         }
 
+        if (!DisableAuxInputSharing())
+        {
+            return false;
+        }
+
         if (hasOwnedRoutingTransaction)
         {
             var restoreResult = await routeExecutor.RestoreAsync(token);
@@ -1202,6 +1207,22 @@ public partial class MainWindow : Window
             requiresAttention = true;
             experimentalRoutingStatus = $"无法更新 Voicemeeter B1：{exception.Message}";
             ShowError("无法更新音乐分享通道。请重新检测后重试。", exception);
+            return false;
+        }
+    }
+
+    private bool DisableAuxInputSharing()
+    {
+        try
+        {
+            voicemeeterSharingBusService.DisableAuxInputSharing();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            requiresAttention = true;
+            experimentalRoutingStatus = $"无法关闭 Voicemeeter AUX B1：{exception.Message}";
+            ShowError("无法关闭 AUX B1 分享通道。请重新检测后重试。", exception);
             return false;
         }
     }
