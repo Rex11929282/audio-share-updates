@@ -212,6 +212,17 @@ public sealed class ExternalRoutingHelperClientTests
         Assert.Single(fixture.Requests);
     }
 
+    [Fact]
+    public async Task CheckHealthAsync_WritesUtf8JsonWithoutABom()
+    {
+        using var fixture = HelperFixture.Create("{\"ok\":true,\"value\":{\"version\":\"1.1.2\"}}");
+
+        var result = await fixture.CreateClient().CheckHealthAsync(CancellationToken.None);
+
+        Assert.True(result.IsAvailable);
+        Assert.DoesNotContain('\uFEFF', fixture.RawRequests.Single());
+    }
+
     private static void AssertRouteRequest(
         JsonElement request,
         string command,
@@ -312,6 +323,10 @@ public sealed class ExternalRoutingHelperClientTests
             ? []
             : File.ReadLines(capturePath).Select(line => JsonDocument.Parse(line)).Select(document => document.RootElement.Clone()).ToArray();
 
+        public IReadOnlyList<string> RawRequests => !File.Exists(capturePath)
+            ? []
+            : File.ReadLines(capturePath).ToArray();
+
         public static HelperFixture Create(string response, FixtureBehavior behavior = FixtureBehavior.Normal)
         {
             return new HelperFixture(response, behavior);
@@ -329,21 +344,8 @@ public sealed class ExternalRoutingHelperClientTests
 
         public void Dispose()
         {
-            if (WasLaunched)
-            {
-                try
-                {
-                    using var process = Process.GetProcessById(ReadProcessInt32("processId"));
-                    if (!process.HasExited)
-                    {
-                        process.Kill(entireProcessTree: true);
-                        process.WaitForExit();
-                    }
-                }
-                catch (ArgumentException)
-                {
-                }
-            }
+            StopRecordedProcess(processPath);
+            StopRecordedProcess(launcherProcessPath);
 
             Directory.Delete(root, recursive: true);
         }
@@ -376,7 +378,7 @@ var configuration = JsonSerializer.Deserialize<FixtureConfiguration>(
     new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
 await File.WriteAllTextAsync(
     configuration.LauncherProcessPath,
-    JsonSerializer.Serialize(new { arguments = args }));
+    JsonSerializer.Serialize(new { processId = Environment.ProcessId, arguments = args }));
 using (var helper = new Process
 {
     StartInfo = new ProcessStartInfo
@@ -538,6 +540,28 @@ public sealed record FixtureConfiguration(string Response, string Behavior, stri
         {
             using var document = JsonDocument.Parse(File.ReadAllText(processPath));
             return document.RootElement.GetProperty(propertyName).GetInt32();
+        }
+
+        private static void StopRecordedProcess(string path)
+        {
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(path));
+                using var process = Process.GetProcessById(document.RootElement.GetProperty("processId").GetInt32());
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit();
+                }
+            }
+            catch (ArgumentException)
+            {
+            }
         }
 
         private bool IsHelperRunning()

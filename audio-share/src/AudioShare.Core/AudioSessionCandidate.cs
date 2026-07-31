@@ -6,4 +6,5 @@ public sealed record AudioSessionCandidate(
     string ProcessName,
     string DisplayName,
     bool IsActive,
-    bool IsSystemSession);
+    bool IsSystemSession,
+    bool HasAudio = true);

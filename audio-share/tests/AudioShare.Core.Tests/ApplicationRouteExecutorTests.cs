@@ -165,6 +165,25 @@ public sealed class ApplicationRouteExecutorTests
     }
 
     [Fact]
+    public async Task RestoreAsync_WhenTrackedSessionEnded_DiscardsTheStaleSnapshot()
+    {
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new("old-console", "old-multimedia"),
+            },
+            missingOutputSessions: new HashSet<int>([1]));
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([new(1, 101, "chrome.exe", "input")]);
+
+        await executor.ApplyAsync(plan, CancellationToken.None);
+        var result = await executor.RestoreAsync(CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.False(result.HasPendingTransaction);
+    }
+
+    [Fact]
     public async Task ApplyAsync_WhenPlanIsEmpty_DoesNotCallTheHelper()
     {
         var helper = new RecordingHelper(new Dictionary<int, ApplicationRouteState>());
@@ -176,6 +195,32 @@ public sealed class ApplicationRouteExecutorTests
         Assert.False(result.HasPendingTransaction);
         Assert.Contains("empty", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(helper.Calls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenPreviousTransactionIsStillOwned_DoesNotOverwriteItsRestorePoint()
+    {
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new("old-console", "old-multimedia"),
+            });
+        var executor = new ApplicationRouteExecutor(helper);
+        var firstPlan = new ApplicationRoutePlan([new(1, 101, "chrome.exe", "input")]);
+        var secondPlan = new ApplicationRoutePlan([new(1, 101, "chrome.exe", "aux")]);
+
+        await executor.ApplyAsync(firstPlan, CancellationToken.None);
+        var result = await executor.ApplyAsync(secondPlan, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.HasPendingTransaction);
+        Assert.Contains("restore", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            [
+                "get:1:101:chrome.exe",
+                "set:1:101:chrome.exe:input",
+            ],
+            helper.Calls);
     }
 
     [Fact]
@@ -191,6 +236,31 @@ public sealed class ApplicationRouteExecutorTests
         Assert.Empty(helper.Calls);
     }
 
+    [Fact]
+    public async Task CompletePersistentRouting_DiscardsTheRestoreTransactionWithoutChangingTheCurrentRoute()
+    {
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new("old-console", "old-multimedia"),
+            });
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([new(1, 101, "chrome.exe", "aux")]);
+
+        await executor.ApplyAsync(plan, CancellationToken.None);
+        executor.CompletePersistentRouting();
+        var restore = await executor.RestoreAsync(CancellationToken.None);
+
+        Assert.False(restore.Succeeded);
+        Assert.False(restore.HasPendingTransaction);
+        Assert.Equal(
+            [
+                "get:1:101:chrome.exe",
+                "set:1:101:chrome.exe:aux",
+            ],
+            helper.Calls);
+    }
+
     private sealed class RecordingHelper : IExternalRoutingHelper
     {
         private readonly IReadOnlyDictionary<int, ApplicationRouteState> routes;
@@ -198,19 +268,22 @@ public sealed class ApplicationRouteExecutorTests
         private readonly int? cancelDuringSetProcessId;
         private readonly CancellationTokenSource? cancellation;
         private readonly Dictionary<int, int> restoreFailures;
+        private readonly IReadOnlySet<int> missingOutputSessions;
 
         public RecordingHelper(
             IReadOnlyDictionary<int, ApplicationRouteState> routes,
             int? failAfterSetProcessId = null,
             int? cancelDuringSetProcessId = null,
             CancellationTokenSource? cancellation = null,
-            Dictionary<int, int>? restoreFailures = null)
+            Dictionary<int, int>? restoreFailures = null,
+            IReadOnlySet<int>? missingOutputSessions = null)
         {
             this.routes = routes;
             this.failAfterSetProcessId = failAfterSetProcessId;
             this.cancelDuringSetProcessId = cancelDuringSetProcessId;
             this.cancellation = cancellation;
             this.restoreFailures = restoreFailures ?? [];
+            this.missingOutputSessions = missingOutputSessions ?? new HashSet<int>();
         }
 
         public List<string> Calls { get; } = [];
@@ -262,6 +335,11 @@ public sealed class ApplicationRouteExecutorTests
             {
                 restoreFailures[processId]--;
                 throw new InvalidOperationException("Route restore failed.");
+            }
+
+            if (missingOutputSessions.Contains(processId))
+            {
+                throw new InvalidOperationException("Active output session not found.");
             }
 
             return Task.CompletedTask;

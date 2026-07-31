@@ -1,6 +1,7 @@
 ﻿using System.Configuration;
 using System.Data;
 using System.Windows;
+using AudioShare.Core;
 
 namespace AudioShare.App;
 
@@ -10,6 +11,9 @@ namespace AudioShare.App;
 public partial class App : Application
 {
     private readonly UpdateService updateService = new();
+    private StagedUpdate? stagedUpdate;
+    private ReleaseUpdate? availableUpdate;
+    private bool isCheckingForUpdates;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -23,35 +27,70 @@ public partial class App : Application
             MessageBox.Show(
                 mainWindow,
                 UpdateService.UpdateFailedRestartNotice,
-                "Audio Share 更新",
+                "FlowCast 更新",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
 
-        _ = CheckForUpdatesAsync(mainWindow);
+        _ = CheckForUpdatesAsync(mainWindow, showDialog: false);
     }
 
-    private async Task CheckForUpdatesAsync(Window owner)
+    public Task CheckForUpdatesFromUserAsync(Window owner) => CheckForUpdatesAsync(owner, showDialog: true);
+
+    private async Task CheckForUpdatesAsync(Window owner, bool showDialog)
     {
+        if (isCheckingForUpdates)
+        {
+            return;
+        }
+
+        if (stagedUpdate is not null)
+        {
+            MessageBox.Show(owner, "更新已下载并验证完成。请关闭并重新打开 FlowCast 完成更新。", "FlowCast 更新", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        isCheckingForUpdates = true;
         try
         {
-            var update = await updateService.CheckForUpdateAsync();
-            if (update is null || new UpdateAvailableDialog(owner, update.Version).ShowDialog() != true)
+            var update = availableUpdate ?? await updateService.CheckForUpdateAsync();
+            if (update is null)
+            {
+                SetUpdateAvailable(owner, false);
+                return;
+            }
+
+            availableUpdate = update;
+            SetUpdateAvailable(owner, true);
+            if (!showDialog || new UpdateAvailableDialog(owner, update.Version).ShowDialog() != true)
             {
                 return;
             }
 
-            await updateService.DownloadVerifyAndRestartAsync(update);
-            Shutdown();
+            stagedUpdate = await updateService.DownloadAndStageAsync(update);
+            updateService.BeginStagedReplacementAndRestart(stagedUpdate);
+            MessageBox.Show(owner, "更新已下载并验证完成。请关闭并重新打开 FlowCast 完成更新。", "FlowCast 更新", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception exception)
         {
             MessageBox.Show(
                 owner,
-                $"更新失敗，未替換目前程式。{exception.Message}",
-                "Audio Share 更新",
+                $"更新失败，未替换当前程序。{exception.Message}",
+                "FlowCast 更新",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+        }
+        finally
+        {
+            isCheckingForUpdates = false;
+        }
+    }
+
+    private static void SetUpdateAvailable(Window owner, bool isAvailable)
+    {
+        if (owner is MainWindow mainWindow)
+        {
+            mainWindow.SetUpdateAvailable(isAvailable);
         }
     }
 }

@@ -9,6 +9,8 @@ using AudioShare.Core;
 
 namespace AudioShare.App;
 
+public sealed record StagedUpdate(string UpdateDirectory, string ExtractedDirectory, string ExecutablePath);
+
 public sealed class UpdateService
 {
     private const string LatestReleaseUrl = "https://api.github.com/repos/Rex11929282/audio-share-updates/releases/latest";
@@ -16,7 +18,7 @@ public sealed class UpdateService
     private readonly HttpClient? client;
 
     public const string UpdateFailureSignal = "--update-failed";
-    public const string UpdateFailedRestartNotice = "上一個更新未完成，已保留原本程式並重新啟動。";
+    public const string UpdateFailedRestartNotice = "上一次更新未完成，已保留原程序并重新启动。";
 
     public UpdateService()
     {
@@ -44,13 +46,13 @@ public sealed class UpdateService
         return ReleaseUpdateParser.TryParseNewerRelease(releaseJson, CurrentVersion);
     }
 
-    public async Task DownloadVerifyAndRestartAsync(ReleaseUpdate update, CancellationToken cancellationToken = default)
+    public async Task<StagedUpdate> DownloadAndStageAsync(ReleaseUpdate update, CancellationToken cancellationToken = default)
     {
-        var executablePath = Environment.ProcessPath ?? throw new InvalidOperationException("找不到目前的程式檔案。");
-        var applicationDirectory = Path.GetDirectoryName(executablePath) ?? throw new InvalidOperationException("找不到程式資料夾。");
+        var executablePath = Environment.ProcessPath ?? throw new InvalidOperationException("找不到当前程序文件。");
+        var applicationDirectory = Path.GetDirectoryName(executablePath) ?? throw new InvalidOperationException("找不到程序文件夹。");
         EnsureApplicationDirectoryIsWritable(applicationDirectory);
 
-        var updateDirectory = Path.Combine(Path.GetTempPath(), "AudioShare", "updates", Guid.NewGuid().ToString("N"));
+        var updateDirectory = Path.Combine(Path.GetTempPath(), "FlowCast", "updates", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(updateDirectory);
 
         var packagePath = Path.Combine(updateDirectory, ReleaseUpdateParser.PackageAssetName);
@@ -65,7 +67,7 @@ public sealed class UpdateService
 
         if (!HasMatchingChecksum(packagePath, await File.ReadAllTextAsync(checksumPath, cancellationToken)))
         {
-            throw new InvalidDataException("更新檔案的 SHA-256 驗證失敗。");
+            throw new InvalidDataException("更新文件的 SHA-256 验证失败。");
         }
 
         var extractedDirectory = Path.Combine(updateDirectory, "extracted");
@@ -74,11 +76,16 @@ public sealed class UpdateService
         var requiredFiles = new[] { "AudioShare.App.exe", "ThirdPartyNotices.txt" };
         if (requiredFiles.Any(fileName => !File.Exists(Path.Combine(extractedDirectory, fileName))))
         {
-            throw new InvalidDataException("更新壓縮檔未包含預期的程式或授權告知檔案。");
+            throw new InvalidDataException("更新压缩包未包含预期的程序或授权说明文件。");
         }
 
-        var scriptPath = Path.Combine(updateDirectory, "replace-and-restart.ps1");
-        await File.WriteAllTextAsync(scriptPath, ReplacementScript, new UTF8Encoding(false), cancellationToken);
+        return new StagedUpdate(updateDirectory, extractedDirectory, executablePath);
+    }
+
+    public void BeginStagedReplacementAndRestart(StagedUpdate update)
+    {
+        var scriptPath = Path.Combine(update.UpdateDirectory, "replace-and-restart.ps1");
+        File.WriteAllText(scriptPath, ReplacementScript, new UTF8Encoding(false));
 
         var process = Process.Start(new ProcessStartInfo
         {
@@ -93,15 +100,21 @@ public sealed class UpdateService
                 "-File",
                 scriptPath,
                 Process.GetCurrentProcess().Id.ToString(),
-                extractedDirectory,
-                executablePath,
+                update.ExtractedDirectory,
+                update.ExecutablePath,
             },
         });
 
         if (process is null)
         {
-            throw new InvalidOperationException("無法啟動更新程式。");
+            throw new InvalidOperationException("无法启动更新程序。");
         }
+    }
+
+    public async Task DownloadVerifyAndRestartAsync(ReleaseUpdate update, CancellationToken cancellationToken = default)
+    {
+        var stagedUpdate = await DownloadAndStageAsync(update, cancellationToken);
+        BeginStagedReplacementAndRestart(stagedUpdate);
     }
 
     private static readonly string ReplacementScript = """
@@ -123,15 +136,15 @@ public sealed class UpdateService
                 foreach ($File in $Files) {
                     $SourcePath = Join-Path $SourceDirectory $File
                     $FileTargetPath = Join-Path $ApplicationDirectory $File
-                    $StagedPath = "$FileTargetPath.audioshare-update-new"
-                    $BackupPath = "$FileTargetPath.audioshare-update-backup"
+                    $StagedPath = "$FileTargetPath.flowcast-update-new"
+                    $BackupPath = "$FileTargetPath.flowcast-update-backup"
                     Copy-Item -LiteralPath $SourcePath -Destination $StagedPath -Force
                     [System.IO.File]::Replace($StagedPath, $FileTargetPath, $BackupPath, $true)
                     $ReplacedFiles.Add($File)
                 }
 
                 foreach ($File in $Files) {
-                    Remove-Item -LiteralPath (Join-Path $ApplicationDirectory "$File.audioshare-update-backup") -Force -ErrorAction SilentlyContinue
+                    Remove-Item -LiteralPath (Join-Path $ApplicationDirectory "$File.flowcast-update-backup") -Force -ErrorAction SilentlyContinue
                 }
 
                 $ReplacementSucceeded = $true
@@ -140,14 +153,14 @@ public sealed class UpdateService
             catch {
                 foreach ($File in $ReplacedFiles) {
                     $FileTargetPath = Join-Path $ApplicationDirectory $File
-                    $BackupPath = "$FileTargetPath.audioshare-update-backup"
+                    $BackupPath = "$FileTargetPath.flowcast-update-backup"
                     if (Test-Path -LiteralPath $BackupPath) {
                         [System.IO.File]::Replace($BackupPath, $FileTargetPath, $null, $true)
                     }
                 }
 
                 foreach ($File in $Files) {
-                    Remove-Item -LiteralPath (Join-Path $ApplicationDirectory "$File.audioshare-update-new") -Force -ErrorAction SilentlyContinue
+                    Remove-Item -LiteralPath (Join-Path $ApplicationDirectory "$File.flowcast-update-new") -Force -ErrorAction SilentlyContinue
                 }
 
                 Start-Sleep -Milliseconds 500
@@ -165,7 +178,7 @@ public sealed class UpdateService
     private static HttpClient CreateClient()
     {
         var client = new HttpClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"AudioShare/{CurrentVersion}");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"FlowCast/{CurrentVersion}");
         return client;
     }
 
@@ -194,7 +207,7 @@ public sealed class UpdateService
 
     private static void EnsureApplicationDirectoryIsWritable(string applicationDirectory)
     {
-        var probePath = Path.Combine(applicationDirectory, $".audioshare-update-{Guid.NewGuid():N}.tmp");
+        var probePath = Path.Combine(applicationDirectory, $".flowcast-update-{Guid.NewGuid():N}.tmp");
         File.WriteAllText(probePath, string.Empty);
         File.Delete(probePath);
     }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AudioShare.Core;
 
@@ -149,6 +150,7 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
+                StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             },
         };
         process.StartInfo.ArgumentList.Add("-I");

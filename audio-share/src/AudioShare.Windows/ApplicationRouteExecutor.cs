@@ -37,6 +37,15 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
 
     public async Task<ApplicationRouteExecutionResult> ApplyAsync(ApplicationRoutePlan plan, CancellationToken token)
     {
+        if (pendingTransaction is not null)
+        {
+            return new ApplicationRouteExecutionResult(
+                false,
+                true,
+                "Restore the owned application route transaction before applying another plan.",
+                pendingTransaction);
+        }
+
         if (plan.Commands.Count == 0)
         {
             return new ApplicationRouteExecutionResult(false, false, "Application route plan is empty.", []);
@@ -128,6 +137,8 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
         return new ApplicationRouteExecutionResult(true, false, null, snapshots);
     }
 
+    public void CompletePersistentRouting() => pendingTransaction = null;
+
     private async Task<RecoveryResult> RestoreSnapshotsAsync(IReadOnlyList<ApplicationRouteSnapshot> snapshots)
     {
         var failedSnapshots = new List<ApplicationRouteSnapshot>();
@@ -145,6 +156,11 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
             }
             catch (Exception exception)
             {
+                if (IsMissingActiveOutputSession(exception))
+                {
+                    continue;
+                }
+
                 failedSnapshots.Insert(0, snapshot);
                 messages.Add($"Process {snapshot.ProcessId}: {exception.Message}");
             }
@@ -152,6 +168,9 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
 
         return new RecoveryResult(failedSnapshots, messages);
     }
+
+    private static bool IsMissingActiveOutputSession(Exception exception) =>
+        exception.Message.Contains("Active output session not found", StringComparison.OrdinalIgnoreCase);
 
     private sealed record RecoveryResult(
         IReadOnlyList<ApplicationRouteSnapshot> FailedSnapshots,

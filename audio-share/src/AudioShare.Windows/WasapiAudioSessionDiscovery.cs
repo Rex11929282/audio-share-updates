@@ -7,6 +7,8 @@ namespace AudioShare.Windows;
 
 public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
 {
+    private const int PeakConfirmationDelayMilliseconds = 125;
+
     public Task<IReadOnlyList<AudioSession>> GetActiveSessionsAsync(CancellationToken token) =>
         Task.Run(() => Discover(token), token);
 
@@ -44,13 +46,17 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
 
                         using var process = Process.GetProcessById(processId);
                         var processStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
+                        var initialPeakLevel = session.AudioMeterInformation.MasterPeakValue;
+                        var hasAudio = initialPeakLevel >= AudioActivityPolicy.MinimumPeakLevel &&
+                            HasConfirmedOutput(session, initialPeakLevel);
                         candidates.Add(new AudioSessionCandidate(
                             processId,
                             processStartUtcTicks,
                             process.ProcessName,
                             session.DisplayName,
                             IsActive: true,
-                            IsSystemSession: false));
+                            IsSystemSession: false,
+                            HasAudio: hasAudio));
                     }
                     catch (Exception) when (!token.IsCancellationRequested)
                     {
@@ -61,5 +67,13 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
         }
 
         return AudioSessionFilter.GetActiveProcessSessions(candidates);
+    }
+
+    private static bool HasConfirmedOutput(AudioSessionControl session, float initialPeakLevel)
+    {
+        Thread.Sleep(PeakConfirmationDelayMilliseconds);
+        return AudioActivityPolicy.HasConfirmedOutput(
+            initialPeakLevel,
+            session.AudioMeterInformation.MasterPeakValue);
     }
 }

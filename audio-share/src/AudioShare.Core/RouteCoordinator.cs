@@ -10,7 +10,8 @@ public sealed class RouteCoordinator
         "discord.exe",
     };
 
-    private readonly ConcurrentDictionary<ProcessIdentity, byte> selectedProcesses = [];
+    // Windows saves per-app audio routing by executable identity, not a transient PID.
+    private readonly ConcurrentDictionary<ProcessKey, byte> selectedProcesses = [];
 
     public Task<RouteResult> ShareAsync(AudioSession session, CancellationToken token)
     {
@@ -22,7 +23,7 @@ public sealed class RouteCoordinator
             return Task.FromResult(RouteResult.Failed("Discord cannot be shared."));
         }
 
-        selectedProcesses.TryAdd(ProcessIdentity.From(session), 0);
+        selectedProcesses.TryAdd(ProcessKey.From(session), 0);
         return Task.FromResult(RouteResult.Success());
     }
 
@@ -30,28 +31,31 @@ public sealed class RouteCoordinator
     {
         ArgumentNullException.ThrowIfNull(session);
         token.ThrowIfCancellationRequested();
-        selectedProcesses.TryRemove(ProcessIdentity.From(session), out _);
+        selectedProcesses.TryRemove(ProcessKey.From(session), out _);
         return Task.FromResult(RouteResult.Success());
     }
 
-    public void RemoveSelectionsAbsentFrom(IEnumerable<AudioSession> activeSessions)
+    public bool RemoveSelectionsAbsentFrom(IEnumerable<AudioSession> activeSessions)
     {
         ArgumentNullException.ThrowIfNull(activeSessions);
-        var activeProcessSet = activeSessions.Select(ProcessIdentity.From).ToHashSet();
+        var activeProcessSet = activeSessions.Select(ProcessKey.From).ToHashSet();
+        var removedSelection = false;
 
         foreach (var process in selectedProcesses.Keys)
         {
             if (!activeProcessSet.Contains(process))
             {
-                selectedProcesses.TryRemove(process, out _);
+                removedSelection |= selectedProcesses.TryRemove(process, out _);
             }
         }
+
+        return removedSelection;
     }
 
     public bool IsSelected(AudioSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        return selectedProcesses.ContainsKey(ProcessIdentity.From(session));
+        return selectedProcesses.ContainsKey(ProcessKey.From(session));
     }
 
     public IReadOnlyList<AudioSession> GetSelectedSessions(IEnumerable<AudioSession> activeSessions)
@@ -71,10 +75,10 @@ public sealed class RouteCoordinator
             .ToArray();
     }
 
-    private readonly record struct ProcessIdentity(int ProcessId, long ProcessStartUtcTicks, string ProcessName)
+    private readonly record struct ProcessKey(string ProcessName)
     {
-        public static ProcessIdentity From(AudioSession session) =>
-            new(session.ProcessId, session.ProcessStartUtcTicks, session.ProcessName.ToUpperInvariant());
+        public static ProcessKey From(AudioSession session) =>
+            new(session.ProcessName.ToUpperInvariant());
     }
 }
 

@@ -44,7 +44,8 @@ public sealed class AudioSessionFilteringTests
             new AudioSessionCandidate(1, 10, "discord.exe", "Discord", true, false),
             new AudioSessionCandidate(2, 20, "Voicemod.exe", "Voicemod", true, false),
             new AudioSessionCandidate(3, 30, "Voicemeeter.exe", "Voicemeeter", true, false),
-            new AudioSessionCandidate(4, 40, "chrome.exe", "Chrome", true, false),
+            new AudioSessionCandidate(4, 40, "wallpaper64.exe", "wallpaper64", true, false),
+            new AudioSessionCandidate(5, 50, "chrome.exe", "Chrome", true, false),
         ]);
 
         var session = Assert.Single(sessions);
@@ -92,5 +93,26 @@ public sealed class AudioSessionFilteringTests
         Assert.Equal("browser", forward.DisplayName);
         Assert.Equal("alpha.exe", forward.ProcessName);
         Assert.Equal(forward, reverse);
+    }
+
+    [Fact]
+    public void GetActiveProcessSessions_MarksSilentProcessesAsNotAudible()
+    {
+        var sessions = AudioSessionFilter.GetActiveProcessSessions(
+        [new AudioSessionCandidate(70, 700, "idleplayer.exe", "idleplayer", true, false, HasAudio: false)]);
+
+        Assert.False(Assert.Single(sessions).HasAudio);
+    }
+
+    [Fact]
+    public void GetActiveProcessSessions_MarksAProcessAudibleWhenAnyOfItsSessionsHasSound()
+    {
+        var sessions = AudioSessionFilter.GetActiveProcessSessions(
+        [
+            new AudioSessionCandidate(80, 800, "chrome.exe", "Chrome", true, false, HasAudio: false),
+            new AudioSessionCandidate(80, 800, "chrome.exe", "Chrome", true, false, HasAudio: true),
+        ]);
+
+        Assert.True(Assert.Single(sessions).HasAudio);
     }
 }

@@ -74,7 +74,7 @@ public sealed class UpdateServiceTests
     {
         Assert.True(UpdateService.IsUpdateFailedRestart(["--update-failed"]));
         Assert.False(UpdateService.IsUpdateFailedRestart([]));
-        Assert.Contains("上一個更新未完成", UpdateService.UpdateFailedRestartNotice);
+        Assert.Contains("上一次更新未完成", UpdateService.UpdateFailedRestartNotice);
     }
 
     private static Version GetCurrentVersion(Assembly assembly)

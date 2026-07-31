@@ -17,6 +17,17 @@ public sealed class ApplicationRoutePlannerTests
     }
 
     [Fact]
+    public void Create_SendsEveryActiveSessionToAuxWhenNothingIsSelected()
+    {
+        var chrome = new AudioSession(11, 100, "chrome.exe", "Chrome", true);
+        var music = new AudioSession(12, 200, "cloudmusic.exe", "NetEase", true);
+
+        var plan = ApplicationRoutePlanner.Create([chrome, music], [], "input-id", "aux-id");
+
+        Assert.All(plan.Commands, command => Assert.Equal("aux-id", command.TargetDeviceId));
+    }
+
+    [Fact]
     public void Create_SendsAllConcurrentSessionsWithSelectedApplicationIdentityToInput()
     {
         var selectedChrome = new AudioSession(11, 100, "chrome.exe", "Chrome", true);

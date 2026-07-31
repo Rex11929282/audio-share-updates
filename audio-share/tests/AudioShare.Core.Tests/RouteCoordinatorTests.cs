@@ -66,7 +66,7 @@ public sealed class RouteCoordinatorTests
     }
 
     [Fact]
-    public async Task GetSelectedSessions_DoesNotReturnPidReusedProcess()
+    public async Task GetSelectedSessions_KeepsSelectionWhenTheAppRecreatesItsAudioProcess()
     {
         var coordinator = new RouteCoordinator();
         var selected = new AudioSession(400, 4000, "app.exe", "Original App", true);
@@ -76,7 +76,7 @@ public sealed class RouteCoordinatorTests
 
         var result = coordinator.GetSelectedSessions([reused]);
 
-        Assert.Empty(result);
+        Assert.Equal([reused], result);
     }
 
     [Fact]
@@ -105,14 +105,15 @@ public sealed class RouteCoordinatorTests
         await coordinator.ShareAsync(inactive, CancellationToken.None);
         await coordinator.ShareAsync(active, CancellationToken.None);
 
-        coordinator.RemoveSelectionsAbsentFrom([active]);
+        var removedSelection = coordinator.RemoveSelectionsAbsentFrom([active]);
 
+        Assert.True(removedSelection);
         Assert.False(coordinator.IsSelected(inactive));
         Assert.True(coordinator.IsSelected(active));
     }
 
     [Fact]
-    public async Task RemoveSelectionsAbsentFrom_DeselectsAppWhenPidIsReusedByTheSameProcess()
+    public async Task RemoveSelectionsAbsentFrom_KeepsSelectionWhenTheAppRecreatesItsAudioProcess()
     {
         var coordinator = new RouteCoordinator();
         var selected = new AudioSession(400, 4000, "app.exe", "Original App", true);
@@ -122,7 +123,7 @@ public sealed class RouteCoordinatorTests
 
         coordinator.RemoveSelectionsAbsentFrom([reused]);
 
-        Assert.False(coordinator.IsSelected(selected));
-        Assert.False(coordinator.IsSelected(reused));
+        Assert.True(coordinator.IsSelected(selected));
+        Assert.True(coordinator.IsSelected(reused));
     }
 }
