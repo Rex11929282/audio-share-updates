@@ -9,7 +9,7 @@
         MaxWidth="1280"
         MinHeight="700"
         MaxHeight="700"
-        ResizeMode="NoResize"
+        ResizeMode="CanMinimize"
         Background="#F4F8FC"
         FontFamily="Microsoft YaHei UI"
         WindowStartupLocation="CenterScreen">
