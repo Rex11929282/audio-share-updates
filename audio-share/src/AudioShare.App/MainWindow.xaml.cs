@@ -35,7 +35,8 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private readonly ShareStopSchedule stopSchedule = new();
     private readonly FavoritePrograms favoritePrograms;
-    private readonly FlowCastPreferences preferences;
+    private readonly FlowCastPreferencesStore preferencesStore = new();
+    private FlowCastPreferences preferences;
     private readonly List<string> activityLog = [];
     private IReadOnlyList<AudioSession> activeSessions = [];
     private string? inputDeviceId;
@@ -60,7 +61,7 @@ public partial class MainWindow : Window
         DataContext = this;
         routeExecutor = new ApplicationRouteExecutor(routingHelper);
         favoritePrograms = new FavoritePrograms(LoadFavoritePrograms());
-        preferences = new FlowCastPreferencesStore().Load();
+        preferences = preferencesStore.Load();
 
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
 
@@ -183,6 +184,19 @@ public partial class MainWindow : Window
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
 
     private void TutorialButton_Click(object sender, RoutedEventArgs e) => new TutorialWindow(this).ShowDialog();
+
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var preferencesWindow = new PreferencesWindow(this, preferences);
+        if (preferencesWindow.ShowDialog() != true)
+        {
+            return;
+        }
+
+        preferences = preferencesWindow.UpdatedPreferences;
+        preferencesStore.Save(preferences);
+        await RefreshApplicationsOnlyAsync();
+    }
 
     private async void CopyDiagnosticsButton_Click(object sender, RoutedEventArgs e)
     {
@@ -316,6 +330,28 @@ public partial class MainWindow : Window
         EmptyStateText.Text = "当前没有检测到正在播放音频的程序。";
         UpdateRoutingSetupState();
         return selectedProgramClosed;
+    }
+
+    private async Task RefreshApplicationsOnlyAsync()
+    {
+        if (isRefreshing || isClosing)
+        {
+            return;
+        }
+
+        try
+        {
+            var sessions = await discovery.GetActiveSessionsAsync(lifetimeCancellation.Token);
+            activeSessions = sessions.Where(session => !preferences.IsExcluded(session.ProcessName)).ToArray();
+            UpdateApplications(activeSessions);
+        }
+        catch (OperationCanceledException) when (isClosing)
+        {
+        }
+        catch (Exception exception)
+        {
+            ShowError("无法刷新程序列表。", exception);
+        }
     }
 
     private async void ApplicationSelectionChanged(object sender, RoutedEventArgs e)
@@ -1014,6 +1050,18 @@ public partial class MainWindow : Window
         SaveFavoritePrograms();
         AddActivity(isFavorite ? $"已将 {row.DisplayName} 置顶。" : $"已取消 {row.DisplayName} 置顶。");
         UpdateApplications(activeSessions);
+    }
+
+    private async void HideProgramButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: AudioApplicationRow row })
+        {
+            return;
+        }
+
+        preferences = preferences.Exclude(row.Session.ProcessName);
+        preferencesStore.Save(preferences);
+        await RefreshApplicationsOnlyAsync();
     }
 
     private static IReadOnlyCollection<string> LoadFavoritePrograms()

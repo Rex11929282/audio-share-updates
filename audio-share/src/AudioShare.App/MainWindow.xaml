@@ -146,6 +146,7 @@
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource UtilityButton}" Click="SettingsButton_Click" Content="设置" />
                     <Button Style="{StaticResource UtilityButton}" Click="TutorialButton_Click" Content="教程" />
                     <Button Style="{StaticResource UtilityButton}" Click="CopyDiagnosticsButton_Click" Content="诊断" />
                     <Button x:Name="UpdateButton" Style="{StaticResource UtilityButton}" Visibility="Collapsed" Click="UpdateButton_Click" Content="更新" />
@@ -230,6 +231,7 @@
                                             <TextBlock Margin="0,3,0,0" FontSize="12" Foreground="#788A9C" Text="{Binding DetailText}" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="12,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Padding="9,5" Margin="0,0,7,0" Style="{StaticResource UtilityButton}" Click="HideProgramButton_Click" Content="不再显示" />
                                             <Button Padding="9,5" Margin="0,0,7,0" Style="{StaticResource UtilityButton}" Click="FavoriteButton_Click" Content="{Binding FavoriteButtonText}" />
                                             <Border Padding="10,5" Background="#E8F1FF" CornerRadius="12">
                                                 <TextBlock Foreground="#3972BC" Text="{Binding SelectionStatus}" />

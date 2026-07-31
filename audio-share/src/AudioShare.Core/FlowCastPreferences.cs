@@ -6,7 +6,7 @@ public sealed record FlowCastPreferences
 {
     public IReadOnlySet<string> ExcludedProcesses { get; }
 
-    public bool ReduceMotion { get; }
+    public bool ReduceMotion { get; init; }
 
     public static FlowCastPreferences Empty { get; } = new(
         ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase),

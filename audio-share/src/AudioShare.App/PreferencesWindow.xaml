@@ -1,0 +1,105 @@
+<Window x:Class="AudioShare.App.PreferencesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置"
+        Width="460"
+        Height="500"
+        MinWidth="400"
+        MinHeight="420"
+        Background="#F4F8FC"
+        FontFamily="Microsoft YaHei UI"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Window.Resources>
+        <DropShadowEffect x:Key="SoftShadow" BlurRadius="16" ShadowDepth="5" Opacity="0.10" Color="#45678F" />
+        <Style x:Key="GlassCard" TargetType="Border">
+            <Setter Property="Background" Value="#D9FFFFFF" />
+            <Setter Property="BorderBrush" Value="#A8FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="20" />
+            <Setter Property="Effect" Value="{StaticResource SoftShadow}" />
+        </Style>
+        <Style x:Key="UtilityButton" TargetType="Button">
+            <Setter Property="Padding" Value="15,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Background" Value="#BFFFFFFF" />
+            <Setter Property="BorderBrush" Value="#B8D7E1EF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#29425D" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource UtilityButton}">
+            <Setter Property="Background" Value="#1976F3" />
+            <Setter Property="BorderBrush" Value="#5AA7FF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+    </Window.Resources>
+
+    <Grid ClipToBounds="True">
+        <Rectangle>
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#F7FBFF" Offset="0" />
+                    <GradientStop Color="#EDF5FF" Offset="0.58" />
+                    <GradientStop Color="#F2FAF8" Offset="1" />
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+        <Ellipse Width="280" Height="250" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-125,-80,0" Opacity="0.25">
+            <Ellipse.Fill>
+                <RadialGradientBrush>
+                    <GradientStop Color="#A3DBFF" Offset="0" />
+                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
+
+        <Grid Margin="28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Margin="3,0,3,20">
+                <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="#172D45" Text="设置" />
+                <TextBlock Margin="0,5,0,0" Foreground="#687D94" Text="管理不再显示的程序和动态效果。" />
+            </StackPanel>
+
+            <Border Grid.Row="1" Style="{StaticResource GlassCard}" Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <CheckBox x:Name="ReduceMotionCheckBox" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="减少动态效果" />
+                    <TextBlock Grid.Row="1" Margin="0,18,0,8" FontWeight="SemiBold" Foreground="#203A56" Text="不再显示的程序" />
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ListBox x:Name="ExcludedProgramsList" ItemsSource="{Binding ExcludedPrograms}" SelectionChanged="ExcludedProgramsList_SelectionChanged" BorderThickness="0" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,3" Padding="11,8" Background="#BFFFFFFF" BorderBrush="#C8DAE8" BorderThickness="1" CornerRadius="12">
+                                        <TextBlock Foreground="#29425D" Text="{Binding}" />
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Button x:Name="RestoreButton" Grid.Row="1" HorizontalAlignment="Right" Margin="0,12,0,0" Style="{StaticResource UtilityButton}" IsEnabled="False" Click="RestoreButton_Click" Content="恢复显示" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="2" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource UtilityButton}" Click="CancelButton_Click" Content="取消" />
+                <Button Style="{StaticResource PrimaryButton}" Click="DoneButton_Click" Content="完成" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

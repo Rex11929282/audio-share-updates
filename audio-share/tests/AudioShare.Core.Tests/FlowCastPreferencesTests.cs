@@ -23,4 +23,13 @@ public sealed class FlowCastPreferencesTests
         Assert.False(preferences.IsExcluded("chrome"));
         Assert.True(preferences.IsExcluded("cloudmusic"));
     }
+
+    [Fact]
+    public void ChangingReduceMotionKeepsExcludedPrograms()
+    {
+        var preferences = FlowCastPreferences.Empty.Exclude("wallpaper64") with { ReduceMotion = true };
+
+        Assert.True(preferences.ReduceMotion);
+        Assert.True(preferences.IsExcluded("wallpaper64.exe"));
+    }
 }
