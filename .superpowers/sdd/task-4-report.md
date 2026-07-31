@@ -1,5 +1,11 @@
 # Task 4 Report: B1 Meter And Verified Stop
 
+## Review Fix
+
+- Updated `StopVerificationPolicy.IsComplete` to require both the main Input B1 and AUX B1 switches to be off, plus verified local-only routes.
+- Added a focused regression test proving an AUX B1 switch that remains on cannot report stop success.
+- Confirmed the stop flow rereads Voicemeeter status after applying local-only routes. When either B1 switch remains on, it keeps `requiresAttention`, retains the sharing recovery scope, preserves the retryable stop action, and returns failure before clearing routing state.
+
 ## RED
 
 - Added `StopVerificationPolicyTests` for B1 still enabled, route verification failure, and verified local-only recovery.

@@ -13,6 +13,14 @@ public sealed class StopVerificationPolicyTests
     }
 
     [Fact]
+    public void IsComplete_ReturnsFalse_WhenAuxB1IsStillShared()
+    {
+        var status = new SharingBusStatus(false, true, 0.2f, 0.2f);
+
+        Assert.False(StopVerificationPolicy.IsComplete(status, routesVerified: true));
+    }
+
+    [Fact]
     public void IsComplete_ReturnsFalse_WhenLocalOnlyRoutesAreNotVerified()
     {
         var status = new SharingBusStatus(false, false, 0.2f, 0.2f);
