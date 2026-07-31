@@ -206,14 +206,21 @@
                             <TextBlock FontSize="19" FontWeight="SemiBold" Foreground="#203A56" Text="正在播放的程序" />
                             <TextBlock Margin="0,4,0,0" Foreground="#74879A" Text="勾选后，朋友才会听到该程序。" />
                         </StackPanel>
-                        <ItemsControl Grid.Column="1" ItemsSource="{Binding ProcessStatuses}" VerticalAlignment="Center">
+                        <ItemsControl Grid.Column="1" ItemsSource="{Binding HealthItems}" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel HorizontalAlignment="Right" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                    <Border Padding="11,7" Background="#B9F7FFF9" BorderBrush="#A3DECF" BorderThickness="1" CornerRadius="14">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Ellipse Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" Fill="#1DBE86" />
-                                            <TextBlock FontWeight="SemiBold" Foreground="#148365" Text="Voicemeeter Banana" />
-                                            <TextBlock Margin="5,0,0,0" Foreground="#397767" Text="{Binding StatusText}" />
+                                    <Border MaxWidth="210" Margin="6,4,0,4" Padding="10,7" Background="{Binding Background}" BorderBrush="{Binding BorderBrush}" BorderThickness="1" CornerRadius="14">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center" Fill="{Binding Accent}" />
+                                                <TextBlock FontWeight="SemiBold" Foreground="#29425D" Text="{Binding Title}" />
+                                            </StackPanel>
+                                            <TextBlock Margin="14,3,0,0" FontSize="11" Foreground="#61798F" TextWrapping="Wrap" Text="{Binding Message}" />
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>

@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private readonly IApplicationRouteExecutor routeExecutor;
     private readonly DefaultPlaybackDeviceService defaultPlaybackDeviceService = new();
     private readonly VoicemeeterSharingBusService voicemeeterSharingBusService = new();
+    private readonly FlowCastHealthProbe healthProbe;
     private readonly DispatcherTimer refreshTimer = new() { Interval = PassiveRefreshInterval };
     private readonly DispatcherTimer signalTimer = new() { Interval = SignalRefreshInterval };
     private readonly CancellationTokenSource lifetimeCancellation = new();
@@ -55,12 +56,14 @@ public partial class MainWindow : Window
     private int backgroundRouteStateRefreshCount;
     private SharingRouteState sharingRouteState = SharingRouteState.Unknown;
     private SharingBusStatus? sharingBusStatus;
+    private HealthSummary healthSummary = HealthSummary.Create(false, false, false, false, false);
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = this;
         routeExecutor = new ApplicationRouteExecutor(routingHelper);
+        healthProbe = new FlowCastHealthProbe(routingHelper);
         favoritePrograms = new FavoritePrograms(LoadFavoritePrograms());
         preferences = preferencesStore.Load();
 
@@ -76,6 +79,8 @@ public partial class MainWindow : Window
     public ObservableCollection<AudioApplicationRow> Applications { get; } = [];
 
     public ObservableCollection<ProcessStatus> ProcessStatuses { get; } = [];
+
+    public ObservableCollection<HealthChip> HealthItems { get; } = [];
 
     public void SetUpdateAvailable(bool isAvailable) =>
         UpdateButton.Visibility = isAvailable ? Visibility.Visible : Visibility.Collapsed;
@@ -243,7 +248,6 @@ public partial class MainWindow : Window
         try
         {
             var wasSharing = sharingRouteState == SharingRouteState.Sharing;
-            UpdateProcessStatuses();
             var sessions = await discovery.GetActiveSessionsAsync(lifetimeCancellation.Token);
             activeSessions = sessions;
             var selectedProgramClosed = UpdateApplications(activeSessions);
@@ -416,6 +420,7 @@ public partial class MainWindow : Window
         var b1Percent = Math.Clamp((sharingBusStatus?.B1Level ?? 0f) * 100f, 0f, 100f);
         B1MeterFill.Width = b1Percent;
         B1MeterValueText.Text = $"{b1Percent:0}%";
+        UpdateHealthChips();
         (FlowCastStatusText.Text, FlowCastStatusHintText.Text) = requiresAttention
             ? ("需要处理", experimentalRoutingStatus)
             : sharingRouteState switch
@@ -462,11 +467,32 @@ public partial class MainWindow : Window
         ShareStartPolicy.CanStart(
             GetSelectedSessions().Count > 0,
             voicemeeterBananaInstalled &&
+            healthSummary.IsReady("Banana") &&
+            healthSummary.IsReady("Input") &&
+            healthSummary.IsReady("AUX") &&
             GetRoutableActiveSessions().Count > 0 &&
             experimentalRoutingAvailable &&
             !string.IsNullOrWhiteSpace(inputDeviceId) &&
             !string.IsNullOrWhiteSpace(auxDeviceId),
             isRoutingOperation);
+
+    private void UpdateHealthChips()
+    {
+        var items = healthSummary.Items;
+        if (HealthItems.Count == items.Count &&
+            HealthItems.Select(item => item.Key).SequenceEqual(items.Select(item => item.Key)) &&
+            HealthItems.Select(item => item.State).SequenceEqual(items.Select(item => item.State)) &&
+            HealthItems.Select(item => item.Message).SequenceEqual(items.Select(item => item.Message)))
+        {
+            return;
+        }
+
+        HealthItems.Clear();
+        foreach (var item in items)
+        {
+            HealthItems.Add(HealthChip.From(item));
+        }
+    }
 
     private string GetB1StatusText()
     {
@@ -555,17 +581,18 @@ public partial class MainWindow : Window
             UpdateRoutingSetupState();
         }
 
-        var health = await routingHelper.CheckHealthAsync(lifetimeCancellation.Token);
-        if (!health.IsAvailable)
+        var probe = await healthProbe.CheckAsync(lifetimeCancellation.Token);
+        healthSummary = probe.Summary;
+        if (!probe.RoutingAvailable)
         {
-            SetExperimentalRoutingUnavailable(health.Message);
+            SetVoicemeeterBananaInstalled(false);
+            SetExperimentalRoutingUnavailable(probe.RoutingMessage);
             return false;
         }
 
         try
         {
-            var devices = await routingHelper.ListOutputDevicesAsync(lifetimeCancellation.Token);
-            if (!VoicemeeterBananaDetector.TryFindEndpoints(devices, out var endpoints))
+            if (probe.Endpoints is null)
             {
                 SetVoicemeeterBananaInstalled(false);
                 SetExperimentalRoutingUnavailable("未检测到 Voicemeeter Banana 的必要音频装置。请安装后重启电脑，再重新检测。");
@@ -573,11 +600,18 @@ public partial class MainWindow : Window
             }
 
             var endpointsChanged = !string.IsNullOrWhiteSpace(inputDeviceId) &&
-                                   (!string.Equals(inputDeviceId, endpoints!.Input.Id, StringComparison.OrdinalIgnoreCase) ||
-                                    !string.Equals(auxDeviceId, endpoints.AuxInput.Id, StringComparison.OrdinalIgnoreCase));
+                                   (!string.Equals(inputDeviceId, probe.Endpoints.Input.Id, StringComparison.OrdinalIgnoreCase) ||
+                                    !string.Equals(auxDeviceId, probe.Endpoints.AuxInput.Id, StringComparison.OrdinalIgnoreCase));
+            if (!healthSummary.IsReady("Banana"))
+            {
+                SetVoicemeeterBananaInstalled(false);
+                SetExperimentalRoutingUnavailable("Voicemeeter Banana 未在运行。请打开 Banana 后重新检测。");
+                return false;
+            }
+
             SetVoicemeeterBananaInstalled(true);
-            inputDeviceId = endpoints!.Input.Id;
-            auxDeviceId = endpoints.AuxInput.Id;
+            inputDeviceId = probe.Endpoints.Input.Id;
+            auxDeviceId = probe.Endpoints.AuxInput.Id;
             experimentalRoutingAvailable = true;
             experimentalRoutingStatus = hasOwnedRoutingTransaction
                 ? "本次音频路由已生效。再次应用会按当前勾选替换；停止分享会让声音只在本机播放。"
@@ -1315,6 +1349,22 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+}
+
+public sealed record HealthChip(string Key, string Title, HealthState State, string Message, string Accent, string Background, string BorderBrush)
+{
+    public static HealthChip From(HealthItem item) => item.State switch
+    {
+        HealthState.Ready => new HealthChip(item.Key, GetTitle(item.Key), item.State, item.Message, "#1DBE86", "#B9F7FFF9", "#A3DECF"),
+        HealthState.Attention => new HealthChip(item.Key, GetTitle(item.Key), item.State, item.Message, "#E58A2B", "#FFF8E9", "#F0C886"),
+        _ => new HealthChip(item.Key, GetTitle(item.Key), item.State, item.Message, "#718499", "#EEF3F7", "#C8D5DF"),
+    };
+
+    private static string GetTitle(string key) => key switch
+    {
+        "A1" => "A1 / 默认播放",
+        _ => key,
+    };
 }
 
 public sealed class ProcessStatus : INotifyPropertyChanged
