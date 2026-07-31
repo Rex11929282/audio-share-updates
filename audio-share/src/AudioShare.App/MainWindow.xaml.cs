@@ -26,6 +26,7 @@ public partial class MainWindow : Window
 
     private readonly IAudioSessionDiscovery discovery = new WasapiAudioSessionDiscovery();
     private readonly RouteCoordinator routeCoordinator = new();
+    private readonly SharingRecoveryScope sharingRecoveryScope = new();
     private readonly ExternalRoutingHelperClient routingHelper = new(Path.Combine(AppContext.BaseDirectory, "router-helper"));
     private readonly IApplicationRouteExecutor routeExecutor;
     private readonly DefaultPlaybackDeviceService defaultPlaybackDeviceService = new();
@@ -244,7 +245,7 @@ public partial class MainWindow : Window
             var wasSharing = sharingRouteState == SharingRouteState.Sharing;
             UpdateProcessStatuses();
             var sessions = await discovery.GetActiveSessionsAsync(lifetimeCancellation.Token);
-            activeSessions = sessions.Where(session => !preferences.IsExcluded(session.ProcessName)).ToArray();
+            activeSessions = sessions;
             var selectedProgramClosed = UpdateApplications(activeSessions);
             var refreshEndpoints = refreshRouting || ++backgroundRefreshCount % 4 == 0;
             var endpointsChanged = refreshEndpoints && await RefreshExperimentalRoutingAvailabilityAsync();
@@ -313,7 +314,7 @@ public partial class MainWindow : Window
     private bool UpdateApplications(IReadOnlyList<AudioSession> sessions)
     {
         var eligibleSessions = sessions.Where(session => !preferences.IsExcluded(session.ProcessName)).ToArray();
-        var selectedProgramClosed = routeCoordinator.RemoveSelectionsAbsentFrom(eligibleSessions);
+        var selectedProgramClosed = routeCoordinator.RemoveSelectionsAbsentFrom(sessions);
         Applications.Clear();
 
         foreach (var session in favoritePrograms.Order(eligibleSessions.Where(session => session.HasAudio)))
@@ -342,7 +343,7 @@ public partial class MainWindow : Window
         try
         {
             var sessions = await discovery.GetActiveSessionsAsync(lifetimeCancellation.Token);
-            activeSessions = sessions.Where(session => !preferences.IsExcluded(session.ProcessName)).ToArray();
+            activeSessions = sessions;
             UpdateApplications(activeSessions);
         }
         catch (OperationCanceledException) when (isClosing)
@@ -450,6 +451,10 @@ public partial class MainWindow : Window
             .Where(session => !preferences.IsExcluded(session.ProcessName))
             .ToArray();
 
+    private IReadOnlyList<AudioSession> GetRecoverySessions() =>
+        sharingRecoveryScope.IncludeCurrent(
+            activeSessions.Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)));
+
     private bool CanApplyRouting() =>
         ShareStartPolicy.CanStart(
             GetSelectedSessions().Count > 0,
@@ -478,7 +483,7 @@ public partial class MainWindow : Window
 
     private bool CanStopSharing() =>
         voicemeeterBananaInstalled &&
-        GetRoutableActiveSessions().Count > 0 &&
+        GetRecoverySessions().Count > 0 &&
         experimentalRoutingAvailable &&
         sharingRouteState == SharingRouteState.Sharing &&
         !isRoutingOperation &&
@@ -487,7 +492,7 @@ public partial class MainWindow : Window
 
     private bool CanResetToLocalOnly() =>
         voicemeeterBananaInstalled &&
-        GetRoutableActiveSessions().Count > 0 &&
+        GetRecoverySessions().Count > 0 &&
         experimentalRoutingAvailable &&
         !isRoutingOperation &&
         !string.IsNullOrWhiteSpace(inputDeviceId) &&
@@ -667,6 +672,7 @@ public partial class MainWindow : Window
 
             if (plan.Commands.Count > 0)
             {
+                sharingRecoveryScope.Track(routeableSessions);
                 var result = await routeExecutor.ApplyAsync(plan, lifetimeCancellation.Token);
                 if (!result.Succeeded)
                 {
@@ -807,7 +813,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var routableSessions = GetRoutableActiveSessions();
+        var routableSessions = GetRecoverySessions();
         var routeableSessions = await GetRouteableSessionsAsync(routableSessions, token);
         if (routeableSessions.Count > 0)
         {
@@ -830,10 +836,11 @@ public partial class MainWindow : Window
             }
 
             routeExecutor.CompletePersistentRouting();
+            sharingRecoveryScope.Clear();
         }
 
         hasOwnedRoutingTransaction = false;
-        foreach (var session in GetRoutableActiveSessions())
+        foreach (var session in GetRecoverySessions())
         {
             await routeCoordinator.UnshareAsync(session, token);
         }
@@ -897,7 +904,7 @@ public partial class MainWindow : Window
         if (!CanResetToLocalOnly())
         {
             if (hasOwnedRoutingTransaction && experimentalRoutingAvailable &&
-                GetRoutableActiveSessions().Count == 0)
+                GetRecoverySessions().Count == 0)
             {
                 pendingLocalOnlyReset = true;
                 requiresAttention = false;
