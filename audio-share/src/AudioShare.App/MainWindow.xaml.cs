@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private readonly ShareStopSchedule stopSchedule = new();
     private readonly FavoritePrograms favoritePrograms;
+    private readonly FlowCastPreferences preferences;
     private readonly List<string> activityLog = [];
     private IReadOnlyList<AudioSession> activeSessions = [];
     private string? inputDeviceId;
@@ -59,6 +60,7 @@ public partial class MainWindow : Window
         DataContext = this;
         routeExecutor = new ApplicationRouteExecutor(routingHelper);
         favoritePrograms = new FavoritePrograms(LoadFavoritePrograms());
+        preferences = new FlowCastPreferencesStore().Load();
 
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
 
@@ -228,8 +230,8 @@ public partial class MainWindow : Window
             var wasSharing = sharingRouteState == SharingRouteState.Sharing;
             UpdateProcessStatuses();
             var sessions = await discovery.GetActiveSessionsAsync(lifetimeCancellation.Token);
-            activeSessions = sessions;
-            var selectedProgramClosed = UpdateApplications(sessions);
+            activeSessions = sessions.Where(session => !preferences.IsExcluded(session.ProcessName)).ToArray();
+            var selectedProgramClosed = UpdateApplications(activeSessions);
             var refreshEndpoints = refreshRouting || ++backgroundRefreshCount % 4 == 0;
             var endpointsChanged = refreshEndpoints && await RefreshExperimentalRoutingAvailabilityAsync();
             var refreshRouteState = refreshRouting ||
@@ -239,8 +241,7 @@ public partial class MainWindow : Window
                 await RefreshSharingRouteStateAsync();
             }
 
-            var shouldRecoverPendingReset = pendingLocalOnlyReset &&
-                activeSessions.Any(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName));
+            var shouldRecoverPendingReset = pendingLocalOnlyReset && GetRoutableActiveSessions().Count > 0;
             if (selectedProgramClosed || shouldRecoverPendingReset ||
                 RouteSafetyPolicy.ShouldStopSharing(wasSharing, endpointsChanged))
             {
@@ -297,10 +298,11 @@ public partial class MainWindow : Window
 
     private bool UpdateApplications(IReadOnlyList<AudioSession> sessions)
     {
-        var selectedProgramClosed = routeCoordinator.RemoveSelectionsAbsentFrom(sessions);
+        var eligibleSessions = sessions.Where(session => !preferences.IsExcluded(session.ProcessName)).ToArray();
+        var selectedProgramClosed = routeCoordinator.RemoveSelectionsAbsentFrom(eligibleSessions);
         Applications.Clear();
 
-        foreach (var session in favoritePrograms.Order(sessions.Where(session => session.HasAudio)))
+        foreach (var session in favoritePrograms.Order(eligibleSessions.Where(session => session.HasAudio)))
         {
             var isProtected = AudioRoutingPolicy.IsProtectedProcess(session.ProcessName);
             Applications.Add(new AudioApplicationRow(
@@ -402,13 +404,21 @@ public partial class MainWindow : Window
     }
 
     private IReadOnlyList<AudioSession> GetSelectedSessions() =>
-        routeCoordinator.GetSelectedSessions(activeSessions);
+        routeCoordinator.GetSelectedSessions(activeSessions)
+            .Where(session => !preferences.IsExcluded(session.ProcessName))
+            .ToArray();
+
+    private IReadOnlyList<AudioSession> GetRoutableActiveSessions() =>
+        activeSessions
+            .Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName))
+            .Where(session => !preferences.IsExcluded(session.ProcessName))
+            .ToArray();
 
     private bool CanApplyRouting() =>
         ShareStartPolicy.CanStart(
             GetSelectedSessions().Count > 0,
             voicemeeterBananaInstalled &&
-            activeSessions.Any(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)) &&
+            GetRoutableActiveSessions().Count > 0 &&
             experimentalRoutingAvailable &&
             !string.IsNullOrWhiteSpace(inputDeviceId) &&
             !string.IsNullOrWhiteSpace(auxDeviceId),
@@ -432,7 +442,7 @@ public partial class MainWindow : Window
 
     private bool CanStopSharing() =>
         voicemeeterBananaInstalled &&
-        activeSessions.Any(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)) &&
+        GetRoutableActiveSessions().Count > 0 &&
         experimentalRoutingAvailable &&
         sharingRouteState == SharingRouteState.Sharing &&
         !isRoutingOperation &&
@@ -441,7 +451,7 @@ public partial class MainWindow : Window
 
     private bool CanResetToLocalOnly() =>
         voicemeeterBananaInstalled &&
-        activeSessions.Any(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)) &&
+        GetRoutableActiveSessions().Count > 0 &&
         experimentalRoutingAvailable &&
         !isRoutingOperation &&
         !string.IsNullOrWhiteSpace(inputDeviceId) &&
@@ -462,17 +472,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        var routableSessions = activeSessions
-            .Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName))
-            .ToArray();
-        if (routableSessions.Length == 0)
+        var routableSessions = GetRoutableActiveSessions();
+        if (routableSessions.Count == 0)
         {
             return;
         }
 
         try
         {
-            var routeStates = new List<SharingRouteState>(routableSessions.Length);
+            var routeStates = new List<SharingRouteState>(routableSessions.Count);
             foreach (var session in routableSessions)
             {
                 var routes = await routingHelper.GetRouteAsync(
@@ -554,9 +562,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var routableSessions = activeSessions
-            .Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName))
-            .ToArray();
+        var routableSessions = GetRoutableActiveSessions();
 
         var routeableSessions = await GetRouteableSessionsAsync(routableSessions, lifetimeCancellation.Token);
         var selectedNames = selected.Select(session => session.ProcessName).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -765,9 +771,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var routableSessions = activeSessions
-            .Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName))
-            .ToArray();
+        var routableSessions = GetRoutableActiveSessions();
         var routeableSessions = await GetRouteableSessionsAsync(routableSessions, token);
         if (routeableSessions.Count > 0)
         {
@@ -793,7 +797,7 @@ public partial class MainWindow : Window
         }
 
         hasOwnedRoutingTransaction = false;
-        foreach (var session in activeSessions.Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)))
+        foreach (var session in GetRoutableActiveSessions())
         {
             await routeCoordinator.UnshareAsync(session, token);
         }
@@ -857,7 +861,7 @@ public partial class MainWindow : Window
         if (!CanResetToLocalOnly())
         {
             if (hasOwnedRoutingTransaction && experimentalRoutingAvailable &&
-                activeSessions.All(session => AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)))
+                GetRoutableActiveSessions().Count == 0)
             {
                 pendingLocalOnlyReset = true;
                 requiresAttention = false;
@@ -968,7 +972,7 @@ public partial class MainWindow : Window
             "音频程序：",
         };
 
-        foreach (var session in activeSessions.Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)))
+        foreach (var session in GetRoutableActiveSessions())
         {
             try
             {
