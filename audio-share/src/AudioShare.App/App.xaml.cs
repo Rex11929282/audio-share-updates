@@ -69,7 +69,8 @@ public partial class App : Application
 
             stagedUpdate = await updateService.DownloadAndStageAsync(update);
             updateService.BeginStagedReplacementAndRestart(stagedUpdate);
-            MessageBox.Show(owner, "更新已下载并验证完成。请关闭并重新打开 FlowCast 完成更新。", "FlowCast 更新", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(owner, "更新已下载并验证完成。FlowCast 现在会自动关闭、安装并重新打开。", "FlowCast 更新", MessageBoxButton.OK, MessageBoxImage.Information);
+            owner.Close();
         }
         catch (Exception exception)
         {

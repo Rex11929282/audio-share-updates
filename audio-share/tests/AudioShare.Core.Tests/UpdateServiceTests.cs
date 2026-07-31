@@ -38,8 +38,10 @@ public sealed class UpdateServiceTests
     {
         var script = GetReplacementScript();
 
-        Assert.Contains("$MaximumAttempts = 5", script);
+        Assert.Contains("$MaximumAttempts = 30", script);
         Assert.Contains("for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++)", script);
+        Assert.Contains("replace-and-restart.log", script);
+        Assert.Contains("Start-Sleep -Seconds 1", script);
         Assert.Contains("New-Item -ItemType Directory -Path $StagedApplicationDirectory -Force", script);
         Assert.DoesNotContain("Remove-Item -LiteralPath $TargetPath", script);
     }

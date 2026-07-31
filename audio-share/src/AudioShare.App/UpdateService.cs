@@ -158,11 +158,19 @@ public sealed class UpdateService
         $TransactionId = [Guid]::NewGuid().ToString("N")
         $StagedApplicationDirectory = Join-Path $ApplicationParent ".$ApplicationName.flowcast-update-new-$TransactionId"
         $BackupApplicationDirectory = Join-Path $ApplicationParent ".$ApplicationName.flowcast-update-backup-$TransactionId"
-        $MaximumAttempts = 5
+        $LogPath = Join-Path $PSScriptRoot "replace-and-restart.log"
+        $MaximumAttempts = 30
         $ReplacementSucceeded = $false
+
+        function Write-UpdateLog([string]$Message) {
+            Add-Content -LiteralPath $LogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
+        }
+
+        Write-UpdateLog "Waiting for FlowCast process $ProcessId to exit."
 
         for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
             try {
+                Write-UpdateLog "Replacement attempt $attempt of $MaximumAttempts."
                 Remove-Item -LiteralPath $StagedApplicationDirectory -Recurse -Force -ErrorAction SilentlyContinue
                 New-Item -ItemType Directory -Path $StagedApplicationDirectory -Force | Out-Null
                 $PackageItems = @(Get-ChildItem -LiteralPath $SourceDirectory -Force)
@@ -185,23 +193,27 @@ public sealed class UpdateService
                 Move-Item -LiteralPath $StagedApplicationDirectory -Destination $ApplicationDirectory
                 $ReplacementSucceeded = $true
                 Remove-Item -LiteralPath $BackupApplicationDirectory -Recurse -Force -ErrorAction SilentlyContinue
+                Write-UpdateLog "Replacement completed."
                 break
             }
             catch {
+                Write-UpdateLog "Replacement attempt $attempt failed: $($_.Exception.Message)"
                 if (-not (Test-Path -LiteralPath $ApplicationDirectory) -and
                     (Test-Path -LiteralPath $BackupApplicationDirectory)) {
                     Move-Item -LiteralPath $BackupApplicationDirectory -Destination $ApplicationDirectory
                 }
 
                 Remove-Item -LiteralPath $StagedApplicationDirectory -Recurse -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Milliseconds 500
+                Start-Sleep -Seconds 1
             }
         }
 
         if ($ReplacementSucceeded) {
+            Write-UpdateLog "Restarting updated FlowCast."
             Start-Process -FilePath $TargetPath
         }
         else {
+            Write-UpdateLog "Replacement failed after $MaximumAttempts attempts; restarting original FlowCast."
             Start-Process -FilePath $TargetPath -ArgumentList '--update-failed'
         }
         """;
