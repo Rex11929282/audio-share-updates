@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using AudioShare.Core;
 
 namespace AudioShare.Windows;
 
@@ -82,7 +83,10 @@ public sealed class VoicemeeterSharingBusService
             var auxSwitchResult = VBVMR_GetParameterFloat("Strip[4].B1", out var auxB1);
             var inputLeftResult = VBVMR_GetLevel(0, 6, out var inputLeft);
             var inputRightResult = VBVMR_GetLevel(0, 7, out var inputRight);
-            if (inputSwitchResult != 0 || auxSwitchResult != 0 || inputLeftResult != 0 || inputRightResult != 0)
+            var b1LeftResult = VBVMR_GetLevel(3, 24, out var b1Left);
+            var b1RightResult = VBVMR_GetLevel(3, 25, out var b1Right);
+            if (inputSwitchResult != 0 || auxSwitchResult != 0 || inputLeftResult != 0 || inputRightResult != 0 ||
+                b1LeftResult != 0 || b1RightResult != 0)
             {
                 throw new InvalidOperationException("Unable to read Voicemeeter B1 or Input status.");
             }
@@ -90,7 +94,8 @@ public sealed class VoicemeeterSharingBusService
             return new SharingBusStatus(
                 inputB1 >= 0.99f,
                 auxB1 >= 0.99f,
-                Math.Max(inputLeft, inputRight));
+                Math.Max(inputLeft, inputRight),
+                Math.Max(b1Left, b1Right));
         }
         finally
         {
@@ -98,5 +103,3 @@ public sealed class VoicemeeterSharingBusService
         }
     }
 }
-
-public sealed record SharingBusStatus(bool IsMainInputShared, bool IsAuxShared, float InputLevel);

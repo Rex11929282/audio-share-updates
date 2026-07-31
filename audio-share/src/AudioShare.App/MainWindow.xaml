@@ -170,6 +170,12 @@
                         <TextBlock x:Name="FlowCastStatusText" FontSize="27" FontWeight="SemiBold" Foreground="#117F95" Text="正在确认分享状态" />
                         <TextBlock x:Name="FlowCastStatusHintText" Margin="0,5,0,0" FontSize="14" Foreground="#496C82" TextWrapping="Wrap" Text="正在检查当前程序。" />
                         <TextBlock x:Name="B1StatusText" Margin="0,5,0,0" FontSize="13" FontWeight="SemiBold" Foreground="#278093" Text="B1：正在检测" />
+                        <StackPanel Margin="0,5,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="100" Height="6" Background="#D6E8EE" CornerRadius="3" ClipToBounds="True">
+                                <Border x:Name="B1MeterFill" Width="0" HorizontalAlignment="Left" Background="#1BBFAD" CornerRadius="3" />
+                            </Border>
+                            <TextBlock x:Name="B1MeterValueText" Margin="8,0,0,0" FontSize="12" Foreground="#70869A" Text="0%" />
+                        </StackPanel>
                         <TextBlock x:Name="RecentActivityText" Margin="0,8,0,0" FontSize="12" Foreground="#70869A" TextWrapping="Wrap" />
                         <StackPanel Margin="0,13,0,0" Orientation="Horizontal" Opacity="0.65">
                             <Rectangle Width="4" Height="10" Margin="0,0,4,0" Fill="#36C8C2" RadiusX="2" RadiusY="2" />

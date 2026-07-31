@@ -413,6 +413,9 @@ public partial class MainWindow : Window
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
         B1StatusText.Text = GetB1StatusText();
+        var b1Percent = Math.Clamp((sharingBusStatus?.B1Level ?? 0f) * 100f, 0f, 100f);
+        B1MeterFill.Width = b1Percent;
+        B1MeterValueText.Text = $"{b1Percent:0}%";
         (FlowCastStatusText.Text, FlowCastStatusHintText.Text) = requiresAttention
             ? ("需要处理", experimentalRoutingStatus)
             : sharingRouteState switch
@@ -485,7 +488,7 @@ public partial class MainWindow : Window
         voicemeeterBananaInstalled &&
         GetRecoverySessions().Count > 0 &&
         experimentalRoutingAvailable &&
-        sharingRouteState == SharingRouteState.Sharing &&
+        (sharingRouteState == SharingRouteState.Sharing || requiresAttention) &&
         !isRoutingOperation &&
         !string.IsNullOrWhiteSpace(inputDeviceId) &&
         !string.IsNullOrWhiteSpace(auxDeviceId);
@@ -828,6 +831,7 @@ public partial class MainWindow : Window
 
         var routableSessions = GetRecoverySessions();
         var routeableSessions = await GetRouteableSessionsAsync(routableSessions, token);
+        var routesVerified = true;
         if (routeableSessions.Count > 0)
         {
             var localOnlyPlan = ApplicationRoutePlanner.Create(routeableSessions, [], inputDeviceId, auxDeviceId);
@@ -840,7 +844,8 @@ public partial class MainWindow : Window
                 return false;
             }
 
-            if (!await VerifyRoutePlanAsync(localOnlyPlan, token))
+            routesVerified = await VerifyRoutePlanAsync(localOnlyPlan, token);
+            if (!routesVerified)
             {
                 requiresAttention = true;
                 experimentalRoutingStatus = "未能确认所有程序已回到本机收听。";
@@ -848,9 +853,33 @@ public partial class MainWindow : Window
                 return false;
             }
 
-            routeExecutor.CompletePersistentRouting();
-            sharingRecoveryScope.Clear();
         }
+
+        SharingBusStatus status;
+        try
+        {
+            status = voicemeeterSharingBusService.GetStatus();
+            sharingBusStatus = status;
+        }
+        catch (Exception exception)
+        {
+            requiresAttention = true;
+            experimentalRoutingStatus = $"停止分享失败：无法确认 B1 状态：{exception.Message}";
+            ShowError("停止分享后无法确认 B1 已关闭。请重试“停止分享”。", null);
+            return false;
+        }
+
+        if (!StopVerificationPolicy.IsComplete(status, routesVerified))
+        {
+            requiresAttention = true;
+            sharingRouteState = SharingRouteState.Sharing;
+            experimentalRoutingStatus = "停止分享尚未确认。请重试“停止分享”。";
+            ShowError("停止分享未完成：请确认 B1 已关闭且程序已回到仅自己听，然后重试。", null);
+            return false;
+        }
+
+        routeExecutor.CompletePersistentRouting();
+        sharingRecoveryScope.Clear();
 
         hasOwnedRoutingTransaction = false;
         foreach (var session in GetRecoverySessions())
