@@ -50,6 +50,14 @@ public sealed class UpdateService
 
     public async Task<StagedUpdate> DownloadAndStageAsync(ReleaseUpdate update, CancellationToken cancellationToken = default)
     {
+        return await DownloadAndStageAsync(update, null, cancellationToken);
+    }
+
+    public async Task<StagedUpdate> DownloadAndStageAsync(
+        ReleaseUpdate update,
+        IProgress<UpdateProgress>? progress,
+        CancellationToken cancellationToken = default)
+    {
         var executablePath = this.executablePath ?? Environment.ProcessPath ??
             throw new InvalidOperationException("找不到当前程序文件。");
         var applicationDirectory = Path.GetDirectoryName(executablePath) ?? throw new InvalidOperationException("找不到程序文件夹。");
@@ -68,16 +76,18 @@ public sealed class UpdateService
             using (var ownedClient = client is null ? CreateClient() : null)
             {
                 var httpClient = ownedClient ?? client!;
-                await File.WriteAllBytesAsync(packagePath, await httpClient.GetByteArrayAsync(update.AssetUrl, cancellationToken), cancellationToken);
+                await DownloadPackageAsync(httpClient, update.AssetUrl, packagePath, progress, cancellationToken);
                 await File.WriteAllBytesAsync(checksumPath, await httpClient.GetByteArrayAsync(update.Sha256Url, cancellationToken), cancellationToken);
             }
 
+            progress?.Report(new UpdateProgress(UpdateStage.Verifying, "Verifying update", null));
             if (!HasMatchingChecksum(packagePath, await File.ReadAllTextAsync(checksumPath, cancellationToken)))
             {
                 throw new InvalidDataException("更新文件的 SHA-256 验证失败。");
             }
 
             var extractedDirectory = Path.Combine(updateDirectory, "extracted");
+            progress?.Report(new UpdateProgress(UpdateStage.Extracting, "Extracting update", null));
             ZipFile.ExtractToDirectory(packagePath, extractedDirectory);
 
             var requiredFiles = new[]
@@ -92,6 +102,7 @@ public sealed class UpdateService
                 throw new InvalidDataException("更新压缩包未包含预期的程序、授权说明或路由组件。");
             }
 
+            progress?.Report(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
             return new StagedUpdate(updateDirectory, extractedDirectory, executablePath);
         }
         catch
@@ -227,6 +238,42 @@ public sealed class UpdateService
 
     private static Version GetCurrentVersion(Assembly assembly) =>
         assembly.GetName().Version ?? new Version(0, 0);
+
+    private static async Task DownloadPackageAsync(
+        HttpClient httpClient,
+        Uri packageUrl,
+        string packagePath,
+        IProgress<UpdateProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync(
+            packageUrl,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var contentLength = response.Content.Headers.ContentLength;
+        progress?.Report(new UpdateProgress(UpdateStage.Downloading, "Downloading update", contentLength is null ? null : 0));
+        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var destination = new FileStream(
+            packagePath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 81920,
+            useAsync: true);
+
+        var buffer = new byte[81920];
+        long totalBytesRead = 0;
+        int bytesRead;
+        while ((bytesRead = await source.ReadAsync(buffer, cancellationToken)) != 0)
+        {
+            await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+            totalBytesRead += bytesRead;
+            int? percentage = contentLength is null ? null : (int)(totalBytesRead * 100 / contentLength.Value);
+            progress?.Report(new UpdateProgress(UpdateStage.Downloading, "Downloading update", percentage));
+        }
+    }
 
     private static bool HasMatchingChecksum(string packagePath, string checksumText)
     {

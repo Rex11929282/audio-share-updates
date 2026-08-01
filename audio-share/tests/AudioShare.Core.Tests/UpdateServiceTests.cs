@@ -202,6 +202,38 @@ public sealed class UpdateServiceTests
         }
     }
 
+    [Fact]
+    public async Task DownloadAndStageAsync_ReportsDownloadAndValidationProgress()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var executablePath = Path.Combine(root, "installed", "AudioShare.App.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+            await File.WriteAllTextAsync(executablePath, "old");
+            var package = CreatePackage(includeRouterHelper: true);
+            using var client = CreatePackageClient(package);
+            var service = new UpdateService(client, executablePath);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 1),
+                new Uri("https://example.com/AudioShare-win-x64.zip"),
+                new Uri("https://example.com/AudioShare-win-x64.zip.sha256"));
+            var updates = new List<UpdateProgress>();
+
+            var staged = await service.DownloadAndStageAsync(update, new Progress<UpdateProgress>(updates.Add));
+
+            Assert.Contains(updates, item => item.Stage == UpdateStage.Downloading && item.Percentage == 100);
+            Assert.Contains(updates, item => item.Stage == UpdateStage.Verifying);
+            Assert.Contains(updates, item => item.Stage == UpdateStage.ReadyToRestart);
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static Version GetCurrentVersion(Assembly assembly)
     {
         var method = typeof(UpdateService).GetMethod("GetCurrentVersion", BindingFlags.NonPublic | BindingFlags.Static);
