@@ -7,31 +7,50 @@ namespace AudioShare.App;
 internal sealed class MotionController
 {
     private const int MaximumFramesPerSecond = 30;
+    private static readonly TimeSpan AudioPulseCooldown = TimeSpan.FromMilliseconds(850);
     private readonly Window owner;
     private readonly FrameworkElement logo;
     private readonly FrameworkElement topCard;
+    private readonly FrameworkElement statusPulse;
     private readonly FrameworkElement b1Fill;
+    private readonly FrameworkElement b1ActivityBars;
     private readonly FrameworkElement routeFlowPath;
+    private readonly FrameworkElement routeBeaconOne;
+    private readonly FrameworkElement routeBeaconTwo;
     private readonly FrameworkElement listPanel;
-    private readonly List<Storyboard> runningStoryboards = [];
+    private readonly FrameworkElement timerProgressGlow;
+    private readonly List<RunningStoryboard> runningStoryboards = [];
+    private DateTimeOffset lastAudioPulseAt;
+    private double lastAudioLevel;
     private bool reduceMotion;
     private bool suspended;
+    private bool routeIsActive;
 
     public MotionController(
         Window owner,
         FrameworkElement logo,
         FrameworkElement topCard,
+        FrameworkElement statusPulse,
         FrameworkElement b1Fill,
+        FrameworkElement b1ActivityBars,
         FrameworkElement routeFlowPath,
+        FrameworkElement routeBeaconOne,
+        FrameworkElement routeBeaconTwo,
         FrameworkElement listPanel,
+        FrameworkElement timerProgressGlow,
         bool reduceMotion)
     {
         this.owner = owner;
         this.logo = logo;
         this.topCard = topCard;
+        this.statusPulse = statusPulse;
         this.b1Fill = b1Fill;
+        this.b1ActivityBars = b1ActivityBars;
         this.routeFlowPath = routeFlowPath;
+        this.routeBeaconOne = routeBeaconOne;
+        this.routeBeaconTwo = routeBeaconTwo;
         this.listPanel = listPanel;
+        this.timerProgressGlow = timerProgressGlow;
         this.reduceMotion = reduceMotion;
 
         ApplyFinalValues();
@@ -60,25 +79,96 @@ internal sealed class MotionController
         PlayEntrance(listPanel, TimeSpan.FromMilliseconds(230), TimeSpan.FromMilliseconds(670), 18, 0.985);
     }
 
-    public void PlayRouteFlow()
+    public void PlaySharingConfirmed()
     {
         if (!CanPlay())
         {
             return;
         }
 
+        SetRouteActive(true);
+        PlayPulse(statusPulse, 1.08, TimeSpan.FromMilliseconds(340));
         Play(routeFlowPath, TimeSpan.FromMilliseconds(320), 14, 1, 0.25, 0.82);
-        Play(b1Fill, TimeSpan.FromMilliseconds(240), 0, 0.96, 0.7, 1);
+        PlayBeacon(routeBeaconOne, -20, 72, TimeSpan.Zero);
+        PlayBeacon(routeBeaconTwo, 18, 126, TimeSpan.FromMilliseconds(130));
+        PlayPulse(b1Fill, 1.05, TimeSpan.FromMilliseconds(240));
     }
 
-    public void PlayStatusTransition()
+    public void PlayLocalOnlyConfirmed()
     {
         if (!CanPlay())
         {
             return;
         }
 
-        Play(topCard, TimeSpan.FromMilliseconds(180), 0, 0.985, 0.82, 1);
+        SetRouteActive(false);
+        PlayPulse(statusPulse, 1.05, TimeSpan.FromMilliseconds(260));
+        Play(routeFlowPath, TimeSpan.FromMilliseconds(260), -10, 1, 0.82, 0);
+        PlayBeacon(routeBeaconOne, 126, 42, TimeSpan.Zero);
+        PlayBeacon(routeBeaconTwo, 82, -16, TimeSpan.FromMilliseconds(110));
+    }
+
+    public void PlayAudioLevelPulse(double level)
+    {
+        if (!CanPlay() || level < 2)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (Math.Abs(level - lastAudioLevel) < 8 && now - lastAudioPulseAt < AudioPulseCooldown)
+        {
+            return;
+        }
+
+        lastAudioLevel = level;
+        lastAudioPulseAt = now;
+        PlayPulse(b1ActivityBars, Math.Clamp(1.02 + level / 500, 1.02, 1.16), TimeSpan.FromMilliseconds(220));
+    }
+
+    public void PlaySelectionConfirmed(FrameworkElement target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (CanPlay())
+        {
+            PlayPulse(target, 1.16, TimeSpan.FromMilliseconds(220));
+        }
+    }
+
+    public void PlayAttention()
+    {
+        if (CanPlay())
+        {
+            PlayPulse(topCard, 1.012, TimeSpan.FromMilliseconds(220));
+        }
+    }
+
+    public void PlayTimerScheduled()
+    {
+        if (CanPlay())
+        {
+            PlayFlash(timerProgressGlow, TimeSpan.FromMilliseconds(500));
+        }
+    }
+
+    public void PlayWindowResume()
+    {
+        if (CanPlay())
+        {
+            Play(topCard, TimeSpan.FromMilliseconds(180), 0, 0.99, 0.86, 1);
+        }
+    }
+
+    public void SetRouteActive(bool value)
+    {
+        if (routeIsActive == value)
+        {
+            return;
+        }
+
+        routeIsActive = value;
+        StopRunningStoryboards(routeFlowPath);
+        SetVisual(routeFlowPath, routeIsActive ? 0.64 : 0, 0, 0, 1);
     }
 
     public void Suspend()
@@ -98,19 +188,65 @@ internal sealed class MotionController
     private void PlayEntrance(FrameworkElement target, TimeSpan beginTime, TimeSpan duration, double translateY, double scale)
     {
         SetVisual(target, 0, 0, translateY, scale);
-        var storyboard = CreateStoryboard(target, duration, beginTime, 0, 1, translateY, 0, scale, 1);
-        Start(storyboard, () => SetVisual(target, 1, 0, 0, 1));
+        var storyboard = CreateTransformStoryboard(target, duration, beginTime, 0, 1, 0, translateY, scale, 1);
+        Start(target, storyboard, () => SetVisual(target, 1, 0, 0, 1));
     }
 
     private void Play(FrameworkElement target, TimeSpan duration, double translateX, double scale, double fromOpacity, double toOpacity)
     {
         SetVisual(target, fromOpacity, translateX, 0, scale);
         Start(
-            CreateStoryboard(target, duration, TimeSpan.Zero, fromOpacity, toOpacity, translateX, 0, scale, 1),
+            target,
+            CreateTransformStoryboard(target, duration, TimeSpan.Zero, fromOpacity, toOpacity, translateX, 0, scale, 1),
             () => SetVisual(target, toOpacity, 0, 0, 1));
     }
 
-    private Storyboard CreateStoryboard(
+    private void PlayPulse(FrameworkElement target, double peakScale, TimeSpan duration)
+    {
+        var firstHalf = TimeSpan.FromMilliseconds(duration.TotalMilliseconds * 0.45);
+        var secondHalf = duration - firstHalf;
+        SetVisual(target, 1, 0, 0, 1);
+        var transforms = GetTransforms(target);
+        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 1, peakScale, firstHalf, TimeSpan.Zero, easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 1, peakScale, firstHalf, TimeSpan.Zero, easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, peakScale, 1, secondHalf, firstHalf, easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, peakScale, 1, secondHalf, firstHalf, easing);
+        Start(target, storyboard, () => SetVisual(target, 1, 0, 0, 1));
+    }
+
+    private void PlayBeacon(FrameworkElement target, double fromX, double toX, TimeSpan beginTime)
+    {
+        const double durationMilliseconds = 360;
+        var duration = TimeSpan.FromMilliseconds(durationMilliseconds);
+        var fadeIn = TimeSpan.FromMilliseconds(90);
+        var fadeOutBegin = beginTime + TimeSpan.FromMilliseconds(220);
+        SetVisual(target, 0, fromX, 0, 0.72);
+        var transforms = GetTransforms(target);
+        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        Add(storyboard, target, UIElement.OpacityProperty, 0, 1, fadeIn, beginTime, easing);
+        Add(storyboard, target, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(140), fadeOutBegin, easing);
+        Add(storyboard, transforms.Translate, TranslateTransform.XProperty, fromX, toX, duration, beginTime, easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.72, 1, fadeIn, beginTime, easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.72, 1, fadeIn, beginTime, easing);
+        Start(target, storyboard, () => SetVisual(target, 0, 0, 0, 1));
+    }
+
+    private void PlayFlash(FrameworkElement target, TimeSpan duration)
+    {
+        var fadeIn = TimeSpan.FromMilliseconds(duration.TotalMilliseconds * 0.35);
+        var fadeOut = duration - fadeIn;
+        SetVisual(target, 0, 0, 0, 1);
+        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        Add(storyboard, target, UIElement.OpacityProperty, 0, 0.92, fadeIn, TimeSpan.Zero, easing);
+        Add(storyboard, target, UIElement.OpacityProperty, 0.92, 0, fadeOut, fadeIn, easing);
+        Start(target, storyboard, () => SetVisual(target, 0, 0, 0, 1));
+    }
+
+    private Storyboard CreateTransformStoryboard(
         FrameworkElement target,
         TimeSpan duration,
         TimeSpan beginTime,
@@ -153,18 +289,19 @@ internal sealed class MotionController
         storyboard.Children.Add(animation);
     }
 
-    private void Start(Storyboard storyboard, Action applyFinalValues)
+    private void Start(FrameworkElement target, Storyboard storyboard, Action applyFinalValues)
     {
+        StopRunningStoryboards(target);
         EventHandler? completed = null;
         completed = (_, _) =>
         {
             applyFinalValues();
             storyboard.Completed -= completed;
             storyboard.Remove(owner);
-            runningStoryboards.Remove(storyboard);
+            runningStoryboards.RemoveAll(running => running.Storyboard == storyboard);
         };
         storyboard.Completed += completed;
-        runningStoryboards.Add(storyboard);
+        runningStoryboards.Add(new RunningStoryboard(target, storyboard, completed));
         storyboard.Begin(owner, true);
     }
 
@@ -173,19 +310,24 @@ internal sealed class MotionController
         StopRunningStoryboards();
         SetVisual(logo, 1, 0, 0, 1);
         SetVisual(topCard, 1, 0, 0, 1);
+        SetVisual(statusPulse, 1, 0, 0, 1);
         SetVisual(b1Fill, 1, 0, 0, 1);
-        SetVisual(routeFlowPath, 0.64, 0, 0, 1);
+        SetVisual(b1ActivityBars, 0.65, 0, 0, 1);
+        SetVisual(routeFlowPath, routeIsActive ? 0.64 : 0, 0, 0, 1);
+        SetVisual(routeBeaconOne, 0, 0, 0, 1);
+        SetVisual(routeBeaconTwo, 0, 0, 0, 1);
         SetVisual(listPanel, 1, 0, 0, 1);
+        SetVisual(timerProgressGlow, 0, 0, 0, 1);
     }
 
-    private void StopRunningStoryboards()
+    private void StopRunningStoryboards(FrameworkElement? target = null)
     {
-        foreach (var storyboard in runningStoryboards)
+        foreach (var running in runningStoryboards.Where(running => target is null || running.Target == target).ToArray())
         {
-            storyboard.Remove(owner);
+            running.Storyboard.Completed -= running.Completed;
+            running.Storyboard.Remove(owner);
+            runningStoryboards.Remove(running);
         }
-
-        runningStoryboards.Clear();
     }
 
     private static void SetVisual(FrameworkElement target, double opacity, double x, double y, double scale)
@@ -200,14 +342,31 @@ internal sealed class MotionController
 
     private static MotionTransforms GetTransforms(FrameworkElement target)
     {
-        if (target.RenderTransform is TransformGroup { Children.Count: 2 } group &&
-            group.Children[0] is ScaleTransform scale &&
-            group.Children[1] is TranslateTransform translate)
+        if (target.RenderTransform is TransformGroup group)
         {
+            var scale = group.Children.OfType<ScaleTransform>().FirstOrDefault();
+            var translate = group.Children.OfType<TranslateTransform>().FirstOrDefault();
+            if (scale is null)
+            {
+                scale = new ScaleTransform(1, 1);
+                group.Children.Add(scale);
+            }
+
+            if (translate is null)
+            {
+                translate = new TranslateTransform();
+                group.Children.Add(translate);
+            }
+
             return new MotionTransforms(scale, translate);
         }
 
         var transforms = new TransformGroup();
+        if (target.RenderTransform is { Value.IsIdentity: false } existingTransform)
+        {
+            transforms.Children.Add(existingTransform);
+        }
+
         var newScale = new ScaleTransform(1, 1);
         var newTranslate = new TranslateTransform();
         transforms.Children.Add(newScale);
@@ -218,4 +377,6 @@ internal sealed class MotionController
     }
 
     private sealed record MotionTransforms(ScaleTransform Scale, TranslateTransform Translate);
+
+    private sealed record RunningStoryboard(FrameworkElement Target, Storyboard Storyboard, EventHandler Completed);
 }

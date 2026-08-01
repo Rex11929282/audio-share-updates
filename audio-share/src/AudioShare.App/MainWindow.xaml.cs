@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     private bool isClosing;
     private bool isUpdateStaging;
     private bool closeAfterRouting;
+    private bool wasMinimized;
     private bool experimentalRoutingAvailable;
     private bool hasOwnedRoutingTransaction;
     private bool voicemeeterBananaInstalled;
@@ -59,7 +60,6 @@ public partial class MainWindow : Window
     private bool pendingLocalOnlyReset;
     private bool wasAttention;
     private int backgroundRefreshCount;
-    private int backgroundRouteStateRefreshCount;
     private SharingRouteState sharingRouteState = SharingRouteState.Unknown;
     private SharingBusStatus? sharingBusStatus;
     private HealthSummary healthSummary = HealthSummary.Create(false, false, false, false, false);
@@ -76,9 +76,14 @@ public partial class MainWindow : Window
             this,
             LogoMark,
             TopStatusCard,
+            StatusPulse,
             B1MeterFill,
+            B1ActivityBars,
             RouteFlowPath,
+            RouteBeaconOne,
+            RouteBeaconTwo,
             ApplicationListPanel,
+            TimerProgressGlow,
             preferences.ReduceMotion);
 
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
@@ -190,11 +195,17 @@ public partial class MainWindow : Window
     {
         if (WindowState == WindowState.Minimized)
         {
+            wasMinimized = true;
             motionController.Suspend();
         }
         else
         {
             motionController.Resume();
+            if (wasMinimized)
+            {
+                wasMinimized = false;
+                motionController.PlayWindowResume();
+            }
         }
 
         if (WindowState == WindowState.Minimized && !CanStopSharing() && !stopSchedule.IsScheduled)
@@ -256,6 +267,11 @@ public partial class MainWindow : Window
         try
         {
             sharingBusStatus = voicemeeterSharingBusService.GetStatus();
+            ReconcileSharingStateWithB1();
+            if (sharingRouteState == SharingRouteState.Sharing && sharingBusStatus.IsMainInputShared)
+            {
+                motionController.PlayAudioLevelPulse(Math.Clamp(sharingBusStatus.B1Level * 100f, 0f, 100f));
+            }
             UpdateRoutingSetupState();
         }
         catch
@@ -383,8 +399,7 @@ public partial class MainWindow : Window
             var selectedProgramClosed = UpdateApplications(activeSessions);
             var refreshEndpoints = refreshRouting || ++backgroundRefreshCount % 4 == 0;
             var endpointsChanged = refreshEndpoints && await RefreshExperimentalRoutingAvailabilityAsync();
-            var refreshRouteState = refreshRouting ||
-                (sharingRouteState == SharingRouteState.Sharing && ++backgroundRouteStateRefreshCount % 2 == 0);
+            var refreshRouteState = refreshRouting || sharingRouteState == SharingRouteState.Sharing;
             if (refreshRouteState)
             {
                 await RefreshSharingRouteStateAsync();
@@ -517,6 +532,7 @@ public partial class MainWindow : Window
             }
 
             ErrorPanel.Visibility = Visibility.Collapsed;
+            motionController.PlaySelectionConfirmed(checkBox);
             if (!shouldShare)
             {
                 return;
@@ -543,6 +559,7 @@ public partial class MainWindow : Window
     private void UpdateRoutingSetupState()
     {
         var selected = GetSelectedSessions();
+        motionController.SetRouteActive(sharingRouteState == SharingRouteState.Sharing);
         SetupSelectedButton.IsEnabled = voicemeeterBananaInstalled && selected.Count > 0;
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
@@ -579,7 +596,7 @@ public partial class MainWindow : Window
 
         if (requiresAttention && !wasAttention)
         {
-            motionController.PlayStatusTransition();
+            motionController.PlayAttention();
         }
 
         wasAttention = requiresAttention;
@@ -677,11 +694,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshSharingRouteStateAsync()
     {
-        if (sharingRouteState == SharingRouteState.Sharing)
-        {
-            return;
-        }
-
+        var previousState = sharingRouteState;
         sharingRouteState = SharingRouteState.Unknown;
         if (!experimentalRoutingAvailable ||
             string.IsNullOrWhiteSpace(inputDeviceId) ||
@@ -691,20 +704,46 @@ public partial class MainWindow : Window
         }
 
         var routableSessions = GetRoutableActiveSessions();
+        if (routableSessions.Count == 0)
+        {
+            sharingRouteState = previousState;
+            return;
+        }
+
         try
         {
             var routeStates = new List<SharingRouteState>(routableSessions.Count);
             foreach (var session in routableSessions)
             {
-                var routes = await routingHelper.GetRouteAsync(
-                    session.ProcessId,
-                    session.ProcessStartUtcTicks,
-                    session.ProcessName,
-                    lifetimeCancellation.Token);
-                routeStates.Add(SharingRouteState.Classify(routes, inputDeviceId, auxDeviceId));
+                try
+                {
+                    var routes = await routingHelper.GetRouteAsync(
+                        session.ProcessId,
+                        session.ProcessStartUtcTicks,
+                        session.ProcessName,
+                        lifetimeCancellation.Token);
+                    routeStates.Add(SharingRouteState.Classify(routes, inputDeviceId, auxDeviceId));
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message.Contains("Active output session not found", StringComparison.OrdinalIgnoreCase))
+                {
+                    // The program already sends audio directly to Voicemeeter Input, so B1 remains its safe gate.
+                }
+            }
+
+            if (routeStates.Count == 0)
+            {
+                sharingRouteState = previousState;
+                return;
             }
 
             sharingRouteState = SharingRouteState.Aggregate(routeStates);
+            if (previousState == SharingRouteState.Sharing && sharingRouteState != SharingRouteState.Sharing)
+            {
+                requiresAttention = true;
+                experimentalRoutingStatus = "检测到 Windows 音频路由已变更，无法确认分享。请重新开始分享或停止分享。";
+                AddActivity("分享路由已在外部变更，等待你确认处理。");
+            }
         }
         catch (OperationCanceledException) when (isClosing)
         {
@@ -713,7 +752,29 @@ public partial class MainWindow : Window
         catch
         {
             sharingRouteState = SharingRouteState.Unknown;
+            if (previousState == SharingRouteState.Sharing)
+            {
+                requiresAttention = true;
+                experimentalRoutingStatus = "无法重新确认分享路由。请停止分享以恢复只自己听。";
+                AddActivity("分享路由暂时无法读取，已保留停止分享入口。");
+            }
         }
+    }
+
+    private void ReconcileSharingStateWithB1()
+    {
+        if (sharingRouteState != SharingRouteState.Sharing ||
+            sharingBusStatus is { IsMainInputShared: true, IsAuxShared: false })
+        {
+            return;
+        }
+
+        sharingRouteState = SharingRouteState.Unknown;
+        requiresAttention = true;
+        experimentalRoutingStatus = sharingBusStatus is { IsAuxShared: true }
+            ? "检测到 AUX 也已发送到 B1。为避免误分享，请停止分享。"
+            : "检测到 Banana 的 B1 已关闭，无法确认分享。请重新开始分享或停止分享。";
+        AddActivity("Banana 的 B1 状态已变更，分享状态需要确认。");
     }
 
     private async Task<bool> RefreshExperimentalRoutingAvailabilityAsync()
@@ -870,7 +931,7 @@ public partial class MainWindow : Window
             }
 
             sharingRouteState = SharingRouteState.Sharing;
-            motionController.PlayRouteFlow();
+            motionController.PlaySharingConfirmed();
             experimentalRoutingStatus = "音频路由已应用。更改勾选后再次应用即可替换；停止分享会让声音只在本机播放。";
             AddActivity("分享已确认。");
             ErrorPanel.Visibility = Visibility.Collapsed;
@@ -1072,7 +1133,7 @@ public partial class MainWindow : Window
 
         experimentalRoutingStatus = "已停止分享。所有当前检测到的程序只会在本机播放。";
         requiresAttention = false;
-        motionController.PlayStatusTransition();
+        motionController.PlayLocalOnlyConfirmed();
         stopSchedule.Cancel();
         AddActivity("已停止分享并取消勾选。");
         ErrorPanel.Visibility = Visibility.Collapsed;
@@ -1190,6 +1251,7 @@ public partial class MainWindow : Window
 
         stopSchedule.Schedule(TimeSpan.FromMinutes(minutes), DateTimeOffset.Now);
         scheduleTimer.Start();
+        motionController.PlayTimerScheduled();
         AddActivity($"已设置 {minutes} 分钟后自动停止分享。");
         ErrorPanel.Visibility = Visibility.Collapsed;
         UpdateRoutingSetupState();
