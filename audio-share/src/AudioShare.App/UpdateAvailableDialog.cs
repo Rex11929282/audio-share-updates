@@ -37,7 +37,7 @@ public sealed class UpdateAvailableDialog : Window
             {
                 new TextBlock
                 {
-                    Text = $"发现新版本 {version}。下载并验证完成后，请关闭并重新打开 FlowCast 以完成更新。",
+                    Text = $"发现新版本 {version}。下载、验证并安装后，FlowCast 将自动重新启动。",
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 20),
                 },

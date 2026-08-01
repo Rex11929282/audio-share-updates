@@ -273,6 +273,18 @@ public sealed class UpdateServiceTests
         }
     }
 
+    [Fact]
+    public void UpdateProgress_UsesIndeterminateProgressWhenByteCountIsUnavailable()
+    {
+        Assert.Null(new UpdateProgress(UpdateStage.Downloading, "正在下载更新", null).Percentage);
+    }
+
+    [Fact]
+    public void ReplacementScript_AutomaticallyStartsTheUpdatedExecutable()
+    {
+        Assert.Contains("Start-Process -FilePath $TargetPath", GetReplacementScript());
+    }
+
     private static Version GetCurrentVersion(Assembly assembly)
     {
         var method = typeof(UpdateService).GetMethod("GetCurrentVersion", BindingFlags.NonPublic | BindingFlags.Static);

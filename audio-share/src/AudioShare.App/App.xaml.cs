@@ -51,6 +51,7 @@ public partial class App : Application
         }
 
         isCheckingForUpdates = true;
+        UpdateProgressWindow? progressWindow = null;
         try
         {
             var update = availableUpdate ?? await updateService.CheckForUpdateAsync();
@@ -67,13 +68,18 @@ public partial class App : Application
                 return;
             }
 
-            stagedUpdate = await updateService.DownloadAndStageAsync(update);
+            progressWindow = new UpdateProgressWindow(owner);
+            progressWindow.Show();
+            stagedUpdate = await updateService.DownloadAndStageAsync(
+                update,
+                new Progress<UpdateProgress>(progressWindow.Update));
+            progressWindow.Update(new UpdateProgress(UpdateStage.ReadyToRestart, "正在重新启动 FlowCast", 100));
             updateService.BeginStagedReplacementAndRestart(stagedUpdate);
-            MessageBox.Show(owner, "更新已下载并验证完成。FlowCast 现在会自动关闭、安装并重新打开。", "FlowCast 更新", MessageBoxButton.OK, MessageBoxImage.Information);
             owner.Close();
         }
         catch (Exception exception)
         {
+            progressWindow?.Close();
             MessageBox.Show(
                 owner,
                 $"更新失败，未替换当前程序。{exception.Message}",
