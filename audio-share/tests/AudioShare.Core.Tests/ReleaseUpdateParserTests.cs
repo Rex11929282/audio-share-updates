@@ -7,6 +7,29 @@ namespace AudioShare.Core.Tests;
 public sealed class ReleaseUpdateParserTests
 {
     [Fact]
+    public void ParsesSingleSetupAssetWithGitHubDigest()
+    {
+        var update = ReleaseUpdateParser.TryParseNewerRelease(
+            """
+            {
+              "tag_name": "v2.0.16",
+              "assets": [
+                {
+                  "name": "FlowCast-Setup.exe",
+                  "browser_download_url": "https://example.com/FlowCast-Setup.exe",
+                  "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                }
+              ]
+            }
+            """,
+            new Version(2, 0, 15));
+
+        Assert.NotNull(update);
+        Assert.Equal("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", update.ExpectedSha256);
+        Assert.Null(update.Sha256Url);
+    }
+
+    [Fact]
     public void ParsesNewerReleaseWithSingleSetupAsset()
     {
         var update = ReleaseUpdateParser.TryParseNewerRelease(

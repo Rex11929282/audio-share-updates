@@ -2,7 +2,11 @@ using System.Text.Json;
 
 namespace AudioShare.Core;
 
-public sealed record ReleaseUpdate(Version Version, Uri AssetUrl, Uri Sha256Url);
+public sealed record ReleaseUpdate(
+    Version Version,
+    Uri AssetUrl,
+    Uri? Sha256Url,
+    string? ExpectedSha256 = null);
 
 public static class ReleaseUpdateParser
 {
@@ -28,6 +32,12 @@ public static class ReleaseUpdateParser
             }
 
             var setupUrl = FindAssetUrl(assets, SetupAssetName);
+            var setupDigest = FindSha256Digest(assets, SetupAssetName);
+            if (setupUrl is not null && setupDigest is not null)
+            {
+                return new ReleaseUpdate(version, setupUrl, null, setupDigest);
+            }
+
             var setupChecksumUrl = FindAssetUrl(assets, SetupChecksumAssetName);
             if (setupUrl is not null && setupChecksumUrl is not null)
             {
@@ -70,5 +80,50 @@ public static class ReleaseUpdateParser
         }
 
         return selectedUrl;
+    }
+
+    private static string? FindSha256Digest(JsonElement assets, string assetName)
+    {
+        string? selectedDigest = null;
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (!asset.TryGetProperty("name", out var name) || name.GetString() != assetName)
+            {
+                continue;
+            }
+
+            if (selectedDigest is not null ||
+                !asset.TryGetProperty("digest", out var digest) ||
+                !TryNormalizeSha256(digest.GetString(), out var normalizedDigest))
+            {
+                return null;
+            }
+
+            selectedDigest = normalizedDigest;
+        }
+
+        return selectedDigest;
+    }
+
+    private static bool TryNormalizeSha256(string? digest, out string normalizedDigest)
+    {
+        normalizedDigest = string.Empty;
+        const string prefix = "sha256:";
+        if (string.IsNullOrWhiteSpace(digest) || !digest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var hash = digest[prefix.Length..];
+        try
+        {
+            normalizedDigest = Convert.ToHexString(Convert.FromHexString(hash)).ToLowerInvariant();
+            return normalizedDigest.Length == 64;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }

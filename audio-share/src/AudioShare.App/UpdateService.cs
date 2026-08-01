@@ -108,7 +108,11 @@ public sealed class UpdateService
             {
                 var httpClient = ownedClient ?? client!;
                 await DownloadPackageAsync(httpClient, update.AssetUrl, packagePath, reportProgressAsync, cancellationToken);
-                await File.WriteAllBytesAsync(checksumPath, await httpClient.GetByteArrayAsync(update.Sha256Url, cancellationToken), cancellationToken);
+                var checksum = update.ExpectedSha256 ??
+                    (update.Sha256Url is { } checksumUrl
+                        ? Encoding.UTF8.GetString(await httpClient.GetByteArrayAsync(checksumUrl, cancellationToken))
+                        : throw new InvalidDataException("Update checksum is missing."));
+                await File.WriteAllTextAsync(checksumPath, checksum, cancellationToken);
             }
 
             await reportProgressAsync(new UpdateProgress(UpdateStage.Verifying, "Verifying update", null));
