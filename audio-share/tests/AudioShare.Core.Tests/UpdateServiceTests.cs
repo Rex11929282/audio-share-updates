@@ -203,7 +203,7 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
-    public async Task DownloadAndStageAsync_ReportsDownloadAndValidationProgress()
+    public async Task DownloadAndStageAsync_ReportsAllProgressStagesForKnownLengthPackage()
     {
         var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -223,9 +223,48 @@ public sealed class UpdateServiceTests
 
             var staged = await service.DownloadAndStageAsync(update, new Progress<UpdateProgress>(updates.Add));
 
+            var stageIndexes = updates
+                .Select((item, index) => (item.Stage, index))
+                .GroupBy(item => item.Stage)
+                .ToDictionary(group => group.Key, group => group.Min(item => item.index));
             Assert.Contains(updates, item => item.Stage == UpdateStage.Downloading && item.Percentage == 100);
-            Assert.Contains(updates, item => item.Stage == UpdateStage.Verifying);
-            Assert.Contains(updates, item => item.Stage == UpdateStage.ReadyToRestart);
+            Assert.True(stageIndexes[UpdateStage.Downloading] < stageIndexes[UpdateStage.Verifying]);
+            Assert.True(stageIndexes[UpdateStage.Verifying] < stageIndexes[UpdateStage.Extracting]);
+            Assert.True(stageIndexes[UpdateStage.Extracting] < stageIndexes[UpdateStage.ReadyToRestart]);
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadAndStageAsync_StagesPackageWithUnknownContentLength()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var executablePath = Path.Combine(root, "installed", "AudioShare.App.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+            await File.WriteAllTextAsync(executablePath, "old");
+            var package = CreatePackage(includeRouterHelper: true);
+            using var client = CreatePackageClient(package, contentLengthKnown: false);
+            var service = new UpdateService(client, executablePath);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 1),
+                new Uri("https://example.com/AudioShare-win-x64.zip"),
+                new Uri("https://example.com/AudioShare-win-x64.zip.sha256"));
+            var updates = new List<UpdateProgress>();
+
+            var staged = await service.DownloadAndStageAsync(update, new Progress<UpdateProgress>(updates.Add));
+
+            Assert.NotEmpty(updates.Where(item => item.Stage == UpdateStage.Downloading));
+            Assert.All(
+                updates.Where(item => item.Stage == UpdateStage.Downloading),
+                item => Assert.Null(item.Percentage));
+            Assert.True(File.Exists(Path.Combine(staged.ExtractedDirectory, "AudioShare.App.exe")));
             Directory.Delete(staged.UpdateDirectory, recursive: true);
         }
         finally
@@ -271,11 +310,11 @@ public sealed class UpdateServiceTests
         writer.Write(content);
     }
 
-    private static HttpClient CreatePackageClient(byte[] package)
+    private static HttpClient CreatePackageClient(byte[] package, bool contentLengthKnown = true)
     {
         var checksum = Encoding.UTF8.GetBytes(
             $"{Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant()}  AudioShare-win-x64.zip");
-        return new HttpClient(new PackageResponseHandler(package, checksum));
+        return new HttpClient(new PackageResponseHandler(package, checksum, contentLengthKnown));
     }
 
     private static string ReleaseJson(string version) => $$"""
@@ -294,7 +333,7 @@ public sealed class UpdateServiceTests
             Task.FromResult(new HttpResponseMessage(statusCode));
     }
 
-    private sealed class PackageResponseHandler(byte[] package, byte[] checksum) : HttpMessageHandler
+    private sealed class PackageResponseHandler(byte[] package, byte[] checksum, bool contentLengthKnown) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -303,8 +342,22 @@ public sealed class UpdateServiceTests
                 : package;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent(content),
+                Content = contentLengthKnown || request.RequestUri?.AbsolutePath.EndsWith(".sha256", StringComparison.Ordinal) == true
+                    ? new ByteArrayContent(content)
+                    : new UnknownLengthContent(content),
             });
+        }
+    }
+
+    private sealed class UnknownLengthContent(byte[] content) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            stream.WriteAsync(content).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 }
