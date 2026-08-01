@@ -73,7 +73,7 @@ public sealed class UpdateService
 
         var executablePath = this.executablePath ?? Environment.ProcessPath ??
             throw new InvalidOperationException("找不到当前程序文件。");
-        var applicationDirectory = Path.GetDirectoryName(executablePath) ?? throw new InvalidOperationException("找不到程序文件夹。");
+        var applicationDirectory = GetCanonicalInstallationDirectory(executablePath);
         EnsureApplicationDirectoryIsWritable(applicationDirectory);
         var applicationParent = Path.GetDirectoryName(applicationDirectory) ??
             throw new InvalidOperationException("找不到程序文件夹的上级目录。");
@@ -116,7 +116,7 @@ public sealed class UpdateService
             }
 
             await reportProgressAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
-            return new StagedUpdate(updateDirectory, extractedDirectory, executablePath);
+            return new StagedUpdate(updateDirectory, extractedDirectory, Path.Combine(applicationDirectory, Path.GetFileName(executablePath)));
         }
         catch
         {
@@ -167,6 +167,24 @@ public sealed class UpdateService
         var stagedUpdate = await DownloadAndStageAsync(update, cancellationToken);
         BeginStagedReplacementAndRestart(stagedUpdate);
     }
+
+    public static string GetCanonicalInstallationDirectory(string executablePath)
+    {
+        var applicationDirectory = Path.GetDirectoryName(executablePath) ??
+            throw new InvalidOperationException("找不到程序文件夹。");
+
+        while (IsFlowCastUpdateTransactionDirectory(Path.GetFileName(applicationDirectory)))
+        {
+            applicationDirectory = Path.GetDirectoryName(applicationDirectory) ??
+                throw new InvalidOperationException("找不到程序文件夹的上级目录。");
+        }
+
+        return applicationDirectory;
+    }
+
+    private static bool IsFlowCastUpdateTransactionDirectory(string directoryName) =>
+        directoryName.StartsWith(".FlowCast.flowcast-update-new-", StringComparison.OrdinalIgnoreCase) ||
+        directoryName.StartsWith(".FlowCast.flowcast-update-backup-", StringComparison.OrdinalIgnoreCase);
 
     private static readonly string ReplacementScript = """
         param(
