@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.ComponentModel;
 
 namespace AudioShare.App;
 
@@ -8,6 +9,7 @@ public sealed class UpdateProgressWindow : Window
     private readonly TextBlock messageText;
     private readonly TextBlock percentageText;
     private readonly ProgressBar progressBar;
+    private bool closeRequestedByApplication;
 
     public UpdateProgressWindow(Window owner)
     {
@@ -18,6 +20,7 @@ public sealed class UpdateProgressWindow : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Closing += UpdateProgressWindow_Closing;
 
         messageText = new TextBlock
         {
@@ -44,6 +47,15 @@ public sealed class UpdateProgressWindow : Window
         };
     }
 
+    public void CloseFromApplication()
+    {
+        closeRequestedByApplication = true;
+        if (IsVisible)
+        {
+            Close();
+        }
+    }
+
     public void Update(UpdateProgress progress)
     {
         progressBar.IsIndeterminate = progress.Percentage is null;
@@ -51,4 +63,7 @@ public sealed class UpdateProgressWindow : Window
         messageText.Text = progress.Message;
         percentageText.Text = progress.Percentage is int percentage ? $"{percentage}%" : string.Empty;
     }
+
+    private void UpdateProgressWindow_Closing(object? sender, CancelEventArgs e) =>
+        e.Cancel = !closeRequestedByApplication;
 }

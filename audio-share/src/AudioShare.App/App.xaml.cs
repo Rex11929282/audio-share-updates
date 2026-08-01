@@ -74,12 +74,13 @@ public partial class App : Application
                 update,
                 new Progress<UpdateProgress>(progressWindow.Update));
             progressWindow.Update(new UpdateProgress(UpdateStage.ReadyToRestart, "正在重新启动 FlowCast", 100));
+            progressWindow.CloseFromApplication();
             updateService.BeginStagedReplacementAndRestart(stagedUpdate);
             owner.Close();
         }
         catch (Exception exception)
         {
-            progressWindow?.Close();
+            progressWindow?.CloseFromApplication();
             MessageBox.Show(
                 owner,
                 $"更新失败，未替换当前程序。{exception.Message}",
