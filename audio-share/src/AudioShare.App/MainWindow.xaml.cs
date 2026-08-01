@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     private bool isRefreshing;
     private bool isRoutingOperation;
     private bool isClosing;
+    private bool isUpdateStaging;
     private bool closeAfterRouting;
     private bool experimentalRoutingAvailable;
     private bool hasOwnedRoutingTransaction;
@@ -99,6 +100,8 @@ public partial class MainWindow : Window
     public void SetUpdateAvailable(bool isAvailable) =>
         UpdateButton.Visibility = isAvailable ? Visibility.Visible : Visibility.Collapsed;
 
+    public void SetUpdateStaging(bool isStaging) => isUpdateStaging = isStaging;
+
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await StartVoicemeeterBananaIfInstalledAsync();
@@ -114,6 +117,12 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if (isUpdateStaging)
+        {
+            e.Cancel = true;
+            return;
+        }
+
         if (isClosing)
         {
             return;

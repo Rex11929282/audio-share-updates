@@ -53,17 +53,10 @@ public partial class App : Application
         isCheckingForUpdates = true;
         UpdateProgressWindow? progressWindow = null;
         var ownerWasEnabled = owner.IsEnabled;
-        System.ComponentModel.CancelEventHandler? ownerClosingHandler = null;
         var restartStarted = false;
 
         void ReleaseOwner()
         {
-            if (ownerClosingHandler is not null)
-            {
-                owner.Closing -= ownerClosingHandler;
-                ownerClosingHandler = null;
-            }
-
             owner.IsEnabled = ownerWasEnabled;
         }
 
@@ -84,8 +77,7 @@ public partial class App : Application
             }
 
             progressWindow = new UpdateProgressWindow(owner);
-            ownerClosingHandler = (_, e) => e.Cancel = true;
-            owner.Closing += ownerClosingHandler;
+            SetUpdateStaging(owner, true);
             owner.IsEnabled = false;
             progressWindow.Show();
             await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.Downloading, "正在准备更新", null));
@@ -96,6 +88,7 @@ public partial class App : Application
             updateService.BeginStagedReplacementAndRestart(updateToRestart);
             stagedUpdate = updateToRestart;
             restartStarted = true;
+            SetUpdateStaging(owner, false);
             ReleaseOwner();
             progressWindow.CloseFromApplication();
             owner.Close();
@@ -103,6 +96,7 @@ public partial class App : Application
         catch (Exception exception)
         {
             progressWindow?.CloseFromApplication();
+            SetUpdateStaging(owner, false);
             ReleaseOwner();
             MessageBox.Show(
                 owner,
@@ -115,6 +109,7 @@ public partial class App : Application
         {
             if (!restartStarted)
             {
+                SetUpdateStaging(owner, false);
                 ReleaseOwner();
             }
 
@@ -127,6 +122,14 @@ public partial class App : Application
         if (owner is MainWindow mainWindow)
         {
             mainWindow.SetUpdateAvailable(isAvailable);
+        }
+    }
+
+    private static void SetUpdateStaging(Window owner, bool isStaging)
+    {
+        if (owner is MainWindow mainWindow)
+        {
+            mainWindow.SetUpdateStaging(isStaging);
         }
     }
 }
