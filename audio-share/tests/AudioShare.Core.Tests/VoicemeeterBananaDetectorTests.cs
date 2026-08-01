@@ -5,6 +5,32 @@ namespace AudioShare.Core.Tests;
 public sealed class VoicemeeterBananaDetectorTests
 {
     [Fact]
+    public void InstallationDetector_ReportsInstalledWhenBananaExecutableExists()
+    {
+        var installed = VoicemeeterBananaInstallationDetector.IsInstalled(path =>
+            path.EndsWith("voicemeeterpro.exe", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(installed);
+    }
+
+    [Fact]
+    public void InstallationDetector_DoesNotTreatMissingExecutableAsInstalled()
+    {
+        Assert.False(VoicemeeterBananaInstallationDetector.IsInstalled(_ => false));
+    }
+
+    [Fact]
+    public void InstallationDetector_ReturnsExecutablePathWhenBananaIsInstalled()
+    {
+        var found = VoicemeeterBananaInstallationDetector.TryGetExecutablePath(
+            out var executablePath,
+            path => path.EndsWith("voicemeeterpro.exe", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(found);
+        Assert.EndsWith("voicemeeterpro.exe", executablePath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void TryFindEndpoints_ReturnsBananaInputAndAuxWhenBothAreInstalled()
     {
         var devices = new[]

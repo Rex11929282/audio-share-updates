@@ -101,6 +101,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        await StartVoicemeeterBananaIfInstalledAsync();
         await RefreshAsync();
         motionController.PlayLaunch();
         SetDefaultPlaybackToAux();
@@ -256,6 +257,45 @@ public partial class MainWindow : Window
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
+
+    private static bool IsVoicemeeterBananaRunning()
+    {
+        var processes = Process.GetProcessesByName("voicemeeterpro");
+        try
+        {
+            return processes.Length > 0;
+        }
+        finally
+        {
+            foreach (var process in processes)
+            {
+                process.Dispose();
+            }
+        }
+    }
+
+    private async Task StartVoicemeeterBananaIfInstalledAsync()
+    {
+        if (IsVoicemeeterBananaRunning() ||
+            !VoicemeeterBananaInstallationDetector.TryGetExecutablePath(out var executablePath) ||
+            string.IsNullOrWhiteSpace(executablePath))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(executablePath) { UseShellExecute = true });
+            for (var attempt = 0; attempt < 20 && !IsVoicemeeterBananaRunning(); attempt++)
+            {
+                await Task.Delay(250);
+            }
+        }
+        catch (Exception exception)
+        {
+            SetExperimentalRoutingUnavailable($"Voicemeeter Banana 已安裝但無法自動啟動：{exception.Message}");
+        }
+    }
 
     private void TutorialButton_Click(object sender, RoutedEventArgs e) => new TutorialWindow(this).ShowDialog();
 
@@ -677,9 +717,9 @@ public partial class MainWindow : Window
 
         var probe = await healthProbe.CheckAsync(lifetimeCancellation.Token);
         healthSummary = probe.Summary;
+        SetVoicemeeterBananaInstalled(probe.BananaInstalled);
         if (!probe.RoutingAvailable)
         {
-            SetVoicemeeterBananaInstalled(false);
             SetExperimentalRoutingUnavailable(probe.RoutingMessage);
             return false;
         }
@@ -688,8 +728,9 @@ public partial class MainWindow : Window
         {
             if (probe.Endpoints is null)
             {
-                SetVoicemeeterBananaInstalled(false);
-                SetExperimentalRoutingUnavailable("未检测到 Voicemeeter Banana 的必要音频装置。请安装后重启电脑，再重新检测。");
+                SetExperimentalRoutingUnavailable(probe.BananaInstalled
+                    ? "Voicemeeter Banana 已安装，但必要的音频设备尚未就绪。请重新启动电脑后再刷新。"
+                    : "未检测到 Voicemeeter Banana。请安装后重启电脑，再重新检测。");
                 return false;
             }
 
@@ -698,12 +739,12 @@ public partial class MainWindow : Window
                                     !string.Equals(auxDeviceId, probe.Endpoints.AuxInput.Id, StringComparison.OrdinalIgnoreCase));
             if (!healthSummary.IsReady("Banana"))
             {
-                SetVoicemeeterBananaInstalled(false);
-                SetExperimentalRoutingUnavailable("Voicemeeter Banana 未在运行。请打开 Banana 后重新检测。");
+                SetExperimentalRoutingUnavailable(probe.BananaInstalled
+                    ? "Voicemeeter Banana 已安装但尚未运行。请打开 Banana 后重新检测。"
+                    : "未检测到 Voicemeeter Banana。请安装后重启电脑，再重新检测。");
                 return false;
             }
 
-            SetVoicemeeterBananaInstalled(true);
             inputDeviceId = probe.Endpoints.Input.Id;
             auxDeviceId = probe.Endpoints.AuxInput.Id;
             experimentalRoutingAvailable = true;

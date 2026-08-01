@@ -6,6 +6,7 @@ namespace AudioShare.Windows;
 
 public sealed record FlowCastHealthProbeResult(
     HealthSummary Summary,
+    bool BananaInstalled,
     bool RoutingAvailable,
     string RoutingMessage,
     VoicemeeterBananaEndpoints? Endpoints);
@@ -21,6 +22,7 @@ public sealed class FlowCastHealthProbe
 
     public async Task<FlowCastHealthProbeResult> CheckAsync(CancellationToken token)
     {
+        var bananaInstalled = VoicemeeterBananaInstallationDetector.IsInstalled();
         var bananaRunning = IsProcessRunning("voicemeeterpro");
         var hasDefaultPlayback = HasDefaultPlayback();
         var discordRunning = IsProcessRunning("Discord");
@@ -29,6 +31,7 @@ public sealed class FlowCastHealthProbe
         {
             return new FlowCastHealthProbeResult(
                 HealthSummary.Create(bananaRunning, hasDefaultPlayback, false, false, discordRunning),
+                bananaInstalled,
                 false,
                 helperHealth.Message,
                 null);
@@ -46,6 +49,7 @@ public sealed class FlowCastHealthProbe
                     endpointHealth.HasInput,
                     endpointHealth.HasAux,
                     discordRunning),
+                bananaInstalled,
                 hasEndpoints,
                 hasEndpoints ? "音频路由已就绪。" : "未检测到 Voicemeeter Banana 的必要音频设备。",
                 endpoints);
@@ -54,6 +58,7 @@ public sealed class FlowCastHealthProbe
         {
             return new FlowCastHealthProbeResult(
                 HealthSummary.Create(bananaRunning, hasDefaultPlayback, false, false, discordRunning),
+                bananaInstalled,
                 false,
                 exception.Message,
                 null);
