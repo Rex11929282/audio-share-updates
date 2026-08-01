@@ -116,7 +116,7 @@ public sealed class UpdateService
             }
 
             await reportProgressAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
-            return new StagedUpdate(updateDirectory, extractedDirectory, Path.Combine(applicationDirectory, Path.GetFileName(executablePath)));
+            return new StagedUpdate(updateDirectory, extractedDirectory, Path.Combine(applicationDirectory, "AudioShare.App.exe"));
         }
         catch
         {

@@ -185,6 +185,36 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
+    public async Task DownloadAndStageAsync_UsesCanonicalExecutableNameWhenRecoveringFromMalformedTransaction()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        var installedDirectory = Path.Combine(root, "installed");
+        var installedExecutablePath = Path.Combine(installedDirectory, "AudioShare.App.exe");
+        var executablePath = Path.Combine(installedDirectory, ".FlowCast.flowcast-update-new-recovery", "Malformed.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        try
+        {
+            await File.WriteAllTextAsync(installedExecutablePath, "installed");
+            await File.WriteAllTextAsync(executablePath, "running");
+            using var client = CreatePackageClient(CreatePackage(includeRouterHelper: true));
+            var service = new UpdateService(client, executablePath);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 1),
+                new Uri("https://example.com/AudioShare-win-x64.zip"),
+                new Uri("https://example.com/AudioShare-win-x64.zip.sha256"));
+
+            var staged = await service.DownloadAndStageAsync(update);
+
+            Assert.Equal(installedExecutablePath, staged.ExecutablePath);
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task DownloadAndStageAsync_RequiresAndKeepsNestedRouterHelperContent()
     {
         var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
