@@ -22,9 +22,11 @@ public sealed class ShareStopSchedule
         ? null
         : StopAt.Value > now ? StopAt.Value - now : TimeSpan.Zero;
 
+    public bool IsDue(DateTimeOffset now) => StopAt is not null && StopAt <= now;
+
     public bool ConsumeIfDue(DateTimeOffset now)
     {
-        if (StopAt is null || StopAt > now)
+        if (!IsDue(now))
         {
             return false;
         }

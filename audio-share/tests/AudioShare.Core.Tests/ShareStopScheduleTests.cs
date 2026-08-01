@@ -31,6 +31,18 @@ public sealed class ShareStopScheduleTests
     }
 
     [Fact]
+    public void DueTimerRemainsScheduledUntilTheStopOperationCancelsIt()
+    {
+        var schedule = new ShareStopSchedule();
+        var now = new DateTimeOffset(2026, 8, 1, 12, 0, 0, TimeSpan.Zero);
+
+        schedule.Schedule(TimeSpan.FromMinutes(5), now);
+
+        Assert.True(schedule.IsDue(now.AddMinutes(5)));
+        Assert.True(schedule.IsScheduled);
+    }
+
+    [Fact]
     public void RejectsAZeroOrNegativeDuration()
     {
         var schedule = new ShareStopSchedule();

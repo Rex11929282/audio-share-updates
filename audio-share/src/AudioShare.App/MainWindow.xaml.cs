@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly FlowCastHealthProbe healthProbe;
     private readonly DispatcherTimer refreshTimer = new() { Interval = PassiveRefreshInterval };
     private readonly DispatcherTimer signalTimer = new() { Interval = SignalRefreshInterval };
+    private readonly DispatcherTimer scheduleTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private readonly ShareStopSchedule stopSchedule = new();
     private readonly FavoritePrograms favoritePrograms;
@@ -86,6 +87,7 @@ public partial class MainWindow : Window
         StateChanged += MainWindow_StateChanged;
         refreshTimer.Tick += RefreshTimer_Tick;
         signalTimer.Tick += SignalTimer_Tick;
+        scheduleTimer.Tick += ScheduleTimer_Tick;
     }
 
     public ObservableCollection<AudioApplicationRow> Applications { get; } = [];
@@ -170,6 +172,7 @@ public partial class MainWindow : Window
         motionController.Suspend();
         refreshTimer.Stop();
         signalTimer.Stop();
+        scheduleTimer.Stop();
         lifetimeCancellation.Cancel();
     }
 
@@ -220,6 +223,17 @@ public partial class MainWindow : Window
     {
         await RefreshAsync(refreshRouting: false);
         await StopWhenScheduleExpiresAsync();
+    }
+
+    private async void ScheduleTimer_Tick(object? sender, EventArgs e)
+    {
+        await StopWhenScheduleExpiresAsync();
+        if (!stopSchedule.IsScheduled)
+        {
+            scheduleTimer.Stop();
+        }
+
+        UpdateRoutingSetupState();
     }
 
     private void SignalTimer_Tick(object? sender, EventArgs e)
@@ -1125,6 +1139,7 @@ public partial class MainWindow : Window
         }
 
         stopSchedule.Schedule(TimeSpan.FromMinutes(minutes), DateTimeOffset.Now);
+        scheduleTimer.Start();
         AddActivity($"已设置 {minutes} 分钟后自动停止分享。");
         ErrorPanel.Visibility = Visibility.Collapsed;
         UpdateRoutingSetupState();
@@ -1133,6 +1148,7 @@ public partial class MainWindow : Window
     private void CancelStopTimerButton_Click(object sender, RoutedEventArgs e)
     {
         stopSchedule.Cancel();
+        scheduleTimer.Stop();
         TimerPanel.Visibility = Visibility.Collapsed;
         AddActivity("已取消定时停止。");
         UpdateRoutingSetupState();
@@ -1140,23 +1156,31 @@ public partial class MainWindow : Window
 
     private async Task StopWhenScheduleExpiresAsync()
     {
-        if (!stopSchedule.ConsumeIfDue(DateTimeOffset.Now))
+        if (!stopSchedule.IsDue(DateTimeOffset.Now) || isClosing || isRoutingOperation || isRefreshing)
         {
             return;
         }
 
         AddActivity("定时停止时间已到。");
-        if (CanStopSharing())
+        if (!CanResetToLocalOnly())
         {
-            isRoutingOperation = true;
-            try
+            requiresAttention = true;
+            experimentalRoutingStatus = "定时已到，正在等待安全路由状态后停止分享。";
+            return;
+        }
+
+        isRoutingOperation = true;
+        try
+        {
+            if (!await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token))
             {
-                await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+                requiresAttention = true;
+                experimentalRoutingStatus = "定时停止未完成，将继续重试。";
             }
-            finally
-            {
-                isRoutingOperation = false;
-            }
+        }
+        finally
+        {
+            isRoutingOperation = false;
         }
 
         UpdateRoutingSetupState();
