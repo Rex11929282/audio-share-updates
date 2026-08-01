@@ -10,6 +10,8 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AudioShare.Core;
 using AudioShare.Windows;
+using Drawing = System.Drawing;
+using Forms = System.Windows.Forms;
 
 namespace AudioShare.App;
 
@@ -44,6 +46,10 @@ public partial class MainWindow : Window
     private FlowCastPreferences preferences;
     private readonly MotionController motionController;
     private readonly List<string> activityLog = [];
+    private Forms.NotifyIcon? trayIcon;
+    private Forms.ToolStripMenuItem? trayStatusItem;
+    private Forms.ToolStripMenuItem? trayStopSharingItem;
+    private bool trayHintShown;
     private IReadOnlyList<AudioSession> activeSessions = [];
     private string? inputDeviceId;
     private string? auxDeviceId;
@@ -77,6 +83,7 @@ public partial class MainWindow : Window
         motionController = new MotionController(
             this,
             LogoMark,
+            LaunchSheen,
             TopStatusCard,
             StatusPulse,
             B1MeterFill,
@@ -112,6 +119,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        InitializeTrayIcon();
         await StartVoicemeeterBananaIfInstalledAsync();
         await RefreshAsync();
         motionController.PlayLaunch();
@@ -188,11 +196,115 @@ public partial class MainWindow : Window
     private void PrepareForClose()
     {
         isClosing = true;
+        DisposeTrayIcon();
         motionController.Suspend();
         refreshTimer.Stop();
         signalTimer.Stop();
         scheduleTimer.Stop();
         lifetimeCancellation.Cancel();
+    }
+
+    private void InitializeTrayIcon()
+    {
+        if (trayIcon is not null)
+        {
+            return;
+        }
+
+        trayStatusItem = new Forms.ToolStripMenuItem { Enabled = false };
+        trayStopSharingItem = new Forms.ToolStripMenuItem("停止分享，只自己听", null, (_, _) =>
+            Dispatcher.BeginInvoke(new Action(() => RestoreRoutingButton_Click(this, new RoutedEventArgs()))));
+        var showItem = new Forms.ToolStripMenuItem("显示 FlowCast", null, (_, _) =>
+            Dispatcher.BeginInvoke(new Action(ShowFromTray)));
+        var exitItem = new Forms.ToolStripMenuItem("退出 FlowCast", null, (_, _) =>
+            Dispatcher.BeginInvoke(new Action(Close)));
+        var menu = new Forms.ContextMenuStrip();
+        menu.Items.AddRange(
+        [
+            trayStatusItem,
+            new Forms.ToolStripSeparator(),
+            showItem,
+            trayStopSharingItem,
+            new Forms.ToolStripSeparator(),
+            exitItem,
+        ]);
+
+        trayIcon = new Forms.NotifyIcon
+        {
+            Icon = GetTrayIcon(),
+            ContextMenuStrip = menu,
+            Visible = true,
+        };
+        trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(new Action(ShowFromTray));
+        UpdateTrayIcon();
+    }
+
+    private static Drawing.Icon GetTrayIcon()
+    {
+        var executablePath = Environment.ProcessPath;
+        return !string.IsNullOrWhiteSpace(executablePath)
+            ? Drawing.Icon.ExtractAssociatedIcon(executablePath) ?? Drawing.SystemIcons.Application
+            : Drawing.SystemIcons.Application;
+    }
+
+    private void HideToTray()
+    {
+        if (trayIcon is null)
+        {
+            return;
+        }
+
+        Hide();
+        if (!trayHintShown)
+        {
+            trayHintShown = true;
+            trayIcon.ShowBalloonTip(
+                1500,
+                "FlowCast",
+                CanStopSharing() ? "正在分享。右键托盘图标可停止分享。" : "已最小化到系统托盘。",
+                Forms.ToolTipIcon.Info);
+        }
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void UpdateTrayIcon()
+    {
+        if (trayIcon is null)
+        {
+            return;
+        }
+
+        var isSharing = sharingRouteState == SharingRouteState.Sharing;
+        trayIcon.Text = isSharing ? "FlowCast - 正在分享" : "FlowCast - 只自己听";
+        if (trayStatusItem is not null)
+        {
+            trayStatusItem.Text = isSharing ? "当前：正在分享" : "当前：只自己听";
+        }
+
+        if (trayStopSharingItem is not null)
+        {
+            trayStopSharingItem.Enabled = CanStopSharing();
+        }
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (trayIcon is null)
+        {
+            return;
+        }
+
+        trayIcon.Visible = false;
+        trayIcon.Dispose();
+        trayIcon = null;
+        trayStatusItem = null;
+        trayStopSharingItem = null;
     }
 
     private async void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -201,6 +313,7 @@ public partial class MainWindow : Window
         {
             wasMinimized = true;
             motionController.Suspend();
+            HideToTray();
         }
         else
         {
@@ -579,6 +692,11 @@ public partial class MainWindow : Window
         var b1Percent = Math.Clamp((sharingBusStatus?.B1Level ?? 0f) * 100f, 0f, 100f);
         B1MeterFill.Width = b1Percent;
         B1MeterValueText.Text = $"{b1Percent:0}%";
+        B1SelfTestText.Text = ShareSignalSelfTest.GetMessage(
+            sharingRouteState == SharingRouteState.Sharing,
+            sharingBusStatus?.IsMainInputShared == true,
+            sharingBusStatus?.B1Level ?? 0f);
+        UpdateTrayIcon();
         UpdateHealthChips();
         (FlowCastStatusText.Text, FlowCastStatusHintText.Text) = requiresAttention
             ? ("需要处理", experimentalRoutingStatus)

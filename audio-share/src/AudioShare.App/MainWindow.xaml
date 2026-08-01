@@ -170,6 +170,15 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+                    <Border x:Name="LaunchSheen" Grid.ColumnSpan="3" CornerRadius="14" IsHitTestVisible="False" Opacity="0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#00FFFFFF" Offset="0" />
+                                <GradientStop Color="#74FFFFFF" Offset="0.5" />
+                                <GradientStop Color="#00FFFFFF" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
                     <Border x:Name="StatusPulse" Width="70" Height="70" Background="#CFFFFFFF" BorderBrush="#DFFFFFFF" BorderThickness="1" CornerRadius="35" VerticalAlignment="Center">
                         <Viewbox Margin="18">
                             <Path Data="M 4,12 C 4,7 8,4 12,4 C 16,4 20,7 20,12 M 8,12 C 8,9 10,8 12,8 C 14,8 16,9 16,12 M 2,10 L 2,14 M 22,10 L 22,14" Stroke="#12AFC0" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
@@ -192,6 +201,7 @@
                             </Border>
                             <TextBlock x:Name="B1MeterValueText" Margin="8,0,0,0" FontSize="12" Foreground="#70869A" Text="0%" />
                         </StackPanel>
+                        <TextBlock x:Name="B1SelfTestText" Margin="0,6,0,0" FontSize="12" Foreground="#70869A" Text="B1 自测：开始分享后会在这里确认音频信号。" />
                         <TextBlock x:Name="RecentActivityText" Margin="0,8,0,0" FontSize="12" Foreground="#70869A" TextWrapping="Wrap" />
                         <StackPanel x:Name="B1ActivityBars" Margin="0,13,0,0" Orientation="Horizontal" Opacity="0.65">
                             <Rectangle Width="4" Height="10" Margin="0,0,4,0" Fill="#36C8C2" RadiusX="2" RadiusY="2" />
