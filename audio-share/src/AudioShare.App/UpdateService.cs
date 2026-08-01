@@ -9,7 +9,12 @@ using AudioShare.Core;
 
 namespace AudioShare.App;
 
-public sealed record StagedUpdate(string UpdateDirectory, string ExtractedDirectory, string ExecutablePath);
+public sealed record StagedUpdate(
+    Version Version,
+    string UpdateDirectory,
+    string ExtractedDirectory,
+    string ExecutablePath,
+    bool UsesInstaller = false);
 
 public sealed class UpdateService
 {
@@ -91,8 +96,13 @@ public sealed class UpdateService
         Directory.CreateDirectory(updateDirectory);
         try
         {
-            var packagePath = Path.Combine(updateDirectory, ReleaseUpdateParser.PackageAssetName);
-            var checksumPath = Path.Combine(updateDirectory, ReleaseUpdateParser.ChecksumAssetName);
+            var usesInstaller = IsInstallerUpdate(update);
+            var packagePath = Path.Combine(
+                updateDirectory,
+                usesInstaller ? ReleaseUpdateParser.SetupAssetName : ReleaseUpdateParser.PackageAssetName);
+            var checksumPath = Path.Combine(
+                updateDirectory,
+                usesInstaller ? ReleaseUpdateParser.SetupChecksumAssetName : ReleaseUpdateParser.ChecksumAssetName);
 
             using (var ownedClient = client is null ? CreateClient() : null)
             {
@@ -105,6 +115,22 @@ public sealed class UpdateService
             if (!HasMatchingChecksum(packagePath, await File.ReadAllTextAsync(checksumPath, cancellationToken)))
             {
                 throw new InvalidDataException("更新文件的 SHA-256 验证失败。");
+            }
+
+            if (usesInstaller)
+            {
+                if (!File.Exists(packagePath) || new FileInfo(packagePath).Length == 0)
+                {
+                    throw new InvalidDataException("Setup update package is empty.");
+                }
+
+                await reportProgressAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
+                return new StagedUpdate(
+                    update.Version,
+                    updateDirectory,
+                    packagePath,
+                    Path.Combine(applicationDirectory, "AudioShare.App.exe"),
+                    UsesInstaller: true);
             }
 
             var extractedDirectory = Path.Combine(updateDirectory, "extracted");
@@ -124,7 +150,11 @@ public sealed class UpdateService
             }
 
             await reportProgressAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
-            return new StagedUpdate(updateDirectory, extractedDirectory, Path.Combine(applicationDirectory, "AudioShare.App.exe"));
+            return new StagedUpdate(
+                update.Version,
+                updateDirectory,
+                extractedDirectory,
+                Path.Combine(applicationDirectory, "AudioShare.App.exe"));
         }
         catch
         {
@@ -144,7 +174,10 @@ public sealed class UpdateService
     public void BeginStagedReplacementAndRestart(StagedUpdate update)
     {
         var scriptPath = Path.Combine(update.UpdateDirectory, "replace-and-restart.ps1");
-        File.WriteAllText(scriptPath, ReplacementScript, new UTF8Encoding(false));
+        File.WriteAllText(
+            scriptPath,
+            update.UsesInstaller ? InstallerReplacementScript : ReplacementScript,
+            new UTF8Encoding(false));
 
         var process = Process.Start(new ProcessStartInfo
         {
@@ -161,6 +194,7 @@ public sealed class UpdateService
                 Process.GetCurrentProcess().Id.ToString(),
                 update.ExtractedDirectory,
                 update.ExecutablePath,
+                update.Version.ToString(),
             },
         });
 
@@ -215,6 +249,54 @@ public sealed class UpdateService
             updateRoot + Path.DirectorySeparatorChar,
             StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsInstallerUpdate(ReleaseUpdate update) =>
+        string.Equals(
+            Path.GetFileName(update.AssetUrl.LocalPath),
+            ReleaseUpdateParser.SetupAssetName,
+            StringComparison.OrdinalIgnoreCase);
+
+    private static readonly string InstallerReplacementScript = """
+        param(
+            [int]$ProcessId,
+            [string]$InstallerPath,
+            [string]$TargetPath,
+            [string]$ExpectedVersion
+        )
+
+        $LogPath = Join-Path $PSScriptRoot "replace-and-restart.log"
+
+        function Write-UpdateLog([string]$Message) {
+            Add-Content -LiteralPath $LogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
+        }
+
+        Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        try {
+            Write-UpdateLog "Starting FlowCast Setup from '$InstallerPath'."
+            $Installer = Start-Process -FilePath $InstallerPath -ArgumentList '/S' -PassThru -Wait
+            if ($Installer.ExitCode -ne 0) {
+                throw "FlowCast Setup returned exit code $($Installer.ExitCode)."
+            }
+
+            if (-not (Test-Path -LiteralPath $TargetPath -PathType Leaf)) {
+                throw "Updated executable is missing: $TargetPath"
+            }
+
+            $InstalledVersion = (Get-Item -LiteralPath $TargetPath).VersionInfo.FileVersion
+            if (-not $InstalledVersion.StartsWith("$ExpectedVersion.")) {
+                throw "Installed version '$InstalledVersion' does not match '$ExpectedVersion'."
+            }
+
+            Write-UpdateLog "Setup completed with FlowCast $InstalledVersion."
+            Start-Process -FilePath $TargetPath
+        }
+        catch {
+            Write-UpdateLog "Setup update failed: $($_.Exception.Message)"
+            if (Test-Path -LiteralPath $TargetPath -PathType Leaf) {
+                Start-Process -FilePath $TargetPath -ArgumentList '--update-failed'
+            }
+        }
+        """;
 
     private static readonly string ReplacementScript = """
         param(

@@ -14,6 +14,37 @@ namespace AudioShare.Core.Tests;
 public sealed class UpdateServiceTests
 {
     [Fact]
+    public async Task DownloadAndStageAsync_StagesSingleSetupForSilentInstallation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var executablePath = Path.Combine(root, "installed", "AudioShare.App.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+            await File.WriteAllTextAsync(executablePath, "old");
+            var setup = Encoding.UTF8.GetBytes("setup");
+            using var client = CreatePackageClient(setup);
+            var service = new UpdateService(client, executablePath);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 14),
+                new Uri("https://example.com/FlowCast-Setup.exe"),
+                new Uri("https://example.com/FlowCast-Setup.exe.sha256"));
+
+            var staged = await service.DownloadAndStageAsync(update);
+
+            Assert.True(staged.UsesInstaller);
+            Assert.Equal("FlowCast-Setup.exe", Path.GetFileName(staged.ExtractedDirectory));
+            Assert.Equal(setup, await File.ReadAllBytesAsync(staged.ExtractedDirectory));
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task TreatsGitHubLatestReleaseNotFoundAsNoUpdate()
     {
         using var client = new HttpClient(new StaticResponseHandler(HttpStatusCode.NotFound));
@@ -493,6 +524,16 @@ public sealed class UpdateServiceTests
         Assert.Contains("Start-Process -FilePath $TargetPath", GetReplacementScript());
     }
 
+    [Fact]
+    public void InstallerReplacementScript_UsesSilentSetupAndValidatesInstalledVersion()
+    {
+        var script = GetInstallerReplacementScript();
+
+        Assert.Contains("Start-Process -FilePath $InstallerPath -ArgumentList '/S'", script);
+        Assert.Contains("VersionInfo.FileVersion", script);
+        Assert.Contains("StartsWith(\"$ExpectedVersion.\")", script);
+    }
+
     private static Version GetCurrentVersion(Assembly assembly)
     {
         var method = typeof(UpdateService).GetMethod("GetCurrentVersion", BindingFlags.NonPublic | BindingFlags.Static);
@@ -503,6 +544,13 @@ public sealed class UpdateServiceTests
     private static string GetReplacementScript()
     {
         var field = typeof(UpdateService).GetField("ReplacementScript", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(field);
+        return Assert.IsType<string>(field.GetValue(null));
+    }
+
+    private static string GetInstallerReplacementScript()
+    {
+        var field = typeof(UpdateService).GetField("InstallerReplacementScript", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(field);
         return Assert.IsType<string>(field.GetValue(null));
     }

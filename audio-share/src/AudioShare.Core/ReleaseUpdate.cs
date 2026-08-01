@@ -6,6 +6,8 @@ public sealed record ReleaseUpdate(Version Version, Uri AssetUrl, Uri Sha256Url)
 
 public static class ReleaseUpdateParser
 {
+    public const string SetupAssetName = "FlowCast-Setup.exe";
+    public const string SetupChecksumAssetName = "FlowCast-Setup.exe.sha256";
     public const string PackageAssetName = "AudioShare-win-x64.zip";
     public const string ChecksumAssetName = "AudioShare-win-x64.zip.sha256";
 
@@ -23,6 +25,13 @@ public static class ReleaseUpdateParser
                 assets.ValueKind != JsonValueKind.Array)
             {
                 return null;
+            }
+
+            var setupUrl = FindAssetUrl(assets, SetupAssetName);
+            var setupChecksumUrl = FindAssetUrl(assets, SetupChecksumAssetName);
+            if (setupUrl is not null && setupChecksumUrl is not null)
+            {
+                return new ReleaseUpdate(version, setupUrl, setupChecksumUrl);
             }
 
             var packageUrl = FindAssetUrl(assets, PackageAssetName);

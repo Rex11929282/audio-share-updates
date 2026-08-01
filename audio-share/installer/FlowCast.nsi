@@ -15,7 +15,7 @@ SetCompressor /SOLID lzma
 !endif
 
 Name "FlowCast"
-OutFile "${OUTPUT_DIR}\FlowCast Setup.exe"
+OutFile "${OUTPUT_DIR}\FlowCast-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\FlowCast"
 InstallDirRegKey HKCU "Software\FlowCast" "InstallPath"
 
@@ -24,7 +24,20 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
+Function .onInit
+    IfFileExists "$INSTDIR\AudioShare.App.exe" 0 done
+    ClearErrors
+    Rename "$INSTDIR\AudioShare.App.exe" "$INSTDIR\.flowcast-install-lockcheck.exe"
+    IfErrors 0 unlocked
+    MessageBox MB_ICONEXCLAMATION|MB_OK "Please exit FlowCast, then run Setup again."
+    Abort
+unlocked:
+    Rename "$INSTDIR\.flowcast-install-lockcheck.exe" "$INSTDIR\AudioShare.App.exe"
+done:
+FunctionEnd
+
 Section "Install FlowCast"
+    RMDir /r "$INSTDIR"
     SetOutPath "$INSTDIR"
     File /r "${PUBLISH_DIR}\*.*"
 
@@ -35,9 +48,11 @@ Section "Install FlowCast"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowCast" "UninstallString" "$\"$INSTDIR\Uninstall FlowCast.exe$\""
     WriteUninstaller "$INSTDIR\Uninstall FlowCast.exe"
 
+    StrCmp $INSTDIR "$LOCALAPPDATA\Programs\FlowCast" 0 skipShortcuts
     CreateDirectory "$SMPROGRAMS\FlowCast"
     CreateShortcut "$SMPROGRAMS\FlowCast\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
     CreateShortcut "$DESKTOP\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
+skipShortcuts:
 SectionEnd
 
 Section "Uninstall"
