@@ -1,6 +1,9 @@
-Unicode true
+﻿Unicode true
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
+
+!include "MUI2.nsh"
+!include "nsDialogs.nsh"
 
 !ifndef PUBLISH_DIR
 !error "PUBLISH_DIR must point to the published FlowCast files."
@@ -19,12 +22,17 @@ OutFile "${OUTPUT_DIR}\FlowCast-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\FlowCast"
 InstallDirRegKey HKCU "Software\FlowCast" "InstallPath"
 
+Var CreateDesktopShortcut
+Var DesktopShortcutCheckbox
+
 Page directory
+Page custom DesktopShortcutPage DesktopShortcutPageLeave
 Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
 Function .onInit
+    StrCpy $CreateDesktopShortcut "1"
     IfFileExists "$INSTDIR\AudioShare.App.exe" 0 done
     ClearErrors
     Rename "$INSTDIR\AudioShare.App.exe" "$INSTDIR\.flowcast-install-lockcheck.exe"
@@ -34,6 +42,21 @@ Function .onInit
 unlocked:
     Rename "$INSTDIR\.flowcast-install-lockcheck.exe" "$INSTDIR\AudioShare.App.exe"
 done:
+FunctionEnd
+
+Function DesktopShortcutPage
+    nsDialogs::Create 1018
+    Pop $0
+    ${NSD_CreateLabel} 0 0 100% 24u "要在桌面建立 FlowCast 快捷方式吗？"
+    Pop $0
+    ${NSD_CreateCheckbox} 0 30u 100% 12u "在桌面建立 FlowCast 快捷方式"
+    Pop $DesktopShortcutCheckbox
+    ${NSD_Check} $DesktopShortcutCheckbox
+    nsDialogs::Show
+FunctionEnd
+
+Function DesktopShortcutPageLeave
+    ${NSD_GetState} $DesktopShortcutCheckbox $CreateDesktopShortcut
 FunctionEnd
 
 Section "Install FlowCast"
@@ -51,7 +74,9 @@ Section "Install FlowCast"
     StrCmp $INSTDIR "$LOCALAPPDATA\Programs\FlowCast" 0 skipShortcuts
     CreateDirectory "$SMPROGRAMS\FlowCast"
     CreateShortcut "$SMPROGRAMS\FlowCast\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
+    StrCmp $CreateDesktopShortcut 1 0 skipDesktopShortcut
     CreateShortcut "$DESKTOP\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
+skipDesktopShortcut:
 skipShortcuts:
 SectionEnd
 

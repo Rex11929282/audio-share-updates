@@ -116,12 +116,23 @@ public partial class MainWindow : Window
         await StartVoicemeeterBananaIfInstalledAsync();
         await RefreshAsync();
         motionController.PlayLaunch();
+        refreshTimer.Start();
+        signalTimer.Start();
+        _ = ResetStartupToLocalOnlyAfterWindowIsReadyAsync();
+    }
+
+    private async Task ResetStartupToLocalOnlyAfterWindowIsReadyAsync()
+    {
+        await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
+        if (isClosing)
+        {
+            return;
+        }
+
         SetDefaultPlaybackToAux();
         SetMainInputSharing(false);
         await ResetToLocalOnlyAsync("已打开 FlowCast，正在重置为只自己听。");
         AddActivity("FlowCast 已启动，当前为只自己听。");
-        refreshTimer.Start();
-        signalTimer.Start();
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
