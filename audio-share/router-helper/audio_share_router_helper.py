@@ -187,14 +187,6 @@ def _field(value, name, fallback=None):
     return getattr(value, name, fallback)
 
 
-def _active_session(process_id):
-    for session in _router().list_app_sessions():
-        session_id = _field(session, "process_id", _field(session, "pid"))
-        if session_id == process_id:
-            return session
-    return None
-
-
 def _process_id(request):
     process_id = request.get("processId")
     if isinstance(process_id, bool) or not isinstance(process_id, int) or process_id <= 0:
@@ -226,21 +218,15 @@ def _route_session(request):
     if process_id is None:
         return None, {"ok": False, "error": "Missing processId."}
 
-    session = _active_session(process_id)
-    if session is None:
-        return None, {"ok": False, "error": "Active output session not found."}
-
-    process_name = _field(session, "process_name", "")
-    if not isinstance(process_name, str) or not process_name.strip():
-        return None, {"ok": False, "error": "Active output session not found."}
-    if ntpath.basename(process_name).casefold().startswith(PROTECTED_PREFIXES):
-        return None, {"ok": False, "error": "Protected process cannot be routed."}
-
     expected_identity = _process_identity(request)
     if expected_identity is None:
         return None, {"ok": False, "error": "Missing process identity."}
 
-    return (process_id, *expected_identity), None
+    expected_name, expected_start_utc_ticks = expected_identity
+    if ntpath.basename(expected_name).casefold().startswith(PROTECTED_PREFIXES):
+        return None, {"ok": False, "error": "Protected process cannot be routed."}
+
+    return (process_id, expected_name, expected_start_utc_ticks), None
 
 
 def _device_value(device):

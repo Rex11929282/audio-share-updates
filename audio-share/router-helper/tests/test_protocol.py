@@ -161,9 +161,14 @@ def test_unknown_command_is_rejected(helper):
 
 def test_set_route_rejects_discord_without_calling_router(helper):
     module, router = helper
-    router.sessions = [Session(8, "discord.exe")]
 
-    assert module.handle({"command": "set-route", "processId": 8, "deviceId": "input"}) == {
+    assert module.handle({
+        "command": "set-route",
+        "processId": 8,
+        "processName": "discord.exe",
+        "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+        "deviceId": "input",
+    }) == {
         "ok": False,
         "error": "Protected process cannot be routed.",
     }
@@ -181,9 +186,14 @@ def test_set_route_rejects_discord_without_calling_router(helper):
 )
 def test_set_route_rejects_protected_name_variants_without_calling_router(helper, process_name):
     module, router = helper
-    router.sessions = [Session(8, process_name)]
 
-    assert module.handle({"command": "set-route", "processId": 8, "deviceId": "input"}) == {
+    assert module.handle({
+        "command": "set-route",
+        "processId": 8,
+        "processName": process_name,
+        "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+        "deviceId": "input",
+    }) == {
         "ok": False,
         "error": "Protected process cannot be routed.",
     }
@@ -206,28 +216,28 @@ def test_malformed_request_is_rejected(helper, payload, error):
     assert module.handle(payload) == {"ok": False, "error": error}
 
 
-def test_missing_active_session_is_rejected(helper):
+def test_route_requires_process_identity(helper):
     module, router = helper
 
     assert module.handle({"command": "clear-route", "processId": 7}) == {
         "ok": False,
-        "error": "Active output session not found.",
+        "error": "Missing process identity.",
     }
     assert router.clear_calls == []
 
 
-def test_main_sanitizes_active_session_discovery_failure(helper, monkeypatch):
+def test_main_sanitizes_device_discovery_failure(helper, monkeypatch):
     module, router = helper
     stdout = io.StringIO()
 
-    def fail_session_discovery():
+    def fail_device_discovery():
         raise RuntimeError("untrusted router detail")
 
-    monkeypatch.setattr(router, "list_app_sessions", fail_session_discovery)
+    monkeypatch.setattr(router, "list_output_devices", fail_device_discovery)
     monkeypatch.setattr(
         module.sys,
         "stdin",
-        io.StringIO('{"command":"clear-route","processId":7}\n'),
+        io.StringIO('{"command":"list-devices"}\n'),
     )
     monkeypatch.setattr(module.sys, "stdout", stdout)
 
@@ -236,6 +246,25 @@ def test_main_sanitizes_active_session_discovery_failure(helper, monkeypatch):
         "ok": False,
         "error": "Router unavailable.",
     }
+
+
+def test_set_route_allows_audible_process_on_a_nondefault_output(helper):
+    module, router = helper
+    module.process_identity_lease_factory = lambda _: ProcessIdentityLease(
+        "cloudmusic.exe",
+        PROCESS_START_UTC_TICKS,
+    )
+
+    assert module.handle(
+        {
+            "command": "set-route",
+            "processId": 9,
+            "processName": "cloudmusic.exe",
+            "processStartUtcTicks": PROCESS_START_UTC_TICKS,
+            "deviceId": "input",
+        }
+    ) == {"ok": True, "value": None}
+    assert router.policy.set_calls == [(9, "input")]
 
 
 @pytest.mark.parametrize(
