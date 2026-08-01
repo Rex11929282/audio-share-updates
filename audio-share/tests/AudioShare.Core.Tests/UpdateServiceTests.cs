@@ -185,6 +185,43 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
+    public async Task DownloadAndStageAsync_UsesRegisteredInstallDirectoryForTemporaryUpdateLaunches()
+    {
+        var installedDirectory = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"), "installed");
+        var temporaryExecutablePath = Path.Combine(
+            Path.GetTempPath(),
+            "FlowCast",
+            "updates",
+            Guid.NewGuid().ToString("N"),
+            "extracted",
+            "AudioShare.App.exe");
+        Directory.CreateDirectory(installedDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(temporaryExecutablePath)!);
+        try
+        {
+            var installedExecutablePath = Path.Combine(installedDirectory, "AudioShare.App.exe");
+            await File.WriteAllTextAsync(installedExecutablePath, "installed");
+            await File.WriteAllTextAsync(temporaryExecutablePath, "running");
+            using var client = CreatePackageClient(CreatePackage(includeRouterHelper: true));
+            var service = new UpdateService(client, temporaryExecutablePath, installedDirectory);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 1),
+                new Uri("https://example.com/AudioShare-win-x64.zip"),
+                new Uri("https://example.com/AudioShare-win-x64.zip.sha256"));
+
+            var staged = await service.DownloadAndStageAsync(update);
+
+            Assert.Equal(installedExecutablePath, staged.ExecutablePath);
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(installedDirectory, recursive: true);
+            Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(temporaryExecutablePath)!)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task DownloadAndStageAsync_UsesCanonicalExecutableNameWhenRecoveringFromMalformedTransaction()
     {
         var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));

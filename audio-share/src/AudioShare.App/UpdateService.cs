@@ -17,6 +17,7 @@ public sealed class UpdateService
     private static readonly Version CurrentVersion = GetCurrentVersion(typeof(UpdateService).Assembly);
     private readonly HttpClient? client;
     private readonly string? executablePath;
+    private readonly string? registeredInstallationDirectory;
 
     public const string UpdateFailureSignal = "--update-failed";
     public const string UpdateFailedRestartNotice = "上一次更新未完成，已保留原程序并重新启动。";
@@ -25,10 +26,14 @@ public sealed class UpdateService
     {
     }
 
-    public UpdateService(HttpClient client, string? executablePath = null)
+    public UpdateService(
+        HttpClient client,
+        string? executablePath = null,
+        string? registeredInstallationDirectory = null)
     {
         this.client = client;
         this.executablePath = executablePath;
+        this.registeredInstallationDirectory = registeredInstallationDirectory;
     }
 
     public static bool IsUpdateFailedRestart(IEnumerable<string> arguments) =>
@@ -73,7 +78,7 @@ public sealed class UpdateService
 
         var executablePath = this.executablePath ?? Environment.ProcessPath ??
             throw new InvalidOperationException("找不到当前程序文件。");
-        var applicationDirectory = GetCanonicalInstallationDirectory(executablePath);
+        var applicationDirectory = GetCanonicalInstallationDirectory(executablePath, registeredInstallationDirectory);
         EnsureApplicationDirectoryIsWritable(applicationDirectory);
         var applicationParent = Path.GetDirectoryName(applicationDirectory) ??
             throw new InvalidOperationException("找不到程序文件夹的上级目录。");
@@ -168,7 +173,9 @@ public sealed class UpdateService
         BeginStagedReplacementAndRestart(stagedUpdate);
     }
 
-    public static string GetCanonicalInstallationDirectory(string executablePath)
+    public static string GetCanonicalInstallationDirectory(
+        string executablePath,
+        string? registeredInstallationDirectory = null)
     {
         var applicationDirectory = Path.GetDirectoryName(executablePath) ??
             throw new InvalidOperationException("找不到程序文件夹。");
@@ -179,12 +186,32 @@ public sealed class UpdateService
                 throw new InvalidOperationException("找不到程序文件夹的上级目录。");
         }
 
-        return applicationDirectory;
+        if (!IsFlowCastTemporaryUpdateDirectory(applicationDirectory))
+        {
+            return applicationDirectory;
+        }
+
+        var installedDirectory = registeredInstallationDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs",
+            "FlowCast");
+        return File.Exists(Path.Combine(installedDirectory, "AudioShare.App.exe"))
+            ? installedDirectory
+            : applicationDirectory;
     }
 
     private static bool IsFlowCastUpdateTransactionDirectory(string directoryName) =>
         directoryName.StartsWith(".FlowCast.flowcast-update-new-", StringComparison.OrdinalIgnoreCase) ||
         directoryName.StartsWith(".FlowCast.flowcast-update-backup-", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFlowCastTemporaryUpdateDirectory(string directory)
+    {
+        var updateRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "FlowCast", "updates"));
+        var fullDirectory = Path.GetFullPath(directory);
+        return fullDirectory.StartsWith(
+            updateRoot + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     private static readonly string ReplacementScript = """
         param(
@@ -209,6 +236,7 @@ public sealed class UpdateService
         }
 
         Write-UpdateLog "Waiting for FlowCast process $ProcessId to exit."
+        Write-UpdateLog "Replacing '$ApplicationDirectory' from '$SourceDirectory'."
 
         for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
             try {
@@ -233,6 +261,9 @@ public sealed class UpdateService
 
                 Move-Item -LiteralPath $ApplicationDirectory -Destination $BackupApplicationDirectory
                 Move-Item -LiteralPath $StagedApplicationDirectory -Destination $ApplicationDirectory
+                if (-not (Test-Path -LiteralPath $TargetPath -PathType Leaf)) {
+                    throw "Updated executable is missing: $TargetPath"
+                }
                 $ReplacementSucceeded = $true
                 Remove-Item -LiteralPath $BackupApplicationDirectory -Recurse -Force -ErrorAction SilentlyContinue
                 Write-UpdateLog "Replacement completed."
