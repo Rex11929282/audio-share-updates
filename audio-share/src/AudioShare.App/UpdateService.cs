@@ -85,12 +85,11 @@ public sealed class UpdateService
         {
             var packagePath = Path.Combine(updateDirectory, ReleaseUpdateParser.PackageAssetName);
             var checksumPath = Path.Combine(updateDirectory, ReleaseUpdateParser.ChecksumAssetName);
-            var downloadProgress = new Progress<UpdateProgress>(stage => _ = reportProgressAsync(stage));
 
             using (var ownedClient = client is null ? CreateClient() : null)
             {
                 var httpClient = ownedClient ?? client!;
-                await DownloadPackageAsync(httpClient, update.AssetUrl, packagePath, downloadProgress, cancellationToken);
+                await DownloadPackageAsync(httpClient, update.AssetUrl, packagePath, reportProgressAsync, cancellationToken);
                 await File.WriteAllBytesAsync(checksumPath, await httpClient.GetByteArrayAsync(update.Sha256Url, cancellationToken), cancellationToken);
             }
 
@@ -257,7 +256,7 @@ public sealed class UpdateService
         HttpClient httpClient,
         Uri packageUrl,
         string packagePath,
-        IProgress<UpdateProgress>? progress,
+        Func<UpdateProgress, Task> reportProgressAsync,
         CancellationToken cancellationToken)
     {
         using var response = await httpClient.GetAsync(
@@ -267,7 +266,7 @@ public sealed class UpdateService
         response.EnsureSuccessStatusCode();
 
         var contentLength = response.Content.Headers.ContentLength;
-        progress?.Report(new UpdateProgress(UpdateStage.Downloading, "Downloading update", contentLength is null ? null : 0));
+        await reportProgressAsync(new UpdateProgress(UpdateStage.Downloading, "Downloading update", contentLength is null ? null : 0));
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var destination = new FileStream(
             packagePath,
@@ -285,7 +284,7 @@ public sealed class UpdateService
             await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
             totalBytesRead += bytesRead;
             int? percentage = contentLength is null ? null : (int)(totalBytesRead * 100 / contentLength.Value);
-            progress?.Report(new UpdateProgress(UpdateStage.Downloading, "Downloading update", percentage));
+            await reportProgressAsync(new UpdateProgress(UpdateStage.Downloading, "Downloading update", percentage));
         }
     }
 

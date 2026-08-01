@@ -240,6 +240,63 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
+    public async Task DownloadAndStageAsync_DoesNotReportVerifyingBeforeDownloadingProgressCompletes()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var executablePath = Path.Combine(root, "installed", "AudioShare.App.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+            await File.WriteAllTextAsync(executablePath, "old");
+            using var client = CreatePackageClient(CreatePackage(includeRouterHelper: true));
+            var service = new UpdateService(client, executablePath);
+            var downloadingEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowDownloading = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var verifyingReported = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var events = new List<string>();
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 1),
+                new Uri("https://example.com/AudioShare-win-x64.zip"),
+                new Uri("https://example.com/AudioShare-win-x64.zip.sha256"));
+
+            async Task ReportProgressAsync(UpdateProgress progress)
+            {
+                if (progress.Stage == UpdateStage.Downloading)
+                {
+                    events.Add("Downloading started");
+                    downloadingEntered.TrySetResult();
+                    await allowDownloading.Task;
+                    events.Add("Downloading completed");
+                    return;
+                }
+
+                events.Add(progress.Stage.ToString());
+                if (progress.Stage == UpdateStage.Verifying)
+                {
+                    verifyingReported.TrySetResult();
+                }
+            }
+
+            var stagingTask = service.DownloadAndStageAsync(update, ReportProgressAsync);
+            await downloadingEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var observedEvent = await Task.WhenAny(verifyingReported.Task, Task.Delay(TimeSpan.FromMilliseconds(250)));
+            Assert.NotSame(verifyingReported.Task, observedEvent);
+            Assert.False(stagingTask.IsCompleted);
+
+            allowDownloading.SetResult();
+            var staged = await stagingTask;
+            Assert.True(events.IndexOf("Downloading completed") < events.IndexOf(nameof(UpdateStage.Verifying)));
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task DownloadAndStageAsync_WaitsForExtractingProgressBeforeExtractingPackage()
     {
         var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
