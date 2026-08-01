@@ -95,12 +95,13 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
+            UpdateService.RecordUpdateError(exception);
             progressWindow?.CloseFromApplication();
             SetUpdateStaging(owner, false);
             ReleaseOwner();
             MessageBox.Show(
                 owner,
-                $"更新失败，未替换当前程序。{exception.Message}",
+                "这次更新没有完成，FlowCast 仍会使用当前版本。\n\n下一步：请关闭其他 FlowCast 窗口后重试；如果仍然失败，请打开主窗口的“诊断”复制信息。",
                 "FlowCast 更新",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

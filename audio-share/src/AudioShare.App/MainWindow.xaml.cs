@@ -47,6 +47,7 @@ public partial class MainWindow : Window
     private IReadOnlyList<AudioSession> activeSessions = [];
     private string? inputDeviceId;
     private string? auxDeviceId;
+    private string? lastTechnicalError;
     private string experimentalRoutingStatus = "正在检查音频路由组件和输出设备。";
     private bool isRefreshing;
     private bool isRoutingOperation;
@@ -165,8 +166,9 @@ public partial class MainWindow : Window
             }
             catch (Exception exception)
             {
-                experimentalRoutingStatus = $"停止分享失败，已取消关闭：{exception.Message}";
-                ShowError("未能让声音回到仅本机收听。请重试“停止分享，只自己听”。", null);
+                RecordTechnicalError(exception);
+                experimentalRoutingStatus = "关闭前无法确认声音已回到只自己听，因此已取消关闭。";
+                ShowError("请先点击“停止分享，只自己听”，确认完成后再关闭 FlowCast。", null);
                 return;
             }
             finally
@@ -326,7 +328,9 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            SetExperimentalRoutingUnavailable($"Voicemeeter Banana 已安裝但無法自動啟動：{exception.Message}");
+            SetExperimentalRoutingUnavailable(
+                "已找到 Voicemeeter Banana，但暂时无法自动打开。请手动打开 Banana 后点击“刷新”。",
+                exception);
         }
     }
 
@@ -850,7 +854,9 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            SetExperimentalRoutingUnavailable($"检测输出设备失败：{exception.Message}");
+            SetExperimentalRoutingUnavailable(
+                "暂时无法确认音频设备。你的声音不会被自动分享，请点击“刷新”后再试。",
+                exception);
             return false;
         }
 
@@ -895,8 +901,10 @@ public partial class MainWindow : Window
             SetMainInputSharing(false);
             sharingRouteState = SharingRouteState.LocalOnly;
             hasOwnedRoutingTransaction = false;
-            SetExperimentalRoutingUnavailable($"生成路由计划失败：{exception.Message}");
-            ShowError("未应用音频路由。", null);
+            SetExperimentalRoutingUnavailable(
+                "暂时无法准备分享。你的声音不会被自动分享，请点击“刷新”后再试。",
+                exception);
+            ShowError("这次没有开始分享，你和朋友的通话设置不会被改变。", null);
             return;
         }
 
@@ -962,7 +970,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            await RecoverFromShareStartFailureAsync($"应用失败：{exception.Message}", exception);
+            await RecoverFromShareStartFailureAsync("暂时无法应用分享设置。", exception);
         }
         finally
         {
@@ -989,7 +997,9 @@ public partial class MainWindow : Window
         catch (Exception recoveryException)
         {
             requiresAttention = true;
-            SetExperimentalRoutingUnavailable($"{failureReason}；恢复只自己听时出错：{recoveryException.Message}");
+            SetExperimentalRoutingUnavailable(
+                "这次没有开始分享，且暂时无法确认声音是否已回到只自己听。请点击“停止分享”再试一次。",
+                recoveryException);
             ShowError("未开始分享，无法恢复只自己听，请重试。", recoveryException);
             return;
         }
@@ -1033,8 +1043,10 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            SetExperimentalRoutingUnavailable($"停止分享失败：{exception.Message}");
-            ShowError("无法停止分享。请重新检测后再试。", null);
+            SetExperimentalRoutingUnavailable(
+                "暂时无法确认是否已停止分享。请点击“停止分享”再试一次。",
+                exception);
+            ShowError("FlowCast 还没能确认声音已回到只自己听。", null);
         }
         finally
         {
@@ -1047,8 +1059,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SetExperimentalRoutingUnavailable(string reason)
+    private void SetExperimentalRoutingUnavailable(string reason, Exception? exception = null)
     {
+        RecordTechnicalError(exception);
         experimentalRoutingAvailable = false;
         inputDeviceId = null;
         auxDeviceId = null;
@@ -1124,7 +1137,8 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             requiresAttention = true;
-            experimentalRoutingStatus = $"停止分享失败：无法确认 B1 状态：{exception.Message}";
+            RecordTechnicalError(exception);
+            experimentalRoutingStatus = "暂时无法确认 B1 是否已关闭。请再点一次“停止分享”。";
             ShowError("停止分享后无法确认 B1 已关闭。请重试“停止分享”。", null);
             return false;
         }
@@ -1331,6 +1345,16 @@ public partial class MainWindow : Window
             "音频程序：",
         };
 
+        if (!string.IsNullOrWhiteSpace(lastTechnicalError))
+        {
+            lines.Add($"最近技术信息：{lastTechnicalError}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(UpdateService.LastUpdateError))
+        {
+            lines.Add($"最近更新信息：{UpdateService.LastUpdateError}");
+        }
+
         foreach (var session in GetRoutableActiveSessions())
         {
             try
@@ -1440,8 +1464,8 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            experimentalRoutingStatus = $"重置为只自己听失败：{exception.Message}";
-            ShowError("无法重置音频路由。", exception);
+            experimentalRoutingStatus = "暂时无法确认声音是否已回到只自己听。";
+            ShowError("FlowCast 没有完成安全重置，请点击“停止分享”再试一次。", exception);
             return false;
         }
         finally
@@ -1469,8 +1493,8 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             requiresAttention = true;
-            experimentalRoutingStatus = $"无法将 Windows 默认播放设备设为 AUX：{exception.Message}";
-            ShowError("无法完成本机收听保护。请重新检测后重试。", exception);
+            experimentalRoutingStatus = "暂时无法切回本机播放。你的声音不会被自动分享，请点击“刷新”后再试。";
+            ShowError("还没能恢复只自己听的设置。", exception);
             return false;
         }
     }
@@ -1485,8 +1509,10 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             requiresAttention = true;
-            experimentalRoutingStatus = $"无法更新 Voicemeeter B1：{exception.Message}";
-            ShowError("无法更新音乐分享通道。请重新检测后重试。", exception);
+            experimentalRoutingStatus = "暂时无法切换音乐分享通道。请确认 Banana 已打开后点击“刷新”。";
+            ShowError(shared
+                ? "这次没有开始分享，你的声音不会被自动发送给朋友。"
+                : "暂时无法确认已停止分享，请再点一次“停止分享”。", exception);
             return false;
         }
     }
@@ -1524,8 +1550,17 @@ public partial class MainWindow : Window
 
     private void ShowError(string message, Exception? exception)
     {
-        ErrorText.Text = exception is null ? message : $"{message} {exception.Message}";
+        RecordTechnicalError(exception);
+        ErrorText.Text = $"{message}\n下一步：请点击“刷新”后再试。需要帮助时，点击“诊断”复制信息。";
         ErrorPanel.Visibility = Visibility.Visible;
+    }
+
+    private void RecordTechnicalError(Exception? exception)
+    {
+        if (exception is not null)
+        {
+            lastTechnicalError = exception.ToString();
+        }
     }
 }
 

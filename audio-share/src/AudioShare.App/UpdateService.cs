@@ -21,6 +21,7 @@ public sealed class UpdateService
 
     public const string UpdateFailureSignal = "--update-failed";
     public const string UpdateFailedRestartNotice = "上一次更新未完成，已保留原程序并重新启动。";
+    internal static string? LastUpdateError { get; private set; }
 
     public UpdateService()
     {
@@ -38,6 +39,8 @@ public sealed class UpdateService
 
     public static bool IsUpdateFailedRestart(IEnumerable<string> arguments) =>
         arguments.Any(argument => string.Equals(argument, UpdateFailureSignal, StringComparison.Ordinal));
+
+    internal static void RecordUpdateError(Exception exception) => LastUpdateError = exception.ToString();
 
     public async Task<ReleaseUpdate?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
     {
