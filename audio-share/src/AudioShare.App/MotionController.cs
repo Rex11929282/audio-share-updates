@@ -14,6 +14,7 @@ internal sealed class MotionController
     private readonly FrameworkElement statusPulse;
     private readonly FrameworkElement b1Fill;
     private readonly FrameworkElement b1ActivityBars;
+    private readonly IReadOnlyList<FrameworkElement> atmosphereBars;
     private readonly FrameworkElement routeFlowPath;
     private readonly FrameworkElement routeBeaconOne;
     private readonly FrameworkElement routeBeaconTwo;
@@ -33,6 +34,7 @@ internal sealed class MotionController
         FrameworkElement statusPulse,
         FrameworkElement b1Fill,
         FrameworkElement b1ActivityBars,
+        IReadOnlyList<FrameworkElement> atmosphereBars,
         FrameworkElement routeFlowPath,
         FrameworkElement routeBeaconOne,
         FrameworkElement routeBeaconTwo,
@@ -46,6 +48,7 @@ internal sealed class MotionController
         this.statusPulse = statusPulse;
         this.b1Fill = b1Fill;
         this.b1ActivityBars = b1ActivityBars;
+        this.atmosphereBars = atmosphereBars;
         this.routeFlowPath = routeFlowPath;
         this.routeBeaconOne = routeBeaconOne;
         this.routeBeaconTwo = routeBeaconTwo;
@@ -77,6 +80,7 @@ internal sealed class MotionController
         PlayEntrance(logo, TimeSpan.Zero, TimeSpan.FromMilliseconds(450), 12, 0.94);
         PlayEntrance(topCard, TimeSpan.FromMilliseconds(120), TimeSpan.FromMilliseconds(620), 16, 0.98);
         PlayEntrance(listPanel, TimeSpan.FromMilliseconds(230), TimeSpan.FromMilliseconds(670), 18, 0.985);
+        PlayAtmosphereEntrance();
     }
 
     public void PlaySharingConfirmed()
@@ -110,6 +114,7 @@ internal sealed class MotionController
 
     public void PlayAudioLevelPulse(double level)
     {
+        SetAtmosphereLevel(level);
         if (!CanPlay() || level < 2)
         {
             return;
@@ -169,6 +174,22 @@ internal sealed class MotionController
         routeIsActive = value;
         StopRunningStoryboards(routeFlowPath);
         SetVisual(routeFlowPath, routeIsActive ? 0.64 : 0, 0, 0, 1);
+        if (!routeIsActive)
+        {
+            SetAtmosphereBars(0);
+        }
+    }
+
+    public void SetAtmosphereLevel(double level)
+    {
+        var normalized = Math.Clamp(level / 100, 0, 1);
+        if (!CanPlay() || normalized < 0.02)
+        {
+            SetAtmosphereBars(0);
+            return;
+        }
+
+        SetAtmosphereBars(normalized);
     }
 
     public void Suspend()
@@ -246,6 +267,27 @@ internal sealed class MotionController
         Start(target, storyboard, () => SetVisual(target, 0, 0, 0, 1));
     }
 
+    private void PlayAtmosphereEntrance()
+    {
+        if (!CanPlay())
+        {
+            return;
+        }
+
+        for (var index = 0; index < atmosphereBars.Count; index++)
+        {
+            var bar = atmosphereBars[index];
+            SetAtmosphereBar(bar, 0.08, 0);
+            var transforms = GetTransforms(bar);
+            bar.RenderTransformOrigin = new Point(0.5, 1);
+            var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+            var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+            Add(storyboard, bar, UIElement.OpacityProperty, 0, 0.26, TimeSpan.FromMilliseconds(280), TimeSpan.FromMilliseconds(340 + index * 38), easing);
+            Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.08, 0.18, TimeSpan.FromMilliseconds(280), TimeSpan.FromMilliseconds(340 + index * 38), easing);
+            Start(bar, storyboard, () => SetAtmosphereBar(bar, 0.18, 0.26));
+        }
+    }
+
     private Storyboard CreateTransformStoryboard(
         FrameworkElement target,
         TimeSpan duration,
@@ -313,6 +355,7 @@ internal sealed class MotionController
         SetVisual(statusPulse, 1, 0, 0, 1);
         SetVisual(b1Fill, 1, 0, 0, 1);
         SetVisual(b1ActivityBars, 0.65, 0, 0, 1);
+        SetAtmosphereBars(0);
         SetVisual(routeFlowPath, routeIsActive ? 0.64 : 0, 0, 0, 1);
         SetVisual(routeBeaconOne, 0, 0, 0, 1);
         SetVisual(routeBeaconTwo, 0, 0, 0, 1);
@@ -338,6 +381,32 @@ internal sealed class MotionController
         transforms.Translate.Y = y;
         transforms.Scale.ScaleX = scale;
         transforms.Scale.ScaleY = scale;
+    }
+
+    private void SetAtmosphereBars(double normalizedLevel)
+    {
+        for (var index = 0; index < atmosphereBars.Count; index++)
+        {
+            var variation = 0.58 + ((index * 37) % 43) / 100d;
+            var scaleY = normalizedLevel <= 0
+                ? 0.18
+                : Math.Clamp(0.22 + normalizedLevel * variation, 0.22, 1);
+            var opacity = normalizedLevel <= 0
+                ? 0.26
+                : Math.Clamp(0.4 + normalizedLevel * 0.6, 0.4, 1);
+            SetAtmosphereBar(atmosphereBars[index], scaleY, opacity);
+        }
+    }
+
+    private static void SetAtmosphereBar(FrameworkElement target, double scaleY, double opacity)
+    {
+        var transforms = GetTransforms(target);
+        target.RenderTransformOrigin = new Point(0.5, 1);
+        target.Opacity = opacity;
+        transforms.Translate.X = 0;
+        transforms.Translate.Y = 0;
+        transforms.Scale.ScaleX = 1;
+        transforms.Scale.ScaleY = scaleY;
     }
 
     private static MotionTransforms GetTransforms(FrameworkElement target)

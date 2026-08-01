@@ -4,9 +4,9 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
-    <Version>2.0.9</Version>
-    <AssemblyVersion>2.0.9.0</AssemblyVersion>
-    <FileVersion>2.0.9.0</FileVersion>
+    <Version>2.0.10</Version>
+    <AssemblyVersion>2.0.10.0</AssemblyVersion>
+    <FileVersion>2.0.10.0</FileVersion>
     <ApplicationIcon>Assets\flowcast-logo.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

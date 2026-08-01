@@ -36,7 +36,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="ButtonBorder" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14">
+                        <Border x:Name="ButtonBorder" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform />
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -45,6 +48,9 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.84" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -195,6 +201,16 @@
                             <Rectangle Width="4" Height="17" Margin="0,0,4,0" Fill="#36C8C2" RadiusX="2" RadiusY="2" />
                             <Rectangle Width="4" Height="10" Fill="#36C8C2" RadiusX="2" RadiusY="2" />
                         </StackPanel>
+                        <StackPanel Margin="0,13,0,0" Orientation="Horizontal" Height="26" VerticalAlignment="Bottom">
+                            <Border x:Name="AtmosphereBarOne" Width="6" Height="18" Margin="0,0,5,0" Background="#36C8C2" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarTwo" Width="6" Height="26" Margin="0,0,5,0" Background="#48CFC3" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarThree" Width="6" Height="15" Margin="0,0,5,0" Background="#36C8C2" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarFour" Width="6" Height="24" Margin="0,0,5,0" Background="#48CFC3" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarFive" Width="6" Height="20" Margin="0,0,5,0" Background="#36C8C2" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarSix" Width="6" Height="28" Margin="0,0,5,0" Background="#48CFC3" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarSeven" Width="6" Height="16" Margin="0,0,5,0" Background="#36C8C2" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                            <Border x:Name="AtmosphereBarEight" Width="6" Height="22" Background="#48CFC3" CornerRadius="3" RenderTransformOrigin="0.5,1" />
+                        </StackPanel>
                     </StackPanel>
                     <Button x:Name="RestoreRoutingButton" Grid.Column="2" Style="{StaticResource DangerButton}" VerticalAlignment="Center" IsEnabled="False" Click="RestoreRoutingButton_Click" Content="停止分享" />
                 </Grid>
@@ -216,7 +232,16 @@
                             <TextBlock FontSize="19" FontWeight="SemiBold" Foreground="#203A56" Text="正在播放的程序" />
                             <TextBlock Margin="0,4,0,0" Foreground="#74879A" Text="勾选后，朋友才会听到该程序。" />
                         </StackPanel>
-                        <ItemsControl Grid.Column="1" ItemsSource="{Binding HealthItems}" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                            <Button Style="{StaticResource UtilityButton}" Margin="0" Click="HealthSummaryButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="HealthSummaryDot" Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" Fill="#1DBE86" />
+                                    <TextBlock x:Name="HealthSummaryText" Foreground="#29425D" Text="系统状态" />
+                                    <TextBlock x:Name="HealthSummaryChevron" Margin="8,0,0,0" Foreground="#61798F" Text="⌃" />
+                                </StackPanel>
+                            </Button>
+                            <Border x:Name="HealthDetailsPanel" Margin="0,8,0,0" Padding="4" Background="#8FFFFFFF" BorderBrush="#C8DAE8" BorderThickness="1" CornerRadius="14" Visibility="Collapsed">
+                        <ItemsControl ItemsSource="{Binding HealthItems}" VerticalAlignment="Center">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel HorizontalAlignment="Right" />
@@ -248,6 +273,8 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                            </Border>
+                        </StackPanel>
                     </Grid>
                     <TextBlock x:Name="EmptyStateText" Grid.Row="1" Margin="0,18,0,2" Foreground="#72879A" Text="正在检测音频会话..." />
                     <ListBox Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding Applications}" ScrollViewer.VerticalScrollBarVisibility="Auto">

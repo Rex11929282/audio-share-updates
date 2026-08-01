@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using AudioShare.Core;
 using AudioShare.Windows;
@@ -79,6 +80,7 @@ public partial class MainWindow : Window
             StatusPulse,
             B1MeterFill,
             B1ActivityBars,
+            [AtmosphereBarOne, AtmosphereBarTwo, AtmosphereBarThree, AtmosphereBarFour, AtmosphereBarFive, AtmosphereBarSix, AtmosphereBarSeven, AtmosphereBarEight],
             RouteFlowPath,
             RouteBeaconOne,
             RouteBeaconTwo,
@@ -270,13 +272,19 @@ public partial class MainWindow : Window
             ReconcileSharingStateWithB1();
             if (sharingRouteState == SharingRouteState.Sharing && sharingBusStatus.IsMainInputShared)
             {
-                motionController.PlayAudioLevelPulse(Math.Clamp(sharingBusStatus.B1Level * 100f, 0f, 100f));
+                var b1Level = Math.Clamp(sharingBusStatus.B1Level * 100f, 0f, 100f);
+                motionController.PlayAudioLevelPulse(b1Level);
+            }
+            else
+            {
+                motionController.SetAtmosphereLevel(0);
             }
             UpdateRoutingSetupState();
         }
         catch
         {
             sharingBusStatus = null;
+            motionController.SetAtmosphereLevel(0);
             UpdateRoutingSetupState();
         }
     }
@@ -646,6 +654,18 @@ public partial class MainWindow : Window
         {
             HealthItems.Add(HealthChip.From(item));
         }
+
+        var allReady = items.All(item => item.State == HealthState.Ready);
+        HealthSummaryText.Text = allReady ? "系统已就绪" : "需要检查";
+        HealthSummaryDot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+            allReady ? "#1DBE86" : "#E58A2B"));
+    }
+
+    private void HealthSummaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var isExpanded = HealthDetailsPanel.Visibility == Visibility.Visible;
+        HealthDetailsPanel.Visibility = isExpanded ? Visibility.Collapsed : Visibility.Visible;
+        HealthSummaryChevron.Text = isExpanded ? "⌄" : "⌃";
     }
 
     private string GetB1StatusText()
