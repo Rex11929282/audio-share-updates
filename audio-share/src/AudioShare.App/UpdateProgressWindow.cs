@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.ComponentModel;
+using System.Windows.Threading;
 
 namespace AudioShare.App;
 
@@ -62,6 +63,12 @@ public sealed class UpdateProgressWindow : Window
         progressBar.Value = progress.Percentage ?? 0;
         messageText.Text = progress.Message;
         percentageText.Text = progress.Percentage is int percentage ? $"{percentage}%" : string.Empty;
+    }
+
+    public async Task UpdateAndRenderAsync(UpdateProgress progress)
+    {
+        Update(progress);
+        await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
     }
 
     private void UpdateProgressWindow_Closing(object? sender, CancelEventArgs e) =>

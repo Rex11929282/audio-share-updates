@@ -240,6 +240,52 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
+    public async Task DownloadAndStageAsync_WaitsForExtractingProgressBeforeExtractingPackage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var executablePath = Path.Combine(root, "installed", "AudioShare.App.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+            await File.WriteAllTextAsync(executablePath, "old");
+            using var client = CreatePackageClient(CreatePackage(includeRouterHelper: true));
+            var service = new UpdateService(client, executablePath);
+            var extractingReported = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowExtraction = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 1),
+                new Uri("https://example.com/AudioShare-win-x64.zip"),
+                new Uri("https://example.com/AudioShare-win-x64.zip.sha256"));
+
+            Task ReportProgressAsync(UpdateProgress progress)
+            {
+                if (progress.Stage != UpdateStage.Extracting)
+                {
+                    return Task.CompletedTask;
+                }
+
+                extractingReported.TrySetResult();
+                return allowExtraction.Task;
+            }
+
+            var stagingTask = service.DownloadAndStageAsync(update, ReportProgressAsync);
+            await extractingReported.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.False(stagingTask.IsCompleted);
+
+            allowExtraction.SetResult();
+            var staged = await stagingTask;
+            Assert.True(File.Exists(Path.Combine(staged.ExtractedDirectory, "AudioShare.App.exe")));
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task DownloadAndStageAsync_StagesPackageWithUnknownContentLength()
     {
         var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));

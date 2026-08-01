@@ -48,16 +48,29 @@ public sealed class UpdateService
         return ReleaseUpdateParser.TryParseNewerRelease(releaseJson, CurrentVersion);
     }
 
-    public async Task<StagedUpdate> DownloadAndStageAsync(ReleaseUpdate update, CancellationToken cancellationToken = default)
-    {
-        return await DownloadAndStageAsync(update, null, cancellationToken);
-    }
+    public Task<StagedUpdate> DownloadAndStageAsync(ReleaseUpdate update, CancellationToken cancellationToken = default) =>
+        DownloadAndStageAsync(update, (IProgress<UpdateProgress>?)null, cancellationToken);
+
+    public Task<StagedUpdate> DownloadAndStageAsync(
+        ReleaseUpdate update,
+        IProgress<UpdateProgress>? progress,
+        CancellationToken cancellationToken = default) =>
+        DownloadAndStageAsync(
+            update,
+            stage =>
+            {
+                progress?.Report(stage);
+                return Task.CompletedTask;
+            },
+            cancellationToken);
 
     public async Task<StagedUpdate> DownloadAndStageAsync(
         ReleaseUpdate update,
-        IProgress<UpdateProgress>? progress,
+        Func<UpdateProgress, Task> reportProgressAsync,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(reportProgressAsync);
+
         var executablePath = this.executablePath ?? Environment.ProcessPath ??
             throw new InvalidOperationException("找不到当前程序文件。");
         var applicationDirectory = Path.GetDirectoryName(executablePath) ?? throw new InvalidOperationException("找不到程序文件夹。");
@@ -72,23 +85,24 @@ public sealed class UpdateService
         {
             var packagePath = Path.Combine(updateDirectory, ReleaseUpdateParser.PackageAssetName);
             var checksumPath = Path.Combine(updateDirectory, ReleaseUpdateParser.ChecksumAssetName);
+            var downloadProgress = new Progress<UpdateProgress>(stage => _ = reportProgressAsync(stage));
 
             using (var ownedClient = client is null ? CreateClient() : null)
             {
                 var httpClient = ownedClient ?? client!;
-                await DownloadPackageAsync(httpClient, update.AssetUrl, packagePath, progress, cancellationToken);
+                await DownloadPackageAsync(httpClient, update.AssetUrl, packagePath, downloadProgress, cancellationToken);
                 await File.WriteAllBytesAsync(checksumPath, await httpClient.GetByteArrayAsync(update.Sha256Url, cancellationToken), cancellationToken);
             }
 
-            progress?.Report(new UpdateProgress(UpdateStage.Verifying, "Verifying update", null));
+            await reportProgressAsync(new UpdateProgress(UpdateStage.Verifying, "Verifying update", null));
             if (!HasMatchingChecksum(packagePath, await File.ReadAllTextAsync(checksumPath, cancellationToken)))
             {
                 throw new InvalidDataException("更新文件的 SHA-256 验证失败。");
             }
 
             var extractedDirectory = Path.Combine(updateDirectory, "extracted");
-            progress?.Report(new UpdateProgress(UpdateStage.Extracting, "Extracting update", null));
-            ZipFile.ExtractToDirectory(packagePath, extractedDirectory);
+            await reportProgressAsync(new UpdateProgress(UpdateStage.Extracting, "Extracting update", null));
+            await Task.Run(() => ZipFile.ExtractToDirectory(packagePath, extractedDirectory), cancellationToken);
 
             var requiredFiles = new[]
             {
@@ -102,7 +116,7 @@ public sealed class UpdateService
                 throw new InvalidDataException("更新压缩包未包含预期的程序、授权说明或路由组件。");
             }
 
-            progress?.Report(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
+            await reportProgressAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
             return new StagedUpdate(updateDirectory, extractedDirectory, executablePath);
         }
         catch

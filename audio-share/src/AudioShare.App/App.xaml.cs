@@ -52,6 +52,21 @@ public partial class App : Application
 
         isCheckingForUpdates = true;
         UpdateProgressWindow? progressWindow = null;
+        var ownerWasEnabled = owner.IsEnabled;
+        System.ComponentModel.CancelEventHandler? ownerClosingHandler = null;
+        var restartStarted = false;
+
+        void ReleaseOwner()
+        {
+            if (ownerClosingHandler is not null)
+            {
+                owner.Closing -= ownerClosingHandler;
+                ownerClosingHandler = null;
+            }
+
+            owner.IsEnabled = ownerWasEnabled;
+        }
+
         try
         {
             var update = availableUpdate ?? await updateService.CheckForUpdateAsync();
@@ -69,18 +84,26 @@ public partial class App : Application
             }
 
             progressWindow = new UpdateProgressWindow(owner);
+            ownerClosingHandler = (_, e) => e.Cancel = true;
+            owner.Closing += ownerClosingHandler;
+            owner.IsEnabled = false;
             progressWindow.Show();
-            stagedUpdate = await updateService.DownloadAndStageAsync(
+            await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.Downloading, "正在准备更新", null));
+            var updateToRestart = await updateService.DownloadAndStageAsync(
                 update,
-                new Progress<UpdateProgress>(progressWindow.Update));
-            progressWindow.Update(new UpdateProgress(UpdateStage.ReadyToRestart, "正在重新启动 FlowCast", 100));
+                progressWindow.UpdateAndRenderAsync);
+            await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "正在重新启动 FlowCast", 100));
+            updateService.BeginStagedReplacementAndRestart(updateToRestart);
+            stagedUpdate = updateToRestart;
+            restartStarted = true;
+            ReleaseOwner();
             progressWindow.CloseFromApplication();
-            updateService.BeginStagedReplacementAndRestart(stagedUpdate);
             owner.Close();
         }
         catch (Exception exception)
         {
             progressWindow?.CloseFromApplication();
+            ReleaseOwner();
             MessageBox.Show(
                 owner,
                 $"更新失败，未替换当前程序。{exception.Message}",
@@ -90,6 +113,11 @@ public partial class App : Application
         }
         finally
         {
+            if (!restartStarted)
+            {
+                ReleaseOwner();
+            }
+
             isCheckingForUpdates = false;
         }
     }
