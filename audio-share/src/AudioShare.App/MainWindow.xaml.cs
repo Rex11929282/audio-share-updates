@@ -47,7 +47,6 @@ public partial class MainWindow : Window
     private IReadOnlyList<AudioSession> activeSessions = [];
     private string? inputDeviceId;
     private string? auxDeviceId;
-    private string? lastTechnicalError;
     private string experimentalRoutingStatus = "正在检查音频路由组件和输出设备。";
     private bool isRefreshing;
     private bool isRoutingOperation;
@@ -78,6 +77,7 @@ public partial class MainWindow : Window
             this,
             LogoMark,
             LaunchSheen,
+            LaunchOverlay,
             TopStatusCard,
             StatusPulse,
             B1MeterFill,
@@ -176,9 +176,8 @@ public partial class MainWindow : Window
 
                 ErrorPanel.Visibility = Visibility.Collapsed;
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                RecordTechnicalError(exception);
                 experimentalRoutingStatus = "关闭前无法确认声音已回到只自己听，因此已取消关闭。";
                 ShowError("请先点击“停止分享，只自己听”，确认完成后再关闭 FlowCast。", null);
                 return;
@@ -360,19 +359,6 @@ public partial class MainWindow : Window
         preferencesStore.Save(preferences);
         motionController.SetReduceMotion(preferences.ReduceMotion);
         await RefreshApplicationsOnlyAsync();
-    }
-
-    private async void CopyDiagnosticsButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Clipboard.SetText(await BuildDiagnosticsReportAsync());
-            AddActivity("已复制诊断信息。");
-        }
-        catch (Exception exception)
-        {
-            ShowError("无法复制诊断信息。", exception);
-        }
     }
 
     private async void UpdateButton_Click(object sender, RoutedEventArgs e) =>
@@ -584,7 +570,6 @@ public partial class MainWindow : Window
     {
         var selected = GetSelectedSessions();
         motionController.SetRouteActive(sharingRouteState == SharingRouteState.Sharing);
-        SetupSelectedButton.IsEnabled = voicemeeterBananaInstalled && selected.Count > 0;
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
         B1StatusText.Text = GetB1StatusText();
@@ -1077,7 +1062,6 @@ public partial class MainWindow : Window
 
     private void SetExperimentalRoutingUnavailable(string reason, Exception? exception = null)
     {
-        RecordTechnicalError(exception);
         experimentalRoutingAvailable = false;
         inputDeviceId = null;
         auxDeviceId = null;
@@ -1150,10 +1134,9 @@ public partial class MainWindow : Window
             status = voicemeeterSharingBusService.GetStatus();
             sharingBusStatus = status;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             requiresAttention = true;
-            RecordTechnicalError(exception);
             experimentalRoutingStatus = "暂时无法确认 B1 是否已关闭。请再点一次“停止分享”。";
             ShowError("停止分享后无法确认 B1 已关闭。请重试“停止分享”。", null);
             return false;
@@ -1348,49 +1331,6 @@ public partial class MainWindow : Window
         UpdateRoutingSetupState();
     }
 
-    private async Task<string> BuildDiagnosticsReportAsync()
-    {
-        var lines = new List<string>
-        {
-            "FlowCast 诊断报告",
-            $"时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-            $"Banana：{(voicemeeterBananaInstalled ? "已检测到" : "未检测到")}",
-            $"状态：{FlowCastStatusText.Text}",
-            $"Input：{inputDeviceId ?? "未检测到"}",
-            $"AUX：{auxDeviceId ?? "未检测到"}",
-            "音频程序：",
-        };
-
-        if (!string.IsNullOrWhiteSpace(lastTechnicalError))
-        {
-            lines.Add($"最近技术信息：{lastTechnicalError}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(UpdateService.LastUpdateError))
-        {
-            lines.Add($"最近更新信息：{UpdateService.LastUpdateError}");
-        }
-
-        foreach (var session in GetRoutableActiveSessions())
-        {
-            try
-            {
-                var route = await routingHelper.GetRouteAsync(
-                    session.ProcessId,
-                    session.ProcessStartUtcTicks,
-                    session.ProcessName,
-                    lifetimeCancellation.Token);
-                lines.Add($"- {session.DisplayName} ({session.ProcessName}, PID {session.ProcessId}): {SharingRouteState.Classify(route, inputDeviceId, auxDeviceId) switch { var state when state == SharingRouteState.Sharing => "分享", var state when state == SharingRouteState.LocalOnly => "仅本机", _ => "未确认" }}");
-            }
-            catch
-            {
-                lines.Add($"- {session.DisplayName} ({session.ProcessName}, PID {session.ProcessId}): 无法读取路由");
-            }
-        }
-
-        return string.Join(Environment.NewLine, lines);
-    }
-
     private void AddActivity(string message)
     {
         activityLog.Add($"{DateTime.Now:HH:mm} {message}");
@@ -1545,18 +1485,10 @@ public partial class MainWindow : Window
 
     private void SetupSelectedButton_Click(object sender, RoutedEventArgs e)
     {
-        var selected = GetSelectedSessions();
-        if (selected.Count == 0)
-        {
-            UpdateRoutingSetupState();
-            return;
-        }
-
         try
         {
             VolumeMixerLauncher.Open();
             ErrorPanel.Visibility = Visibility.Collapsed;
-            InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         }
         catch (Exception exception)
         {
@@ -1566,17 +1498,8 @@ public partial class MainWindow : Window
 
     private void ShowError(string message, Exception? exception)
     {
-        RecordTechnicalError(exception);
-        ErrorText.Text = $"{message}\n下一步：请点击“刷新”后再试。需要帮助时，点击“诊断”复制信息。";
+        ErrorText.Text = $"{message}\n下一步：请点击“刷新”后再试；如果仍然失败，请关闭并重新打开 FlowCast。";
         ErrorPanel.Visibility = Visibility.Visible;
-    }
-
-    private void RecordTechnicalError(Exception? exception)
-    {
-        if (exception is not null)
-        {
-            lastTechnicalError = exception.ToString();
-        }
     }
 }
 

@@ -101,7 +101,7 @@ public partial class App : Application
             ReleaseOwner();
             MessageBox.Show(
                 owner,
-                "这次更新没有完成，FlowCast 仍会使用当前版本。\n\n下一步：请关闭其他 FlowCast 窗口后重试；如果仍然失败，请打开主窗口的“诊断”复制信息。",
+                "这次更新没有完成，FlowCast 仍会使用当前版本。\n\n下一步：请关闭其他 FlowCast 窗口后重试；如果仍然失败，请重新打开 FlowCast 后再试。",
                 "FlowCast 更新",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

@@ -11,6 +11,7 @@ internal sealed class MotionController
     private readonly Window owner;
     private readonly FrameworkElement logo;
     private readonly FrameworkElement launchSheen;
+    private readonly FrameworkElement launchOverlay;
     private readonly FrameworkElement topCard;
     private readonly FrameworkElement statusPulse;
     private readonly FrameworkElement b1Fill;
@@ -32,6 +33,7 @@ internal sealed class MotionController
         Window owner,
         FrameworkElement logo,
         FrameworkElement launchSheen,
+        FrameworkElement launchOverlay,
         FrameworkElement topCard,
         FrameworkElement statusPulse,
         FrameworkElement b1Fill,
@@ -47,6 +49,7 @@ internal sealed class MotionController
         this.owner = owner;
         this.logo = logo;
         this.launchSheen = launchSheen;
+        this.launchOverlay = launchOverlay;
         this.topCard = topCard;
         this.statusPulse = statusPulse;
         this.b1Fill = b1Fill;
@@ -83,6 +86,7 @@ internal sealed class MotionController
         PlayEntrance(logo, TimeSpan.Zero, TimeSpan.FromMilliseconds(450), 12, 0.94);
         PlayEntrance(topCard, TimeSpan.FromMilliseconds(120), TimeSpan.FromMilliseconds(620), 16, 0.98);
         PlayEntrance(listPanel, TimeSpan.FromMilliseconds(230), TimeSpan.FromMilliseconds(670), 18, 0.985);
+        PlayLaunchOverlay();
         PlayLaunchSheen();
         PlayAtmosphereEntrance();
     }
@@ -311,6 +315,16 @@ internal sealed class MotionController
         Start(launchSheen, storyboard, () => SetVisual(launchSheen, 0, 0, 0, 1));
     }
 
+    private void PlayLaunchOverlay()
+    {
+        SetVisual(launchOverlay, 1, 0, 0, 1);
+        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 1, TimeSpan.FromMilliseconds(1950), TimeSpan.Zero, easing);
+        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(1050), TimeSpan.FromMilliseconds(1950), easing);
+        Start(launchOverlay, storyboard, () => SetVisual(launchOverlay, 0, 0, 0, 1));
+    }
+
     private Storyboard CreateTransformStoryboard(
         FrameworkElement target,
         TimeSpan duration,
@@ -375,6 +389,7 @@ internal sealed class MotionController
         StopRunningStoryboards();
         SetVisual(logo, 1, 0, 0, 1);
         SetVisual(launchSheen, 0, 0, 0, 1);
+        SetVisual(launchOverlay, 0, 0, 0, 1);
         SetVisual(topCard, 1, 0, 0, 1);
         SetVisual(statusPulse, 1, 0, 0, 1);
         SetVisual(b1Fill, 1, 0, 0, 1);

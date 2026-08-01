@@ -3,12 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="FlowCast - 音乐分享"
         Icon="/Assets/flowcast-logo.ico"
-        Width="1280"
-        Height="700"
-        MinWidth="1280"
-        MaxWidth="1280"
-        MinHeight="700"
-        MaxHeight="700"
+        Width="1500"
+        Height="860"
+        MinWidth="1500"
+        MaxWidth="1500"
+        MinHeight="860"
+        MaxHeight="860"
         ResizeMode="CanMinimize"
         Background="#F4F8FC"
         FontFamily="Microsoft YaHei UI"
@@ -25,6 +25,7 @@
             <Setter Property="Effect" Value="{StaticResource SoftShadow}" />
         </Style>
         <Style x:Key="UtilityButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Padding" Value="13,8" />
             <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="Background" Value="#A8FFFFFF" />
@@ -70,6 +71,7 @@
             <Setter Property="BorderBrush" Value="#FF9697" />
         </Style>
         <Style x:Key="ProgramCheckBox" TargetType="CheckBox">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Width" Value="24" />
             <Setter Property="Height" Value="24" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -157,7 +159,6 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Style="{StaticResource UtilityButton}" Click="SettingsButton_Click" Content="设置" />
                     <Button Style="{StaticResource UtilityButton}" Click="TutorialButton_Click" Content="教程" />
-                    <Button Style="{StaticResource UtilityButton}" Click="CopyDiagnosticsButton_Click" Content="诊断" />
                     <Button x:Name="UpdateButton" Style="{StaticResource UtilityButton}" Visibility="Collapsed" Click="UpdateButton_Click" Content="更新" />
                     <Button x:Name="RefreshButton" Style="{StaticResource UtilityButton}" Margin="0" Click="RefreshButton_Click" Content="刷新" />
                 </StackPanel>
@@ -226,7 +227,7 @@
                 </Grid>
             </Border>
 
-            <Border x:Name="ApplicationListPanel" Grid.Row="2" Style="{StaticResource GlassCard}" Padding="22" MinHeight="260">
+            <Border x:Name="ApplicationListPanel" Grid.Row="2" Style="{StaticResource GlassCard}" Padding="22" MinHeight="390">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -344,7 +345,7 @@
                             <TextBlock x:Name="ExperimentalRoutingStatusText" Foreground="#426985" TextWrapping="Wrap" Text="正在检查音频路由..." />
                             <TextBlock x:Name="InstructionText" Visibility="Collapsed" />
                         </StackPanel>
-                        <Button x:Name="SetupSelectedButton" Grid.Column="1" Style="{StaticResource UtilityButton}" IsEnabled="False" Click="SetupSelectedButton_Click" Content="打开混音器" />
+                        <Button x:Name="SetupSelectedButton" Grid.Column="1" Style="{StaticResource UtilityButton}" Click="SetupSelectedButton_Click" Content="打开混音器" />
                         <Button x:Name="ApplyRoutingButton" Grid.Column="2" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" IsEnabled="False" Click="ApplyRoutingButton_Click" Content="开始分享" />
                         <Button x:Name="ScheduleStopButton" Grid.Column="3" Style="{StaticResource UtilityButton}" Margin="0" Click="ScheduleStopButton_Click" Content="定时" />
                     </Grid>
@@ -384,5 +385,18 @@
                 </Border>
             </StackPanel>
         </Grid>
+
+        <Border x:Name="LaunchOverlay" Panel.ZIndex="20" Background="#F4F8FC" Opacity="0" IsHitTestVisible="False">
+            <Grid>
+                <Ellipse Width="560" Height="560" Fill="#B6EDF5" Opacity="0.32" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Width="118" Height="118" HorizontalAlignment="Center" Background="#EFFFFFFF" CornerRadius="38" Effect="{StaticResource SoftShadow}">
+                        <Image Margin="22" Source="/Assets/flowcast-logo.png" Stretch="Uniform" />
+                    </Border>
+                    <TextBlock Margin="0,22,0,0" HorizontalAlignment="Center" FontSize="31" FontWeight="SemiBold" Foreground="#173452" Text="FlowCast" />
+                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="15" Foreground="#5F7891" Text="音乐分享" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
