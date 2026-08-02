@@ -62,6 +62,7 @@ public partial class MainWindow : Window
     private bool isClosing;
     private bool isUpdateStaging;
     private bool exitRequested;
+    private bool launchPlayed;
     private bool closeAfterRouting;
     private bool wasMinimized;
     private bool experimentalRoutingAvailable;
@@ -87,9 +88,15 @@ public partial class MainWindow : Window
         preferences = preferencesStore.Load();
         motionController = new MotionController(
             this,
+            MainContent,
             LogoMark,
             LaunchSheen,
             LaunchOverlay,
+            LaunchBrand,
+            LaunchRingOuter,
+            LaunchRingInner,
+            [LaunchWaveOne, LaunchWaveTwo, LaunchWaveThree, LaunchWaveFour, LaunchWaveFive],
+            LaunchStatusText,
             TopStatusCard,
             StatusPulse,
             B1MeterFill,
@@ -105,6 +112,7 @@ public partial class MainWindow : Window
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
 
         Loaded += MainWindow_Loaded;
+        ContentRendered += MainWindow_ContentRendered;
         Closing += MainWindow_Closing;
         StateChanged += MainWindow_StateChanged;
         refreshTimer.Tick += RefreshTimer_Tick;
@@ -137,10 +145,20 @@ public partial class MainWindow : Window
     {
         await StartVoicemeeterBananaIfInstalledAsync();
         await RefreshAsync();
-        motionController.PlayLaunch();
         refreshTimer.Start();
         signalTimer.Start();
         _ = ResetStartupToLocalOnlyAfterWindowIsReadyAsync();
+    }
+
+    private void MainWindow_ContentRendered(object? sender, EventArgs e)
+    {
+        if (launchPlayed)
+        {
+            return;
+        }
+
+        launchPlayed = true;
+        motionController.PlayLaunch();
     }
 
     private async Task ResetStartupToLocalOnlyAfterWindowIsReadyAsync()
