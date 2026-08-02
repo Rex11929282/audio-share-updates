@@ -15,10 +15,20 @@ public sealed class LyricsContractsTests
     }
 
     [Fact]
-    public void ConnectionState_ContainsOnlyTheApprovedStates()
+    public void IslandMode_ContainsOnlyTheApprovedModes()
     {
         Assert.Equal(
-            ["Searching", "Unavailable", "Connected", "Disconnected"],
-            Enum.GetNames<ConnectionState>());
+            ["Idle", "Resolving", "Playing", "Paused", "NoLyrics", "Unavailable"],
+            Enum.GetNames<IslandMode>());
+    }
+
+    [Fact]
+    public void IslandSnapshot_PreservesRealLyricAndSource()
+    {
+        var line = new LyricLine("真實歌詞", 1250, 4800);
+        var snapshot = new IslandSnapshot(IslandMode.Playing, "真實歌詞", line, LyricSource.LocalNetEase);
+
+        Assert.Same(line, snapshot.LyricLine);
+        Assert.Equal(LyricSource.LocalNetEase, snapshot.Source);
     }
 }

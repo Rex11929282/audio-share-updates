@@ -7,39 +7,51 @@ namespace AudioShare.Core.Tests;
 public sealed class LyricsOverlayPresenterTests
 {
     [Fact]
-    public void ConnectedWithoutALine_UsesTheHonestWaitingCopy()
+    public void StartsInTheHonestIdleState()
     {
         var presenter = new LyricsOverlayPresenter();
-        presenter.SetConnectionState(ConnectionState.Connected);
 
         using var json = JsonDocument.Parse(presenter.GetSnapshotJson());
-        Assert.Equal("connected", json.RootElement.GetProperty("connectionState").GetString());
-        Assert.Equal("已連線，等待歌詞", json.RootElement.GetProperty("displayText").GetString());
+        Assert.Equal("idle", json.RootElement.GetProperty("mode").GetString());
+        Assert.Equal("等待播放", json.RootElement.GetProperty("displayText").GetString());
+        Assert.Equal("none", json.RootElement.GetProperty("source").GetString());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("lyricLine").ValueKind);
     }
 
     [Fact]
-    public void Disconnect_ClearsAPreviouslyReceivedLine()
+    public void Show_PausedLyric_SerializesTheIslandSnapshot()
     {
         var presenter = new LyricsOverlayPresenter();
-        presenter.SetConnectionState(ConnectionState.Connected);
-        presenter.ShowLyricLine(new LyricLine("只可顯示收到的文字", 1000, null));
-
-        presenter.SetConnectionState(ConnectionState.Disconnected);
+        presenter.Show(new IslandSnapshot(
+            IslandMode.Paused,
+            "只可顯示收到的文字",
+            new LyricLine("只可顯示收到的文字", 1000, 2400),
+            LyricSource.RemoteRadmin));
 
         using var json = JsonDocument.Parse(presenter.GetSnapshotJson());
-        Assert.Equal("與 FlowCast 的連線已中斷，正在重新連線", json.RootElement.GetProperty("displayText").GetString());
-        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("lyricLine").ValueKind);
+        Assert.Equal("paused", json.RootElement.GetProperty("mode").GetString());
+        Assert.Equal("remoteRadmin", json.RootElement.GetProperty("source").GetString());
+        Assert.Equal(
+            "只可顯示收到的文字",
+            json.RootElement.GetProperty("lyricLine").GetProperty("text").GetString());
     }
 
-    [Fact]
-    public void WhitespaceLine_ReturnsToWaitingCopy()
+    [Theory]
+    [InlineData(IslandMode.Idle, "等待播放")]
+    [InlineData(IslandMode.Resolving, "正在取得歌詞")]
+    [InlineData(IslandMode.NoLyrics, "這首歌沒有歌詞")]
+    [InlineData(IslandMode.Unavailable, "暫時無法取得歌詞")]
+    public void Show_StatusMode_DoesNotExposeALyric(IslandMode mode, string text)
     {
         var presenter = new LyricsOverlayPresenter();
-        presenter.SetConnectionState(ConnectionState.Connected);
-        presenter.ShowLyricLine(new LyricLine("   ", 0, null));
+        presenter.Show(new IslandSnapshot(
+            mode,
+            $"  {text}  ",
+            new LyricLine("不可顯示", 0, null),
+            LyricSource.LocalNetEase));
 
         using var json = JsonDocument.Parse(presenter.GetSnapshotJson());
-        Assert.Equal("已連線，等待歌詞", json.RootElement.GetProperty("displayText").GetString());
+        Assert.Equal(text, json.RootElement.GetProperty("displayText").GetString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("lyricLine").ValueKind);
     }
 }
