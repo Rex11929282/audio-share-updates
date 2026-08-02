@@ -24,8 +24,11 @@ public sealed class FlowCastLyricsStartupTests
         Assert.Equal("True", root.Attribute("Topmost")?.Value);
         Assert.Equal("True", root.Attribute("AllowsTransparency")?.Value);
         Assert.Equal("680", root.Attribute("Width")?.Value);
-        Assert.Equal("150", root.Attribute("Height")?.Value);
+        Assert.Equal("92", root.Attribute("Height")?.Value);
         Assert.Contains("WebView2CompositionControl", xaml);
+        Assert.Contains("PreviewMouseLeftButtonDown", xaml);
+        Assert.DoesNotContain("CloseButton", xaml);
+        Assert.DoesNotContain("DragHandle", xaml);
         Assert.DoesNotContain("真實歌詞", xaml);
     }
 

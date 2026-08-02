@@ -6,7 +6,6 @@ interface LyricsOverlayProps {
 }
 
 export function LyricsOverlay({ state }: LyricsOverlayProps) {
-  const isConnected = state.connectionState === 'connected'
   const hasLyric = state.lyricLine !== null
 
   return (
@@ -21,35 +20,17 @@ export function LyricsOverlay({ state }: LyricsOverlayProps) {
         saturation={145}
         aberrationIntensity={2}
         elasticity={0.32}
-        cornerRadius={34}
+        cornerRadius={44}
         padding="0"
         style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
-          width: 'calc(100% - 16px)',
-          height: 'calc(100% - 16px)',
+          width: 'calc(100% - 8px)',
+          height: 'calc(100% - 8px)',
         }}
       >
         <section className="glass-content">
-          <header className="brand-row">
-            <div className="brand-lockup">
-              <span className="flowcast-mark" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <i />
-                <i />
-              </span>
-              <span className="brand-name">FlowCast</span>
-              <span className="brand-product">Lyrics</span>
-            </div>
-            <div className="connection-chip">
-              <span className="connection-dot" aria-hidden="true" />
-              <span>{isConnected ? 'Radmin 已連線' : 'Radmin VPN'}</span>
-            </div>
-          </header>
-
           <div className={`message ${hasLyric ? 'message--lyric' : 'message--status'}`}>
             <p data-testid={hasLyric ? 'lyric-line' : undefined}>{state.displayText}</p>
           </div>

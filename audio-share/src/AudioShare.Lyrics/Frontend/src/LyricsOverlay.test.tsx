@@ -50,4 +50,20 @@ describe('LyricsOverlay', () => {
     expect(container.querySelector('[data-testid="liquid-glass"]')).toHaveClass('lyrics-glass')
     expect(container.querySelector('[data-testid="liquid-glass"]')).toHaveAttribute('data-padding', '0')
   })
+
+  it('renders only the lyric capsule without window chrome', () => {
+    const { container } = render(
+      <LyricsOverlay
+        state={{
+          connectionState: 'connected',
+          displayText: '已連線，等待歌詞',
+          lyricLine: null,
+        }}
+      />,
+    )
+
+    expect(container.querySelector('.brand-row')).not.toBeInTheDocument()
+    expect(container.querySelector('.connection-chip')).not.toBeInTheDocument()
+    expect(container.querySelector('.glass-content')).toBeInTheDocument()
+  })
 })

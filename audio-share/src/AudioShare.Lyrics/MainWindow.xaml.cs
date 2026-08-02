@@ -122,15 +122,13 @@ public partial class MainWindow : Window
         FallbackStatusText.Text = presenter.DisplayText;
     }
 
-    private void DragHandle_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void WindowSurface_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.LeftButton == MouseButtonState.Pressed)
         {
             DragMove();
         }
     }
-
-    private void CloseButton_OnClick(object sender, RoutedEventArgs e) => Close();
 
     private async void MainWindow_OnClosed(object? sender, EventArgs e)
     {

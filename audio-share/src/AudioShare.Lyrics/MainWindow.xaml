@@ -3,11 +3,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="FlowCast Lyrics"
-        Height="150"
+        Height="92"
         Width="680"
-        MinHeight="150"
+        MinHeight="92"
         MinWidth="680"
-        MaxHeight="150"
+        MaxHeight="92"
         MaxWidth="680"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -16,102 +16,35 @@
         ShowInTaskbar="True"
         Background="Transparent"
         WindowStartupLocation="CenterScreen">
-    <Window.Resources>
-        <Style x:Key="OverlayButton" TargetType="Button">
-            <Setter Property="Width" Value="26" />
-            <Setter Property="Height" Value="26" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="#B8FFFFFF" />
-            <Setter Property="Background" Value="#68FFFFFF" />
-            <Setter Property="Foreground" Value="#5B27445A" />
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="ButtonChrome"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="13">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonChrome" Property="Background" Value="#E8FFFFFF" />
-                                <Setter Property="Foreground" Value="#B3223B50" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-
     <Border x:Name="WindowSurface"
             Margin="1"
             Background="#F2EFFAFF"
             BorderBrush="#D8FFFFFF"
             BorderThickness="1"
-            CornerRadius="37">
+            CornerRadius="46"
+            PreviewMouseLeftButtonDown="WindowSurface_OnPreviewMouseLeftButtonDown">
         <Grid ClipToBounds="True">
             <wv2:WebView2CompositionControl x:Name="OverlayWebView"
                                             Margin="0"
                                             Visibility="Hidden" />
 
             <Border x:Name="NativeFallback"
-                    Margin="7"
+                    Margin="4"
                     Background="#ECF3FBFF"
                     BorderBrush="#C8FFFFFF"
                     BorderThickness="1"
-                    CornerRadius="31">
-                <Grid Margin="28,19,28,18">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Foreground="#159DB4" FontSize="15" FontWeight="Bold" Text="⌁" />
-                        <TextBlock Margin="7,0,0,0" Foreground="#17384F" FontSize="15" FontWeight="SemiBold" Text="FlowCast" />
-                        <TextBlock Margin="6,1,0,0" Foreground="#577587" FontSize="13" Text="Lyrics" />
-                    </StackPanel>
-                    <TextBlock x:Name="FallbackStatusText"
-                               Grid.Row="1"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Foreground="#17384F"
-                               FontFamily="Segoe UI Variable, Segoe UI"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               Text="正在尋找 FlowCast"
-                               TextTrimming="CharacterEllipsis" />
-                </Grid>
+                    CornerRadius="42">
+                <TextBlock x:Name="FallbackStatusText"
+                           Margin="30,0"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="#17384F"
+                           FontFamily="Segoe UI Variable, Segoe UI"
+                           FontSize="21"
+                           FontWeight="SemiBold"
+                           Text="正在尋找 FlowCast"
+                           TextTrimming="CharacterEllipsis" />
             </Border>
-
-            <Grid x:Name="WindowControls">
-                <Border x:Name="DragHandle"
-                        Height="31"
-                        VerticalAlignment="Top"
-                        Background="Transparent"
-                        Cursor="SizeAll"
-                        MouseLeftButtonDown="DragHandle_OnMouseLeftButtonDown">
-                    <Border Width="44"
-                            Height="4"
-                            VerticalAlignment="Top"
-                            Margin="0,7,0,0"
-                            Background="#4F668496"
-                            CornerRadius="2" />
-                </Border>
-                <Button x:Name="CloseButton"
-                        Margin="0,9,12,0"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Top"
-                        Style="{StaticResource OverlayButton}"
-                        ToolTip="關閉 FlowCast Lyrics"
-                        Click="CloseButton_OnClick"
-                        Content="×" />
-            </Grid>
         </Grid>
     </Border>
 </Window>
