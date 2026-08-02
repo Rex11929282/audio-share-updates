@@ -244,7 +244,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock FontSize="19" FontWeight="SemiBold" Foreground="#203A56" Text="正在播放的程序" />
-                            <TextBlock Margin="0,4,0,0" Foreground="#74879A" Text="勾选后，朋友才会听到该程序。" />
+                            <TextBlock Margin="0,4,0,0" Foreground="#74879A" Text="勾选后，朋友才会听到该程序；分享中可拖动已选程序调整顺序。" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" VerticalAlignment="Top">
                             <Button Style="{StaticResource UtilityButton}" Margin="0" Click="HealthSummaryButton_Click">
@@ -291,7 +291,7 @@
                         </StackPanel>
                     </Grid>
                     <TextBlock x:Name="EmptyStateText" Grid.Row="1" Margin="0,18,0,2" Foreground="#72879A" Text="正在检测音频会话..." />
-                    <ListBox Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding Applications}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox x:Name="ApplicationList" Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding Applications}" AllowDrop="True" ScrollViewer.VerticalScrollBarVisibility="Auto" PreviewMouseLeftButtonDown="ApplicationList_PreviewMouseLeftButtonDown" PreviewMouseMove="ApplicationList_PreviewMouseMove" Drop="ApplicationList_Drop">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Margin="0,5" Padding="14,12" Background="#BFFFFFFF" BorderBrush="#C8DAE8" BorderThickness="1" CornerRadius="16">

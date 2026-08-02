@@ -5,6 +5,21 @@ namespace AudioShare.Core.Tests;
 public sealed class ApplicationRoutePlannerTests
 {
     [Fact]
+    public void Create_AppliesSelectedProgramsInTheirChosenOrder()
+    {
+        var chrome = new AudioSession(1, 1, "chrome.exe", "Chrome", true);
+        var cloudMusic = new AudioSession(2, 2, "cloudmusic.exe", "CloudMusic", true);
+
+        var plan = ApplicationRoutePlanner.Create(
+            [chrome, cloudMusic],
+            [cloudMusic, chrome],
+            "input",
+            "aux");
+
+        Assert.Equal(["cloudmusic.exe", "chrome.exe"], plan.Commands.Select(command => command.ProcessName));
+    }
+
+    [Fact]
     public void Create_SendsSelectedSessionsToInputAndUnselectedSessionsToAux()
     {
         var chrome = new AudioSession(11, 100, "chrome.exe", "Chrome", true);
@@ -46,18 +61,18 @@ public sealed class ApplicationRoutePlannerTests
     }
 
     [Fact]
-    public void Create_DeduplicatesByPidAndSortsCommandsAscending()
+    public void Create_DeduplicatesByPidAndPlacesSelectedCommandsFirst()
     {
         var later = new AudioSession(20, 200, "later.exe", "Later", true);
         var earlier = new AudioSession(10, 100, "earlier.exe", "Earlier", true);
 
         var plan = ApplicationRoutePlanner.Create([later, earlier, later], [later], "input-id", "aux-id");
 
-        Assert.Equal([10, 20], plan.Commands.Select(command => command.ProcessId));
+        Assert.Equal([20, 10], plan.Commands.Select(command => command.ProcessId));
         Assert.Equal(2, plan.Commands.Count);
-        Assert.Equal(100, plan.Commands[0].ProcessStartUtcTicks);
-        Assert.Equal(200, plan.Commands[1].ProcessStartUtcTicks);
-        Assert.Equal("input-id", plan.Commands[1].TargetDeviceId);
+        Assert.Equal(200, plan.Commands[0].ProcessStartUtcTicks);
+        Assert.Equal(100, plan.Commands[1].ProcessStartUtcTicks);
+        Assert.Equal("input-id", plan.Commands[0].TargetDeviceId);
     }
 
     [Theory]

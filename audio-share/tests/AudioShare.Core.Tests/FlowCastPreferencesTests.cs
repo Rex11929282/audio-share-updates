@@ -11,6 +11,12 @@ public sealed class FlowCastPreferencesTests
     }
 
     [Fact]
+    public void Empty_EnablesDisconnectNotificationsByDefault()
+    {
+        Assert.True(FlowCastPreferences.Empty.DisconnectNotificationsEnabled);
+    }
+
+    [Fact]
     public void NormalizesExtensionsBeforePersistingExclusions()
     {
         var preferences = FlowCastPreferences.Empty.Exclude("Wallpaper64.exe");

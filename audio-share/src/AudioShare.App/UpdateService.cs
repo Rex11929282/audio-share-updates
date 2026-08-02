@@ -19,7 +19,7 @@ public sealed record StagedUpdate(
 public sealed class UpdateService
 {
     private const string LatestReleaseUrl = "https://api.github.com/repos/Rex11929282/audio-share-updates/releases/latest";
-    private static readonly Version CurrentVersion = GetCurrentVersion(typeof(UpdateService).Assembly);
+    public static readonly Version CurrentVersion = GetCurrentVersion(typeof(UpdateService).Assembly);
     private readonly HttpClient? client;
     private readonly string? executablePath;
     private readonly string? registeredInstallationDirectory;

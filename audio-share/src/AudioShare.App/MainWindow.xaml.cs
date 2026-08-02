@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AudioShare.Core;
@@ -25,6 +26,10 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "FlowCast",
         "favorites.json");
+    private static readonly string ApplicationOrderPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "FlowCast",
+        "application-order.json");
 
     private readonly IAudioSessionDiscovery discovery = new WasapiAudioSessionDiscovery();
     private readonly RouteCoordinator routeCoordinator = new();
@@ -41,7 +46,9 @@ public partial class MainWindow : Window
     private readonly ShareStopSchedule stopSchedule = new();
     private readonly ShareSession shareSession = new();
     private readonly FavoritePrograms favoritePrograms;
+    private readonly ApplicationOrder applicationOrder;
     private readonly FlowCastPreferencesStore preferencesStore = new();
+    private readonly FlowCastTrayIcon trayIcon;
     private FlowCastPreferences preferences;
     private readonly MotionController motionController;
     private readonly List<string> activityLog = [];
@@ -53,6 +60,7 @@ public partial class MainWindow : Window
     private bool isRoutingOperation;
     private bool isClosing;
     private bool isUpdateStaging;
+    private bool exitRequested;
     private bool closeAfterRouting;
     private bool wasMinimized;
     private bool experimentalRoutingAvailable;
@@ -61,6 +69,7 @@ public partial class MainWindow : Window
     private bool requiresAttention;
     private bool pendingLocalOnlyReset;
     private bool wasAttention;
+    private Point? dragStartPoint;
     private int backgroundRefreshCount;
     private SharingRouteState sharingRouteState = SharingRouteState.Unknown;
     private SharingBusStatus? sharingBusStatus;
@@ -73,6 +82,7 @@ public partial class MainWindow : Window
         routeExecutor = new ApplicationRouteExecutor(routingHelper);
         healthProbe = new FlowCastHealthProbe(routingHelper);
         favoritePrograms = new FavoritePrograms(LoadFavoritePrograms());
+        applicationOrder = new ApplicationOrder(LoadApplicationOrder());
         preferences = preferencesStore.Load();
         motionController = new MotionController(
             this,
@@ -99,6 +109,12 @@ public partial class MainWindow : Window
         refreshTimer.Tick += RefreshTimer_Tick;
         signalTimer.Tick += SignalTimer_Tick;
         scheduleTimer.Tick += ScheduleTimer_Tick;
+        trayIcon = new FlowCastTrayIcon(
+            () => Dispatcher.BeginInvoke(ShowWindowFromTray),
+            () => Dispatcher.BeginInvoke(StartSharingFromTray),
+            () => Dispatcher.BeginInvoke(ToggleMuteFromTray),
+            () => Dispatcher.BeginInvoke(StopSharingFromTray),
+            () => Dispatcher.BeginInvoke(RequestExitFromTray));
     }
 
     public ObservableCollection<AudioApplicationRow> Applications { get; } = [];
@@ -111,6 +127,10 @@ public partial class MainWindow : Window
         UpdateButton.Visibility = isAvailable ? Visibility.Visible : Visibility.Collapsed;
 
     public void SetUpdateStaging(bool isStaging) => isUpdateStaging = isStaging;
+
+    public bool IsSharingActive => shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted;
+
+    public void PrepareForUpdateRestart() => exitRequested = true;
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
@@ -146,6 +166,13 @@ public partial class MainWindow : Window
 
         if (isClosing)
         {
+            return;
+        }
+
+        if (!exitRequested)
+        {
+            e.Cancel = true;
+            Hide();
             return;
         }
 
@@ -204,7 +231,72 @@ public partial class MainWindow : Window
         refreshTimer.Stop();
         signalTimer.Stop();
         scheduleTimer.Stop();
+        trayIcon.Dispose();
         lifetimeCancellation.Cancel();
+    }
+
+    private void ShowWindowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void RequestExitFromTray()
+    {
+        exitRequested = true;
+        ShowWindowFromTray();
+        Close();
+    }
+
+    private void StartSharingFromTray()
+    {
+        if (ApplyRoutingButton.IsEnabled)
+        {
+            ApplyRoutingButton_Click(ApplyRoutingButton, new RoutedEventArgs());
+        }
+    }
+
+    private void ToggleMuteFromTray() => MuteSharingButton_Click(MuteSharingButton, new RoutedEventArgs());
+
+    private async void StopSharingFromTray()
+    {
+        await StopSharingWithResetAsync();
+    }
+
+    public async Task<bool> StopSharingWithResetAsync()
+    {
+        if (!CanStopSharing())
+        {
+            return !IsSharingActive;
+        }
+
+        isRoutingOperation = true;
+        UpdateRoutingSetupState();
+        try
+        {
+            return await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (isClosing)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            SetExperimentalRoutingUnavailable("暂时无法确认是否已停止分享，请重新打开主窗口后再试。", exception);
+            ShowError("FlowCast 还没能确认声音已回到只自己听。", null);
+            return false;
+        }
+        finally
+        {
+            isRoutingOperation = false;
+            if (!isClosing)
+            {
+                await RefreshSharingRouteStateAsync();
+            }
+
+            UpdateRoutingSetupState();
+        }
     }
 
     private async void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -485,7 +577,9 @@ public partial class MainWindow : Window
         var selectedProgramClosed = routeCoordinator.RemoveSelectionsAbsentFrom(sessions);
         Applications.Clear();
 
-        foreach (var session in favoritePrograms.Order(eligibleSessions.Where(session => session.HasAudio)))
+        var audibleSessions = favoritePrograms.Order(eligibleSessions.Where(session => session.HasAudio));
+        applicationOrder.Synchronize(audibleSessions);
+        foreach (var session in applicationOrder.Order(audibleSessions))
         {
             var isProtected = AudioRoutingPolicy.IsProtectedProcess(session.ProcessName);
             Applications.Add(new AudioApplicationRow(
@@ -578,6 +672,7 @@ public partial class MainWindow : Window
     private void UpdateRoutingSetupState()
     {
         var selected = GetSelectedSessions();
+        trayIcon.SetState(shareSession.State);
         motionController.SetRouteActive(shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted);
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
@@ -631,9 +726,8 @@ public partial class MainWindow : Window
     }
 
     private IReadOnlyList<AudioSession> GetSelectedSessions() =>
-        routeCoordinator.GetSelectedSessions(activeSessions)
-            .Where(session => !preferences.IsExcluded(session.ProcessName))
-            .ToArray();
+        applicationOrder.Order(routeCoordinator.GetSelectedSessions(activeSessions)
+            .Where(session => !preferences.IsExcluded(session.ProcessName)));
 
     private IReadOnlyList<AudioSession> GetRoutableActiveSessions() =>
         activeSessions
@@ -1141,7 +1235,10 @@ public partial class MainWindow : Window
         UpdateRoutingSetupState();
     }
 
-    private async Task<bool> StopSharingAndKeepLocalOnlyAsync(CancellationToken token)
+    private async Task<bool> StopSharingAndKeepLocalOnlyAsync(
+        CancellationToken token,
+        bool disconnected = false,
+        string? stopReason = null)
     {
         var wasSharing = shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted;
         if (!voicemeeterBananaInstalled || !experimentalRoutingAvailable ||
@@ -1173,7 +1270,9 @@ public partial class MainWindow : Window
             }
         }
 
-        var routableSessions = preferences.RestoreLocalPlayback ? GetRecoverySessions() : [];
+        var routableSessions = preferences.RestoreLocalPlayback
+            ? applicationOrder.Order(GetRecoverySessions()).Reverse().ToArray()
+            : [];
         var routeableSessions = await GetRouteableSessionsAsync(routableSessions, token);
         var routesVerified = true;
         if (routeableSessions.Count > 0)
@@ -1228,7 +1327,10 @@ public partial class MainWindow : Window
 
         hasOwnedRoutingTransaction = false;
         sharingRouteState = resultingRouteState;
-        shareSession.Stop(DateTimeOffset.Now, "已停止分享。");
+        shareSession.Stop(
+            DateTimeOffset.Now,
+            stopReason ?? "已停止分享。",
+            disconnected);
         foreach (var session in GetRecoverySessions())
         {
             await routeCoordinator.UnshareAsync(session, token);
@@ -1236,15 +1338,21 @@ public partial class MainWindow : Window
 
         UpdateApplications(activeSessions);
 
-        experimentalRoutingStatus = "已停止分享。所有当前检测到的程序只会在本机播放。";
+        experimentalRoutingStatus = disconnected
+            ? stopReason ?? "分享已断开，已恢复为只自己听。"
+            : "已停止分享。所有当前检测到的程序只会在本机播放。";
         requiresAttention = false;
         if (wasSharing && preferences.EndSharingSoundEnabled)
         {
             System.Media.SystemSounds.Asterisk.Play();
         }
+        if (disconnected && preferences.DisconnectNotificationsEnabled)
+        {
+            trayIcon.ShowDisconnect(experimentalRoutingStatus);
+        }
         motionController.PlayLocalOnlyConfirmed();
         stopSchedule.Cancel();
-        AddActivity("已停止分享并取消勾选。");
+        AddActivity(disconnected ? "分享已断开并恢复为只自己听。" : "已停止分享并取消勾选。");
         ErrorPanel.Visibility = Visibility.Collapsed;
         return true;
     }
@@ -1295,15 +1403,34 @@ public partial class MainWindow : Window
 
     private async Task StopSharingForSafetyAsync(string reason)
     {
+        var wasSharing = shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted;
         if (!CanResetToLocalOnly())
         {
             if (hasOwnedRoutingTransaction && experimentalRoutingAvailable &&
                 GetRecoverySessions().Count == 0)
             {
+                if (!SetMainInputSharing(false))
+                {
+                    requiresAttention = true;
+                    experimentalRoutingStatus = reason;
+                    AddActivity(reason);
+                    return;
+                }
+
                 pendingLocalOnlyReset = true;
                 requiresAttention = false;
-                experimentalRoutingStatus = "已检测到分享程序关闭。下次检测到音频时会自动恢复为只自己听。";
+                shareSession.Stop(DateTimeOffset.Now, reason, disconnected: true);
+                experimentalRoutingStatus = reason;
                 AddActivity("分享程序已关闭，等待自动恢复本机播放。");
+                if (wasSharing && preferences.EndSharingSoundEnabled)
+                {
+                    System.Media.SystemSounds.Asterisk.Play();
+                }
+                if (wasSharing && preferences.DisconnectNotificationsEnabled)
+                {
+                    trayIcon.ShowDisconnect(reason);
+                }
+
                 UpdateRoutingSetupState();
                 return;
             }
@@ -1317,7 +1444,7 @@ public partial class MainWindow : Window
         isRoutingOperation = true;
         try
         {
-            if (!await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token))
+            if (!await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token, disconnected: true, stopReason: reason))
             {
                 requiresAttention = true;
                 experimentalRoutingStatus = reason;
@@ -1431,6 +1558,57 @@ public partial class MainWindow : Window
         UpdateApplications(activeSessions);
     }
 
+    private void ApplicationList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) =>
+        dragStartPoint = e.GetPosition(ApplicationList);
+
+    private void ApplicationList_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (dragStartPoint is null || e.LeftButton != MouseButtonState.Pressed ||
+            GetApplicationRow(e.OriginalSource) is not { IsSelected: true } row)
+        {
+            return;
+        }
+
+        var currentPoint = e.GetPosition(ApplicationList);
+        if (Math.Abs(currentPoint.X - dragStartPoint.Value.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(currentPoint.Y - dragStartPoint.Value.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        DragDrop.DoDragDrop(ApplicationList, row, DragDropEffects.Move);
+        dragStartPoint = null;
+    }
+
+    private void ApplicationList_Drop(object sender, DragEventArgs e)
+    {
+        dragStartPoint = null;
+        if (!e.Data.GetDataPresent(typeof(AudioApplicationRow)) ||
+            e.Data.GetData(typeof(AudioApplicationRow)) is not AudioApplicationRow moved ||
+            GetApplicationRow(e.OriginalSource) is not { IsSelected: true } target ||
+            !moved.IsSelected || !applicationOrder.MoveBefore(moved.Session, target.Session))
+        {
+            return;
+        }
+
+        SaveApplicationOrder();
+        UpdateApplications(activeSessions);
+        AddActivity($"已调整 {moved.DisplayName} 的分享顺序。");
+    }
+
+    private static AudioApplicationRow? GetApplicationRow(object originalSource)
+    {
+        for (var current = originalSource as DependencyObject; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is FrameworkElement { DataContext: AudioApplicationRow row })
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
+
     private async void HideProgramButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: AudioApplicationRow row })
@@ -1472,6 +1650,26 @@ public partial class MainWindow : Window
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FavoritesPath)!);
         File.WriteAllText(FavoritesPath, JsonSerializer.Serialize(favoritePrograms.Names));
+    }
+
+    private static IReadOnlyCollection<string> LoadApplicationOrder()
+    {
+        try
+        {
+            return File.Exists(ApplicationOrderPath)
+                ? JsonSerializer.Deserialize<string[]>(File.ReadAllText(ApplicationOrderPath)) ?? []
+                : [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    private void SaveApplicationOrder()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ApplicationOrderPath)!);
+        File.WriteAllText(ApplicationOrderPath, JsonSerializer.Serialize(applicationOrder.ProcessNames));
     }
 
     private async Task<bool> ResetToLocalOnlyAsync(string status, CancellationToken? token = null)

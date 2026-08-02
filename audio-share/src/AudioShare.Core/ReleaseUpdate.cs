@@ -6,7 +6,8 @@ public sealed record ReleaseUpdate(
     Version Version,
     Uri AssetUrl,
     Uri? Sha256Url,
-    string? ExpectedSha256 = null);
+    string? ExpectedSha256 = null,
+    IReadOnlyList<string>? Notes = null);
 
 public static class ReleaseUpdateParser
 {
@@ -33,28 +34,51 @@ public static class ReleaseUpdateParser
 
             var setupUrl = FindAssetUrl(assets, SetupAssetName);
             var setupDigest = FindSha256Digest(assets, SetupAssetName);
+            var notes = ParseNotes(root);
             if (setupUrl is not null && setupDigest is not null)
             {
-                return new ReleaseUpdate(version, setupUrl, null, setupDigest);
+                return new ReleaseUpdate(version, setupUrl, null, setupDigest, notes);
             }
 
             var setupChecksumUrl = FindAssetUrl(assets, SetupChecksumAssetName);
             if (setupUrl is not null && setupChecksumUrl is not null)
             {
-                return new ReleaseUpdate(version, setupUrl, setupChecksumUrl);
+                return new ReleaseUpdate(version, setupUrl, setupChecksumUrl, Notes: notes);
             }
 
             var packageUrl = FindAssetUrl(assets, PackageAssetName);
             var checksumUrl = FindAssetUrl(assets, ChecksumAssetName);
 
             return packageUrl is not null && checksumUrl is not null
-                ? new ReleaseUpdate(version, packageUrl, checksumUrl)
+                ? new ReleaseUpdate(version, packageUrl, checksumUrl, Notes: notes)
                 : null;
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    private static IReadOnlyList<string> ParseNotes(JsonElement root)
+    {
+        if (!root.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.String)
+        {
+            return [];
+        }
+
+        var lines = body.GetString()!
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
+
+        var bulletNotes = lines
+            .Where(line => line.StartsWith('-') || line.StartsWith('*'))
+            .Select(line => line.TrimStart('-', '*', ' '))
+            .ToArray();
+
+        return (bulletNotes.Length > 0 ? bulletNotes : lines)
+            .Take(3)
+            .ToArray();
     }
 
     private static Uri? FindAssetUrl(JsonElement assets, string assetName)

@@ -1,22 +1,23 @@
 using System.Windows;
 using System.Windows.Controls;
+using AudioShare.Core;
 
 namespace AudioShare.App;
 
 public sealed class UpdateAvailableDialog : Window
 {
-    public UpdateAvailableDialog(Window owner, Version version)
+    public UpdateAvailableDialog(Window owner, Version currentVersion, ReleaseUpdate update)
     {
         Owner = owner;
         Title = "FlowCast 更新";
-        Width = 390;
-        Height = 180;
+        Width = 440;
+        Height = 300;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var updateButton = new Button
         {
-            Content = "下载更新",
+            Content = "立即更新",
             IsDefault = true,
             MinWidth = 100,
             Margin = new Thickness(0, 0, 8, 0),
@@ -25,7 +26,7 @@ public sealed class UpdateAvailableDialog : Window
 
         var laterButton = new Button
         {
-            Content = "稍后",
+            Content = "稍后更新",
             IsCancel = true,
             MinWidth = 72,
         };
@@ -37,7 +38,23 @@ public sealed class UpdateAvailableDialog : Window
             {
                 new TextBlock
                 {
-                    Text = $"发现新版本 {version}。下载、验证并安装后，FlowCast 将自动重新启动。",
+                    Text = "发现可用的 FlowCast 新版本",
+                    FontSize = 20,
+                    FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                },
+                new TextBlock
+                {
+                    Text = $"当前版本：{currentVersion}\n可用版本：{update.Version}",
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 12),
+                },
+                new TextBlock
+                {
+                    Text = update.Notes is { Count: > 0 }
+                        ? "本次更新：\n• " + string.Join("\n• ", update.Notes)
+                        : "本次更新包含稳定性与体验改进。",
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 20),
                 },

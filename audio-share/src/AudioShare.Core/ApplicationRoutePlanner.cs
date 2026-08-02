@@ -19,12 +19,21 @@ public static class ApplicationRoutePlanner
         }
 
         var selectedApplicationIdentities = GetSelectedApplicationIdentities(selected);
-        var commands = active
+        var selectedOrder = selected
+            .Select((session, index) => (Name: session.ProcessName, Index: index))
+            .GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Index, StringComparer.OrdinalIgnoreCase);
+        var sessions = active
             .GroupBy(session => session.ProcessId)
-            .OrderBy(group => group.Key)
-            .Select(group =>
+            .Select(group => group.First());
+        if (selectedOrder.Count > 0)
+        {
+            sessions = sessions.OrderBy(session => selectedOrder.TryGetValue(session.ProcessName, out var index) ? index : int.MaxValue);
+        }
+
+        var commands = sessions
+            .Select(session =>
             {
-                var session = group.First();
                 var targetDeviceId = selectedApplicationIdentities.Contains(session.ProcessName)
                     ? inputDeviceId
                     : auxDeviceId;

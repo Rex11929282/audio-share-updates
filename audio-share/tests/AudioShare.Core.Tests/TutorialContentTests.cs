@@ -51,6 +51,16 @@ public sealed class TutorialContentTests
     }
 
     [Fact]
+    public void Tutorial_ExplainsCurrentSharingControls()
+    {
+        var text = string.Join("\n", TutorialContent.Rules.Concat(TutorialContent.Steps.SelectMany(step => new[] { step.Title, step.Body })));
+
+        Assert.Contains("开始分享", text, StringComparison.Ordinal);
+        Assert.Contains("静音分享", text, StringComparison.Ordinal);
+        Assert.Contains("系统托盘", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SetupSteps_ProvideRealScreenshotResourcesAndCallouts()
     {
         var visualSteps = TutorialContent.Steps

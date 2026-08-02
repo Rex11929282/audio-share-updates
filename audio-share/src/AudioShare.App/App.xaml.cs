@@ -32,12 +32,12 @@ public partial class App : Application
                 MessageBoxImage.Warning);
         }
 
-        _ = CheckForUpdatesAsync(mainWindow, showDialog: false);
+        _ = CheckForUpdatesAsync(mainWindow);
     }
 
-    public Task CheckForUpdatesFromUserAsync(Window owner) => CheckForUpdatesAsync(owner, showDialog: true);
+    public Task CheckForUpdatesFromUserAsync(Window owner) => CheckForUpdatesAsync(owner);
 
-    private async Task CheckForUpdatesAsync(Window owner, bool showDialog)
+    private async Task CheckForUpdatesAsync(Window owner)
     {
         if (isCheckingForUpdates)
         {
@@ -71,9 +71,33 @@ public partial class App : Application
 
             availableUpdate = update;
             SetUpdateAvailable(owner, true);
-            if (!showDialog || new UpdateAvailableDialog(owner, update.Version).ShowDialog() != true)
+            if (new UpdateAvailableDialog(owner, UpdateService.CurrentVersion, update).ShowDialog() != true)
             {
                 return;
+            }
+
+            if (owner is MainWindow mainWindow && mainWindow.IsSharingActive)
+            {
+                if (MessageBox.Show(
+                        owner,
+                        "更新会停止当前分享并恢复本机播放。要继续吗？",
+                        "FlowCast 更新",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+
+                if (!await mainWindow.StopSharingWithResetAsync())
+                {
+                    MessageBox.Show(
+                        owner,
+                        "为了保护你的声音，FlowCast 还不能确认分享已停止。请先停止分享后再更新。",
+                        "FlowCast 更新",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
             }
 
             progressWindow = new UpdateProgressWindow(owner);
@@ -91,6 +115,11 @@ public partial class App : Application
             SetUpdateStaging(owner, false);
             ReleaseOwner();
             progressWindow.CloseFromApplication();
+            if (owner is MainWindow updateMainWindow)
+            {
+                updateMainWindow.PrepareForUpdateRestart();
+            }
+
             owner.Close();
         }
         catch (Exception exception)

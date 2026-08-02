@@ -15,6 +15,7 @@ public partial class PreferencesWindow : Window
         ReduceMotionCheckBox.IsChecked = preferences.ReduceMotion;
         RestoreLocalPlaybackCheckBox.IsChecked = preferences.RestoreLocalPlayback;
         EndSharingSoundCheckBox.IsChecked = preferences.EndSharingSoundEnabled;
+        DisconnectNotificationsCheckBox.IsChecked = preferences.DisconnectNotificationsEnabled;
         StartCountdownComboBox.SelectedValue = preferences.StartCountdownSeconds.ToString();
         DataContext = this;
     }
@@ -47,7 +48,8 @@ public partial class PreferencesWindow : Window
             ReduceMotionCheckBox.IsChecked == true,
             countdown,
             RestoreLocalPlaybackCheckBox.IsChecked != false,
-            EndSharingSoundCheckBox.IsChecked != false);
+            EndSharingSoundCheckBox.IsChecked != false,
+            DisconnectNotificationsCheckBox.IsChecked != false);
         DialogResult = true;
     }
 

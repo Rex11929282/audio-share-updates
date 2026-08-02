@@ -50,6 +50,26 @@ public sealed class ReleaseUpdateParserTests
     }
 
     [Fact]
+    public void ParsesReleaseNotesForTheUpdateDialog()
+    {
+        var update = ReleaseUpdateParser.TryParseNewerRelease(
+            """
+            {
+              "tag_name": "v2.0.14",
+              "body": "- Improved routing\n- Fixed the timer\n\nMore detail",
+              "assets": [
+                { "name": "FlowCast-Setup.exe", "browser_download_url": "https://example.com/FlowCast-Setup.exe" },
+                { "name": "FlowCast-Setup.exe.sha256", "browser_download_url": "https://example.com/FlowCast-Setup.exe.sha256" }
+              ]
+            }
+            """,
+            new Version(2, 0, 13));
+
+        Assert.NotNull(update);
+        Assert.Equal(["Improved routing", "Fixed the timer"], update.Notes);
+    }
+
+    [Fact]
     public void DocumentsCompleteSelectedSourceEnginePhaseOneBoundary()
     {
         var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
