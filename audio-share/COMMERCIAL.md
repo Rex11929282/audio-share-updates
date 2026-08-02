@@ -1,22 +1,18 @@
-# Proprietary Notice
+# FlowCast Commercial Notice
 
-The Audio Share application code and Audio Share-provided assets are proprietary. All rights reserved.
+The FlowCast application code and FlowCast-provided assets are proprietary. All rights reserved.
 
-These proprietary restrictions do not apply to bundled third-party components. Every published ZIP includes these notice files:
+These proprietary restrictions do not apply to bundled third-party components. Every published FlowCast installer includes the applicable notice files:
 
 - `ThirdPartyNotices.txt` for NAudio 2.2.1 and the external routing helper dependencies: winappaudiorouter 1.1.1, comtypes 1.4.16, psutil 7.2.2, and pycaw 20251023.
 - `router-helper/PythonLicense.txt` for the bundled Python 3.12.10 embedded runtime, including its complete license and bundled-component notices.
 - `DotNetRuntimeLicense.txt` for the bundled Microsoft .NET runtime license terms.
 - `DotNetRuntimeThirdPartyNotices.txt` for third-party notices supplied with the bundled Microsoft .NET runtime.
 
-The external routing helper is experimental. It only targets the selected share bus (`Voicemeeter Input`); `Voicemeeter AUX Input` remains local-only, and protected processes remain excluded. The package does not download routing code at runtime.
+The external routing helper changes only supported, selected application routes. It keeps `Voicemeeter AUX Input` local-only, keeps protected communication and audio tools excluded, and never downloads routing code while FlowCast is running.
 
-This list identifies the notice files included with this release; it does not describe components or licenses that are not bundled in the ZIP.
+## Current Boundary
 
-## Phase-One Boundary
+FlowCast provides selected-application routing through Voicemeeter Banana. The separately tested selected-source mixer core is not yet connected to a live Windows process-loopback output adapter. Independent music-only sharing volume and fade controls are therefore not included in this release: changing the shared Voicemeeter B1 bus would also affect the microphone path.
 
-This build contains the tested selected-source mixer core. It does not install a virtual microphone driver and does not yet capture live application audio. It cannot be used as a Discord input until the separately signed driver and Windows process-loopback adapter are released.
-
-Audio Share does not change an application's Windows output device; the user must choose the device manually in Windows Volume Mixer.
-
-Distribution, resale, copying, or modification of the Audio Share code or Audio Share-provided assets requires prior permission from the copyright holder. This release process does not include a code-signing certificate yet.
+Distribution, resale, copying, or modification of FlowCast code or FlowCast-provided assets requires prior permission from the copyright holder. This release process does not include a code-signing certificate.

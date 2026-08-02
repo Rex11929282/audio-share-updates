@@ -1,64 +1,60 @@
-# Audio Share
+# FlowCast
 
-`Audio Share` helps you find applications that are currently playing audio and prepare them for sharing in Discord. It does not change Windows audio routing, Voicemeeter, Voicemod, or Discord settings.
+FlowCast is a Windows desktop app for sharing audio from selected applications in Discord. It detects applications that are actively producing sound, sends only the applications you select to the Voicemeeter B1 sharing path, and keeps unselected applications local.
 
-## Selected-Source Engine
+## Requirements
 
-This build contains the tested selected-source mixer core. It does not install a virtual microphone driver and does not yet capture live application audio. It cannot be used as a Discord input until the separately signed driver and Windows process-loopback adapter are released.
+- Windows 10 version 2004 or newer.
+- Voicemeeter Banana installed and running.
+- In Discord, set the microphone to `Voicemeeter Out B1` and the speaker to `Voicemeeter AUX Input`.
 
-Audio Share does not change an application's Windows output device; the user must choose the device manually in Windows Volume Mixer.
-
-## Before Using
-
-Keep the existing working audio chain:
-
-- Discord input: `Voicemeeter Out B1`.
-- Discord and normal playback: `Voicemeeter AUX Input` to A1 headphones only.
-- Music that should be shared: main `Voicemeeter Input` to A1 and B1.
-- Voicemod microphone: B1.
+FlowCast never lets Discord, Voicemeeter, or its own helper be selected for sharing. Windows saves routing by application executable identity, so all active processes from the same application can be affected together.
 
 ## Use
 
-1. Start Voicemod and Voicemeeter Banana.
+1. Open Voicemeeter Banana and choose your headphones or speakers as A1.
 2. Start playing audio in Chrome, NetEase Cloud Music, or another application.
-3. Open Audio Share and select that application. Selection only stores your intent.
-4. Click `Set up selected apps` to open Windows Volume Mixer, then set that application's output to `Voicemeeter Input`.
-5. Keep Discord excluded. It must remain on AUX/headphones so callers never hear themselves.
+3. Open FlowCast, select the programs you want friends to hear, then click `开始分享`.
+4. FlowCast waits for the configured countdown before changing any routes.
+5. Use `静音分享` to mute only the shared program path. Your local listening continues.
+6. Click `停止分享` to restore local-only playback. Closing the main window only minimizes FlowCast to the system tray.
 
-The selection checkmark is only stored inside Audio Share. Clearing it does not change the application's Windows output device. Change the device in Windows Volume Mixer whenever you need to stop sharing.
+Selected program order can be changed by dragging selected cards. FlowCast preserves that order for routing and restores local playback in reverse order.
 
-## Experimental External Routing
+## Route Safety
 
-The experimental controls are disabled until a refresh verifies the integrity and health of the bundled routing helper and finds exactly one `Voicemeeter Input` share-bus endpoint and one `Voicemeeter AUX Input` local-only endpoint. Matching accepts either the canonical label or that label followed by the parenthesized Windows device description, such as `Voicemeeter Input (VB-Audio Voicemeeter VAIO)`. Substring and lookalike names are rejected, and routing always uses the matched endpoint's actual MMDevice ID. The helper is packaged with the release; Audio Share never downloads a routing runtime while it is running.
+FlowCast verifies the bundled routing helper, Voicemeeter Banana, `Voicemeeter Input`, and `Voicemeeter AUX Input` before enabling sharing. It records only routes it changes. On a normal stop or an unexpected disconnect, it disables the B1 music path and restores local playback when that setting is enabled.
 
-Selecting applications and refreshing only discover state. They never write an audio route. `Apply selected audio routing` first shows the selected-to-Input and unselected-to-AUX process counts and requires an explicit confirmation. The transaction routes selected supported applications to `Voicemeeter Input` and other supported active applications to `Voicemeeter AUX Input`.
+If a selected application closes, a required endpoint disappears, or Windows changes a sharing route, FlowCast stops sharing, shows the reason and final session duration, and can show a local notification. Do not start a new share while the status says that attention is required.
 
-Discord, Voicemod, Voicemeeter, and VoicemeeterPro are always excluded. Routing applies at application identity scope, so selecting an application such as Chrome affects all concurrently active Chrome audio processes. Every get, set, and restore request carries the discovered PID, executable name, and process start time. The helper opens a Windows process handle, validates the executable and start time through that held handle, and keeps it open until the policy read or write finishes so the PID cannot be reused during the operation. Before the first write, Audio Share snapshots both the Console and Multimedia route roles for every process. Each in-flight write is owned before waiting for the helper response, so cancellation or timeout triggers compensation even when the write outcome is ambiguous. After a successful Apply, use `Restore this routing` and confirm again to restore only the transaction created during the current app run.
+## Session Controls
 
-Console and Multimedia writes are attempted independently and report their failures together using sanitized role names; the helper client preserves that aggregate message for the UI. Recovery attempts every owned snapshot even if an earlier restore fails. Fully compensated failed or cancelled applies leave no transaction. If either role for a route cannot be recovered, Restore remains available for that unresolved snapshot and retries both roles without reapplying the route plan.
+- Start countdown: immediate, 3 seconds, or 5 seconds.
+- Session timer: starts only after sharing actually begins and keeps running while sharing is muted.
+- Timed stop: stops sharing and clears selections after the selected duration.
+- End sound: optional confirmation after a normal stop or disconnect.
+- System tray: open, start, mute or resume, stop, or exit FlowCast without reopening the main window.
 
-The manual `Set up selected apps` workflow remains available when the helper is unavailable or when you prefer to manage devices yourself. Do not perform a live routing test without explicit user consent. After consent, test only one non-Discord music app and then restore it before testing anything else.
-
-## Build And Run
-
-```powershell
-dotnet test .\audio-share\AudioShare.sln --configuration Debug
-dotnet run --project .\audio-share\src\AudioShare.App\AudioShare.App.csproj
-```
+Independent source-only share volume and fade controls require the separate Windows process-loopback output adapter. They are intentionally not exposed until that adapter is implemented, because changing the common Voicemeeter B1 bus would also change the microphone path.
 
 ## Updates And Publishing
 
-The app checks `https://api.github.com/repos/Rex11929282/audio-share-updates/releases/latest` after startup. It only offers an update when a newer GitHub Release contains both HTTPS assets with these exact names:
+FlowCast checks the latest GitHub release in the background after startup. It shows an update dialog only when a newer approved release exists. Choosing `立即更新` downloads the signed release asset, verifies SHA-256, safely stops an active share, installs the update, and restarts FlowCast.
 
-- `AudioShare-win-x64.zip`
-- `AudioShare-win-x64.zip.sha256`
+Only approved major releases are published. Small local changes are not uploaded and therefore do not create an update notice for users. A release must include:
 
-It never installs automatically on first detection. Selecting `立即更新` downloads both assets, verifies SHA-256, then replaces and relaunches the portable executable after the current process exits. A failed validation leaves the running application unchanged.
+- `FlowCast-Setup.exe`
+- `FlowCast-Setup.exe.sha256` or a GitHub-provided SHA-256 digest
 
-Create release assets locally without uploading source code or artifacts:
+Create an installer locally without uploading build output:
 
 ```powershell
-.\audio-share\scripts\publish-release.ps1 -OutputDirectory C:\release\audio-share-1.0.0
+.\audio-share\scripts\publish-release.ps1 -OutputDirectory C:\release\FlowCast-1.0.0
 ```
 
-Upload only the two generated assets to a GitHub Release in the public `audio-share-updates` repository. The helper does not upload anything.
+## Build And Test
+
+```powershell
+dotnet test .\audio-share\AudioShare.sln --configuration Release
+dotnet run --project .\audio-share\src\AudioShare.App\AudioShare.App.csproj
+```

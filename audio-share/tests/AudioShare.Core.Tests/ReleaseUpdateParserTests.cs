@@ -70,25 +70,23 @@ public sealed class ReleaseUpdateParserTests
     }
 
     [Fact]
-    public void DocumentsCompleteSelectedSourceEnginePhaseOneBoundary()
+    public void Readme_DescribesCurrentFlowCastRoutingAndUpdatePolicy()
     {
         var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
-        var commercialPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "COMMERCIAL.md"));
         var readme = File.ReadAllText(readmePath);
-        var commercial = File.ReadAllText(commercialPath);
-        const string requiredDisclosure = "This build contains the tested selected-source mixer core. It does not install a virtual microphone driver and does not yet capture live application audio. It cannot be used as a Discord input until the separately signed driver and Windows process-loopback adapter are released.";
 
-        Assert.Contains(requiredDisclosure, readme);
-        Assert.Contains(requiredDisclosure, commercial);
+        Assert.Contains("sends only the applications you select", readme);
+        Assert.Contains("FlowCast-Setup.exe", readme);
+        Assert.DoesNotContain("Voicemod", readme, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Readme_StatesThatWindowsDeviceAssignmentsRemainManual()
+    public void Readme_StatesThatFlowCastChangesSelectedApplicationRoutes()
     {
         var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
         var readme = File.ReadAllText(readmePath);
 
-        Assert.Contains("does not change an application's Windows output device", readme, StringComparison.Ordinal);
+        Assert.Contains("before changing any routes", readme, StringComparison.Ordinal);
     }
 
     [Fact]
