@@ -10,6 +10,7 @@
         MaxHeight="150"
         MaxWidth="680"
         WindowStyle="None"
+        AllowsTransparency="True"
         ResizeMode="NoResize"
         Topmost="True"
         ShowInTaskbar="True"

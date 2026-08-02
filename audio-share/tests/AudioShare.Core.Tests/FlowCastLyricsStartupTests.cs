@@ -22,6 +22,7 @@ public sealed class FlowCastLyricsStartupTests
         Assert.Equal("None", root.Attribute("WindowStyle")?.Value);
         Assert.Equal("NoResize", root.Attribute("ResizeMode")?.Value);
         Assert.Equal("True", root.Attribute("Topmost")?.Value);
+        Assert.Equal("True", root.Attribute("AllowsTransparency")?.Value);
         Assert.Equal("680", root.Attribute("Width")?.Value);
         Assert.Equal("150", root.Attribute("Height")?.Value);
         Assert.Contains("WebView2CompositionControl", xaml);
