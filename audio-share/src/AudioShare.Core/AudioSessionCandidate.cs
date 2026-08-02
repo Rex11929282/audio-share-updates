@@ -7,4 +7,6 @@ public sealed record AudioSessionCandidate(
     string DisplayName,
     bool IsActive,
     bool IsSystemSession,
-    bool HasAudio = true);
+    bool HasAudio = true,
+    string OutputDeviceId = "",
+    string OutputDeviceName = "");

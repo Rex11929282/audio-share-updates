@@ -13,9 +13,9 @@ FlowCast never lets Discord, Voicemeeter, or its own helper be selected for shar
 ## Use
 
 1. Open Voicemeeter Banana and choose your headphones or speakers as A1.
-2. Start playing audio in Chrome, NetEase Cloud Music, or another application.
-3. Open FlowCast, select the programs you want friends to hear, then click `开始分享`.
-4. Confirm the prompt. FlowCast then changes only the selected application routes.
+2. Start playing audio in Chrome, NetEase Cloud Music, or another application. FlowCast shows the current output device for every detected program.
+3. If a program is using speakers, headphones, or another non-Voicemeeter route, click `改为仅自己听` in FlowCast, then pause and resume playback.
+4. Select the programs you want friends to hear, click `开始分享`, then confirm the prompt. FlowCast changes only the selected application routes.
 5. Use `静音分享` to mute only the shared program path. Your local listening continues.
 6. Click `停止分享` to restore local-only playback. Closing the main window lets you choose the system tray or a full exit.
 

@@ -7,7 +7,7 @@ namespace AudioShare.Windows;
 
 public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
 {
-    private const int PeakConfirmationDelayMilliseconds = 125;
+    private const int PeakConfirmationDelayMilliseconds = 65;
 
     public Task<IReadOnlyList<AudioSession>> GetActiveSessionsAsync(CancellationToken token) =>
         Task.Run(() => Discover(token), token);
@@ -47,8 +47,7 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
                         using var process = Process.GetProcessById(processId);
                         var processStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
                         var initialPeakLevel = session.AudioMeterInformation.MasterPeakValue;
-                        var hasAudio = initialPeakLevel >= AudioActivityPolicy.MinimumPeakLevel &&
-                            HasConfirmedOutput(session, initialPeakLevel);
+                        var hasAudio = HasConfirmedOutput(session, initialPeakLevel);
                         candidates.Add(new AudioSessionCandidate(
                             processId,
                             processStartUtcTicks,
@@ -56,7 +55,9 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
                             session.DisplayName,
                             IsActive: true,
                             IsSystemSession: false,
-                            HasAudio: hasAudio));
+                            HasAudio: hasAudio,
+                            OutputDeviceId: device.ID,
+                            OutputDeviceName: device.FriendlyName));
                     }
                     catch (Exception) when (!token.IsCancellationRequested)
                     {
@@ -72,8 +73,11 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
     private static bool HasConfirmedOutput(AudioSessionControl session, float initialPeakLevel)
     {
         Thread.Sleep(PeakConfirmationDelayMilliseconds);
+        var confirmedPeakLevel = session.AudioMeterInformation.MasterPeakValue;
+        Thread.Sleep(PeakConfirmationDelayMilliseconds);
         return AudioActivityPolicy.HasConfirmedOutput(
             initialPeakLevel,
+            confirmedPeakLevel,
             session.AudioMeterInformation.MasterPeakValue);
     }
 }

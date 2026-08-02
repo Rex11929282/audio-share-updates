@@ -21,6 +21,15 @@ public static class AudioSessionFilter
                     .ThenBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(candidate => candidate.ProcessName, StringComparer.OrdinalIgnoreCase)
                     .First();
+                var outputDevices = group
+                    .Where(candidate => !string.IsNullOrWhiteSpace(candidate.OutputDeviceId))
+                    .GroupBy(candidate => candidate.OutputDeviceId, StringComparer.OrdinalIgnoreCase)
+                    .Select(device => device
+                        .OrderByDescending(candidate => candidate.HasAudio)
+                        .ThenBy(candidate => candidate.OutputDeviceName, StringComparer.OrdinalIgnoreCase)
+                        .First())
+                    .OrderBy(candidate => candidate.OutputDeviceName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
                 return new AudioSession(
                     representative.ProcessId,
                     representative.ProcessStartUtcTicks,
@@ -28,7 +37,10 @@ public static class AudioSessionFilter
                     string.IsNullOrWhiteSpace(representative.DisplayName)
                         ? representative.ProcessName
                         : representative.DisplayName,
-                    HasAudio: group.Any(candidate => candidate.HasAudio));
+                    HasAudio: group.Any(candidate => candidate.HasAudio),
+                    OutputDeviceId: outputDevices.Length == 1 ? outputDevices[0].OutputDeviceId : string.Empty,
+                    OutputDeviceName: string.Join("、", outputDevices
+                        .Select(device => string.IsNullOrWhiteSpace(device.OutputDeviceName) ? "未知输出设备" : device.OutputDeviceName)));
             })
             .ToArray();
     }

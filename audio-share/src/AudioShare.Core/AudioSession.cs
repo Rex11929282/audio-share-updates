@@ -5,4 +5,6 @@ public sealed record AudioSession(
     long ProcessStartUtcTicks,
     string ProcessName,
     string DisplayName,
-    bool HasAudio);
+    bool HasAudio,
+    string OutputDeviceId = "",
+    string OutputDeviceName = "");

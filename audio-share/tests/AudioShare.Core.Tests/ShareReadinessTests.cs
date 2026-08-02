@@ -28,6 +28,8 @@ public sealed class ShareReadinessTests
         Assert.False(AudioActivityPolicy.HasConfirmedOutput(0.03f, 0.01f));
         Assert.False(AudioActivityPolicy.HasConfirmedOutput(0.01f, 0.03f));
         Assert.True(AudioActivityPolicy.HasConfirmedOutput(0.03f, 0.04f));
+        Assert.True(AudioActivityPolicy.HasConfirmedOutput(0.01f, 0.03f, 0.04f));
+        Assert.False(AudioActivityPolicy.HasConfirmedOutput(0.03f, 0.01f, 0.01f));
     }
 
     [Fact]

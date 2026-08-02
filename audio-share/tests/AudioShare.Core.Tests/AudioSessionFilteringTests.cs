@@ -115,4 +115,24 @@ public sealed class AudioSessionFilteringTests
 
         Assert.True(Assert.Single(sessions).HasAudio);
     }
+
+    [Fact]
+    public void GetActiveProcessSessions_RetainsTheCurrentOutputDevice()
+    {
+        var session = Assert.Single(AudioSessionFilter.GetActiveProcessSessions(
+        [
+            new AudioSessionCandidate(
+                90,
+                900,
+                "chrome.exe",
+                "Chrome",
+                true,
+                false,
+                OutputDeviceId: "speaker-device",
+                OutputDeviceName: "Speakers (High Definition Audio Device)"),
+        ]));
+
+        Assert.Equal("speaker-device", session.OutputDeviceId);
+        Assert.Equal("Speakers (High Definition Audio Device)", session.OutputDeviceName);
+    }
 }

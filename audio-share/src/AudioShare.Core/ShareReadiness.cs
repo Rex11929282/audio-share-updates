@@ -45,6 +45,10 @@ public static class AudioActivityPolicy
 
     public static bool HasConfirmedOutput(float initialPeakLevel, float confirmedPeakLevel) =>
         initialPeakLevel >= MinimumPeakLevel && confirmedPeakLevel >= MinimumPeakLevel;
+
+    public static bool HasConfirmedOutput(float initialPeakLevel, float confirmedPeakLevel, float sustainedPeakLevel) =>
+        new[] { initialPeakLevel, confirmedPeakLevel, sustainedPeakLevel }
+            .Count(level => level >= MinimumPeakLevel) >= 2;
 }
 
 public static class ShareStartPolicy

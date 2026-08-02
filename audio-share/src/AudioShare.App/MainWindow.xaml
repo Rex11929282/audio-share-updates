@@ -305,8 +305,21 @@
                                         <StackPanel Grid.Column="1">
                                             <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#253F5B" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
                                             <TextBlock Margin="0,3,0,0" FontSize="12" Foreground="#788A9C" Text="{Binding DetailText}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="#277E91" Text="{Binding RouteHint}" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="12,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Padding="9,5" Margin="0,0,7,0" Click="FixToLocalRouteButton_Click" Content="改为仅自己听">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource UtilityButton}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CanAdjustRoute}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
                                             <Button Padding="9,5" Margin="0,0,7,0" Style="{StaticResource UtilityButton}" Click="HideProgramButton_Click" Content="不再显示" />
                                             <Button Padding="9,5" Margin="0,0,7,0" Style="{StaticResource UtilityButton}" Click="FavoriteButton_Click" Content="{Binding FavoriteButtonText}" />
                                             <Border Padding="10,5" Background="#E8F1FF" CornerRadius="12">
@@ -342,15 +355,13 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock x:Name="ExperimentalRoutingStatusText" Foreground="#426985" TextWrapping="Wrap" Text="正在检查音频路由..." />
                             <TextBlock x:Name="InstructionText" Visibility="Collapsed" />
                         </StackPanel>
-                        <Button x:Name="SetupSelectedButton" Grid.Column="1" Style="{StaticResource UtilityButton}" Click="SetupSelectedButton_Click" Content="打开混音器" />
-                        <Button x:Name="ApplyRoutingButton" Grid.Column="2" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" IsEnabled="False" Click="ApplyRoutingButton_Click" Content="开始分享" />
-                        <Button x:Name="ScheduleStopButton" Grid.Column="3" Style="{StaticResource UtilityButton}" Margin="0" Click="ScheduleStopButton_Click" Content="定时" />
+                        <Button x:Name="ApplyRoutingButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" IsEnabled="False" Click="ApplyRoutingButton_Click" Content="开始分享" />
+                        <Button x:Name="ScheduleStopButton" Grid.Column="2" Style="{StaticResource UtilityButton}" Margin="0" Click="ScheduleStopButton_Click" Content="定时" />
                     </Grid>
                 </Border>
 

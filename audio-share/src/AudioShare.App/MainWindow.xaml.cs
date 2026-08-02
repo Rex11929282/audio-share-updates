@@ -616,7 +616,9 @@ public partial class MainWindow : Window
                 session,
                 isProtected,
                 !isProtected && routeCoordinator.IsSelected(session),
-                favoritePrograms.Contains(session.ProcessName)));
+                favoritePrograms.Contains(session.ProcessName),
+                inputDeviceId,
+                auxDeviceId));
         }
 
         EmptyStateText.Visibility = Applications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1784,16 +1786,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SetupSelectedButton_Click(object sender, RoutedEventArgs e)
+    private async void FixToLocalRouteButton_Click(object sender, RoutedEventArgs e)
     {
+        if (sender is not Button { DataContext: AudioApplicationRow row } || !row.CanAdjustRoute || string.IsNullOrWhiteSpace(auxDeviceId))
+        {
+            return;
+        }
+
         try
         {
-            VolumeMixerLauncher.Open();
+            await routingHelper.SetRouteAsync(
+                row.Session.ProcessId,
+                row.Session.ProcessStartUtcTicks,
+                row.Session.ProcessName,
+                auxDeviceId,
+                lifetimeCancellation.Token);
+            row.MarkLocalRouteRequested();
+            experimentalRoutingStatus = $"已为 {row.DisplayName} 设为仅自己听。请暂停后重新播放，让 Windows 使用 Voicemeeter AUX Input。";
+            AddActivity(experimentalRoutingStatus);
             ErrorPanel.Visibility = Visibility.Collapsed;
+        }
+        catch (OperationCanceledException) when (isClosing)
+        {
         }
         catch (Exception exception)
         {
-            ShowError("无法打开 Windows 音量混音器。", exception);
+            ShowError($"暂时无法为 {row.DisplayName} 修改播放路径。请点“刷新”后再试。", exception);
         }
     }
 
@@ -1807,13 +1825,24 @@ public partial class MainWindow : Window
 public sealed class AudioApplicationRow : INotifyPropertyChanged
 {
     private bool isSelected;
+    private bool localRouteRequested;
+    private readonly string? inputDeviceId;
+    private readonly string? auxDeviceId;
 
-    public AudioApplicationRow(AudioSession session, bool isProtected, bool isSelected, bool isFavorite)
+    public AudioApplicationRow(
+        AudioSession session,
+        bool isProtected,
+        bool isSelected,
+        bool isFavorite,
+        string? inputDeviceId,
+        string? auxDeviceId)
     {
         Session = session;
         IsProtected = isProtected;
         this.isSelected = isSelected;
         IsFavorite = isFavorite;
+        this.inputDeviceId = inputDeviceId;
+        this.auxDeviceId = auxDeviceId;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -1822,7 +1851,7 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
 
     public string DisplayName => string.IsNullOrWhiteSpace(Session.DisplayName) ? Session.ProcessName : Session.DisplayName;
 
-    public string DetailText => $"{Session.ProcessName}  |  PID {Session.ProcessId}";
+    public string DetailText => $"{Session.ProcessName}  |  PID {Session.ProcessId}  |  当前：{GetOutputDeviceName()}";
 
     public bool IsProtected { get; }
 
@@ -1831,6 +1860,22 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
     public string FavoriteButtonText => IsFavorite ? "已置顶" : "置顶";
 
     public bool IsSelectable => !IsProtected;
+
+    public bool CanAdjustRoute =>
+        IsSelectable &&
+        !localRouteRequested &&
+        !string.IsNullOrWhiteSpace(auxDeviceId) &&
+        !IsUsingVoicemeeterRoute();
+
+    public string RouteHint => IsProtected
+        ? "此程序受保护，不会被 FlowCast 路由。"
+        : localRouteRequested
+            ? "已设为仅自己听；暂停后重新播放即可生效。"
+            : CanAdjustRoute
+                ? "当前走其他播放路径。可在这里改为仅自己听；开始分享时会自动改到分享路径。"
+                : IsSelected
+                    ? "已选中；开始分享时会自动切换到分享路径。"
+                    : "勾选后，开始分享会自动切换到分享路径。";
 
     public bool IsSelected
     {
@@ -1845,12 +1890,29 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
             isSelected = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectionStatus));
+            OnPropertyChanged(nameof(RouteHint));
         }
     }
 
     public string SelectionStatus => IsProtected
         ? "已排除：受保护的应用程序"
         : IsSelected ? "已选中" : "未选中";
+
+    public void MarkLocalRouteRequested()
+    {
+        localRouteRequested = true;
+        OnPropertyChanged(nameof(CanAdjustRoute));
+        OnPropertyChanged(nameof(RouteHint));
+    }
+
+    private bool IsUsingVoicemeeterRoute() =>
+        !string.IsNullOrWhiteSpace(Session.OutputDeviceId) &&
+        (string.Equals(Session.OutputDeviceId, inputDeviceId, StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(Session.OutputDeviceId, auxDeviceId, StringComparison.OrdinalIgnoreCase));
+
+    private string GetOutputDeviceName() => string.IsNullOrWhiteSpace(Session.OutputDeviceName)
+        ? "正在确认输出设备"
+        : Session.OutputDeviceName;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
