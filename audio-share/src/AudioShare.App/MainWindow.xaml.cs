@@ -894,14 +894,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!CanApplyRouting() || !shareSession.StartCountdown(TimeSpan.FromSeconds(3), DateTimeOffset.Now))
+        if (!CanApplyRouting() || !shareSession.StartCountdown(TimeSpan.FromSeconds(preferences.StartCountdownSeconds), DateTimeOffset.Now))
         {
             UpdateRoutingSetupState();
             return;
         }
 
         scheduleTimer.Start();
-        experimentalRoutingStatus = "将在 3 秒后开始分享。";
+        experimentalRoutingStatus = preferences.StartCountdownSeconds == 0
+            ? "正在开始分享。"
+            : $"将在 {preferences.StartCountdownSeconds} 秒后开始分享。";
         UpdateRoutingSetupState();
     }
 
@@ -1141,6 +1143,7 @@ public partial class MainWindow : Window
 
     private async Task<bool> StopSharingAndKeepLocalOnlyAsync(CancellationToken token)
     {
+        var wasSharing = shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted;
         if (!voicemeeterBananaInstalled || !experimentalRoutingAvailable ||
             string.IsNullOrWhiteSpace(inputDeviceId) || string.IsNullOrWhiteSpace(auxDeviceId))
         {
@@ -1170,7 +1173,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var routableSessions = GetRecoverySessions();
+        var routableSessions = preferences.RestoreLocalPlayback ? GetRecoverySessions() : [];
         var routeableSessions = await GetRouteableSessionsAsync(routableSessions, token);
         var routesVerified = true;
         if (routeableSessions.Count > 0)
@@ -1235,6 +1238,10 @@ public partial class MainWindow : Window
 
         experimentalRoutingStatus = "已停止分享。所有当前检测到的程序只会在本机播放。";
         requiresAttention = false;
+        if (wasSharing && preferences.EndSharingSoundEnabled)
+        {
+            System.Media.SystemSounds.Asterisk.Play();
+        }
         motionController.PlayLocalOnlyConfirmed();
         stopSchedule.Cancel();
         AddActivity("已停止分享并取消勾选。");

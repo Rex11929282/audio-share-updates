@@ -13,6 +13,9 @@ public partial class PreferencesWindow : Window
         Owner = owner;
         ExcludedPrograms = new ObservableCollection<string>(preferences.ExcludedProcesses.Order(StringComparer.OrdinalIgnoreCase));
         ReduceMotionCheckBox.IsChecked = preferences.ReduceMotion;
+        RestoreLocalPlaybackCheckBox.IsChecked = preferences.RestoreLocalPlayback;
+        EndSharingSoundCheckBox.IsChecked = preferences.EndSharingSoundEnabled;
+        StartCountdownComboBox.SelectedValue = preferences.StartCountdownSeconds.ToString();
         DataContext = this;
     }
 
@@ -36,7 +39,15 @@ public partial class PreferencesWindow : Window
 
     private void DoneButton_Click(object sender, RoutedEventArgs e)
     {
-        UpdatedPreferences = new FlowCastPreferences(ExcludedPrograms, ReduceMotionCheckBox.IsChecked == true);
+        var countdown = StartCountdownComboBox.SelectedValue is string value && int.TryParse(value, out var parsed)
+            ? parsed
+            : 3;
+        UpdatedPreferences = new FlowCastPreferences(
+            ExcludedPrograms,
+            ReduceMotionCheckBox.IsChecked == true,
+            countdown,
+            RestoreLocalPlaybackCheckBox.IsChecked != false,
+            EndSharingSoundCheckBox.IsChecked != false);
         DialogResult = true;
     }
 
