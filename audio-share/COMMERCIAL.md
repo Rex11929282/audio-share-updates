@@ -13,6 +13,6 @@ The external routing helper changes only supported, selected application routes.
 
 ## Current Boundary
 
-FlowCast provides selected-application routing through Voicemeeter Banana. The separately tested selected-source mixer core is not yet connected to a live Windows process-loopback output adapter. Independent music-only sharing volume and fade controls are therefore not included in this release: changing the shared Voicemeeter B1 bus would also affect the microphone path.
+FlowCast provides selected-application routing through Voicemeeter Banana. It does not alter the Windows master volume or the user's local listening volume.
 
 Distribution, resale, copying, or modification of FlowCast code or FlowCast-provided assets requires prior permission from the copyright holder. This release process does not include a code-signing certificate.

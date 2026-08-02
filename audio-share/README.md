@@ -35,8 +35,6 @@ If a selected application closes, a required endpoint disappears, or Windows cha
 - End sound: optional confirmation after a normal stop or disconnect.
 - System tray: open, start, mute or resume, stop, or exit FlowCast without reopening the main window.
 
-Independent source-only share volume and fade controls require the separate Windows process-loopback output adapter. They are intentionally not exposed until that adapter is implemented, because changing the common Voicemeeter B1 bus would also change the microphone path.
-
 ## Updates And Publishing
 
 FlowCast checks the latest GitHub release in the background after startup. It shows an update dialog only when a newer approved release exists. Choosing `立即更新` downloads the signed release asset, verifies SHA-256, safely stops an active share, installs the update, and restarts FlowCast.
