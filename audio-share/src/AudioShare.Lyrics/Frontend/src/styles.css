@@ -1,0 +1,217 @@
+:root {
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  color: #102c44;
+  background: transparent;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  user-select: none;
+}
+
+.overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  overflow: hidden;
+  border-radius: 38px;
+  background:
+    radial-gradient(circle at 8% 18%, rgb(255 255 255 / 92%), transparent 34%),
+    linear-gradient(120deg, rgb(236 252 255 / 86%), rgb(245 248 255 / 72%));
+}
+
+.ambient {
+  position: absolute;
+  width: 220px;
+  height: 120px;
+  border-radius: 999px;
+  filter: blur(34px);
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.ambient--cyan {
+  top: -58px;
+  left: 16px;
+  background: #61e7ee;
+}
+
+.ambient--blue {
+  right: 4px;
+  bottom: -66px;
+  background: #7ca9ff;
+}
+
+.glass-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 20px 28px 18px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 31px;
+  background: linear-gradient(135deg, rgb(255 255 255 / 42%), rgb(235 249 255 / 20%));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 88%),
+    0 16px 38px rgb(37 91 125 / 15%);
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 24px;
+}
+
+.brand-lockup,
+.connection-chip {
+  display: flex;
+  align-items: center;
+}
+
+.brand-lockup {
+  gap: 7px;
+  letter-spacing: -0.02em;
+}
+
+.flowcast-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: 24px;
+  height: 20px;
+}
+
+.flowcast-mark i {
+  display: block;
+  width: 3px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #0dc6d2, #1791bf);
+}
+
+.flowcast-mark i:nth-child(1),
+.flowcast-mark i:nth-child(5) {
+  height: 6px;
+}
+
+.flowcast-mark i:nth-child(2),
+.flowcast-mark i:nth-child(4) {
+  height: 13px;
+}
+
+.flowcast-mark i:nth-child(3) {
+  height: 19px;
+}
+
+.brand-name {
+  color: #12344d;
+  font-size: 15px;
+  font-weight: 720;
+}
+
+.brand-product {
+  color: #4f7288;
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.connection-chip {
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid rgb(255 255 255 / 68%);
+  border-radius: 999px;
+  color: #45667b;
+  background: rgb(255 255 255 / 36%);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.connection-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e1a62f;
+  box-shadow: 0 0 0 3px rgb(225 166 47 / 13%);
+}
+
+.overlay--connected .connection-dot {
+  background: #17b985;
+  box-shadow: 0 0 0 3px rgb(23 185 133 / 14%);
+}
+
+.overlay--disconnected .connection-dot,
+.overlay--unavailable .connection-dot {
+  background: #e16c72;
+  box-shadow: 0 0 0 3px rgb(225 108 114 / 13%);
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  height: calc(100% - 24px);
+  padding-top: 6px;
+}
+
+.message p {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: #102c44;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 72%);
+  white-space: nowrap;
+}
+
+.message--status p {
+  font-size: 22px;
+  font-weight: 660;
+  letter-spacing: 0.01em;
+}
+
+.message--lyric p {
+  font-size: 27px;
+  font-weight: 730;
+  letter-spacing: 0.015em;
+  animation: lyric-arrival 260ms ease-out;
+}
+
+@keyframes lyric-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
