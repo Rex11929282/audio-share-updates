@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AudioShare.Lyrics.Contracts\AudioShare.Lyrics.Contracts.csproj" />
     <ProjectReference Include="..\AudioShare.Windows\AudioShare.Windows.csproj" />
   </ItemGroup>
 
