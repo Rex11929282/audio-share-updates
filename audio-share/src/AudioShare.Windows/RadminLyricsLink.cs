@@ -124,6 +124,9 @@ public sealed class RadminLyricsHost : IAsyncDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
     }
 
     private async Task DiscoveryLoopAsync(CancellationToken cancellationToken)
@@ -144,6 +147,9 @@ public sealed class RadminLyricsHost : IAsyncDisposable
             }
         }
         catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
         {
         }
     }
