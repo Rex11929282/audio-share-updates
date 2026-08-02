@@ -56,8 +56,6 @@ public partial class MainWindow : Window
                 webRoot,
                 CoreWebView2HostResourceAccessKind.DenyCors);
             OverlayWebView.Source = new Uri("https://flowcast.local/index.html");
-            OverlayWebView.Visibility = Visibility.Visible;
-            NativeFallback.Visibility = Visibility.Collapsed;
         }
         catch (Exception)
         {
@@ -98,6 +96,8 @@ public partial class MainWindow : Window
             {
                 webViewReady = true;
                 OverlayWebView.CoreWebView2.PostWebMessageAsJson(presenter.GetSnapshotJson());
+                OverlayWebView.Visibility = Visibility.Visible;
+                NativeFallback.Visibility = Visibility.Collapsed;
             }
         }
         catch (JsonException)

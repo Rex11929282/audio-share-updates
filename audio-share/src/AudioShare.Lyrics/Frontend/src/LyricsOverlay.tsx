@@ -14,15 +14,22 @@ export function LyricsOverlay({ state }: LyricsOverlayProps) {
       <div className="ambient ambient--cyan" />
       <div className="ambient ambient--blue" />
       <LiquidGlass
+        className="lyrics-glass"
         mode="standard"
-        displacementScale={34}
-        blurAmount={0.11}
-        saturation={122}
-        aberrationIntensity={1}
-        elasticity={0.12}
+        displacementScale={96}
+        blurAmount={0.32}
+        saturation={145}
+        aberrationIntensity={2}
+        elasticity={0.32}
         cornerRadius={34}
-        overLight
-        style={{ width: '100%', height: '100%' }}
+        padding="0"
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: 'calc(100% - 16px)',
+          height: 'calc(100% - 16px)',
+        }}
       >
         <section className="glass-content">
           <header className="brand-row">

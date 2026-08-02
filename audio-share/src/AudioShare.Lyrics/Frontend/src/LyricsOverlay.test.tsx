@@ -1,10 +1,18 @@
 import { render, screen } from '@testing-library/react'
-import type { PropsWithChildren } from 'react'
+import type { CSSProperties, PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { LyricsOverlay } from './LyricsOverlay'
 
 vi.mock('liquid-glass-react', () => ({
-  default: ({ children }: PropsWithChildren) => <div data-testid="liquid-glass">{children}</div>,
+  default: ({ children, className, padding, style }: PropsWithChildren<{
+    className?: string
+    padding?: string
+    style?: CSSProperties
+  }>) => (
+    <div data-testid="liquid-glass" className={className} data-padding={padding} style={style}>
+      {children}
+    </div>
+  ),
 }))
 
 describe('LyricsOverlay', () => {
@@ -21,5 +29,25 @@ describe('LyricsOverlay', () => {
 
     expect(screen.getByText('已連線，等待歌詞')).toBeInTheDocument()
     expect(screen.queryByTestId('lyric-line')).not.toBeInTheDocument()
+  })
+
+  it('stacks the liquid glass layers instead of placing the content below the window', () => {
+    const { container } = render(
+      <LyricsOverlay
+        state={{
+          connectionState: 'searching',
+          displayText: '正在尋找 FlowCast',
+          lyricLine: null,
+        }}
+      />,
+    )
+
+    expect(container.querySelector('[data-testid="liquid-glass"]')).toHaveStyle({
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+    })
+    expect(container.querySelector('[data-testid="liquid-glass"]')).toHaveClass('lyrics-glass')
+    expect(container.querySelector('[data-testid="liquid-glass"]')).toHaveAttribute('data-padding', '0')
   })
 })

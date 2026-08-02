@@ -28,6 +28,20 @@ public sealed class FlowCastLyricsStartupTests
         Assert.DoesNotContain("真實歌詞", xaml);
     }
 
+    [Fact]
+    public void MainWindow_KeepsTheNativeStatusVisibleUntilTheWebSurfaceIsReady()
+    {
+        var path = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs");
+        var source = File.ReadAllText(path);
+        var readyHandler = source.IndexOf("type.GetString() == \"ready\"", StringComparison.Ordinal);
+        var showWebSurface = source.IndexOf("OverlayWebView.Visibility = Visibility.Visible;", StringComparison.Ordinal);
+        var hideFallback = source.IndexOf("NativeFallback.Visibility = Visibility.Collapsed;", StringComparison.Ordinal);
+
+        Assert.True(readyHandler >= 0);
+        Assert.True(showWebSurface > readyHandler);
+        Assert.True(hideFallback > readyHandler);
+    }
+
     private static string FindRepositoryFile(params string[] relativeSegments)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
