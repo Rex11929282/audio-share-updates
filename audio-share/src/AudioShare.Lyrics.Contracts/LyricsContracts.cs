@@ -1,13 +1,5 @@
 namespace AudioShare.Lyrics.Contracts;
 
-public enum ConnectionState
-{
-    Searching,
-    Unavailable,
-    Connected,
-    Disconnected
-}
-
 public enum IslandMode
 {
     Idle,

@@ -1,7 +1,11 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using AudioShare.Lyrics.Contracts;
 using AudioShare.Windows;
 using Microsoft.Web.WebView2.Core;
@@ -10,15 +14,17 @@ namespace AudioShare.Lyrics;
 
 public partial class MainWindow : Window
 {
+    private static readonly Duration IslandAnimationDuration = new(TimeSpan.FromMilliseconds(320));
     private readonly LyricsOverlayPresenter presenter = new();
-    private readonly CancellationTokenSource connectionCancellation = new();
-    private RadminLyricsReceiver? receiver;
+    private readonly LyricsRuntime runtime = new();
+    private readonly CancellationTokenSource lifetimeCancellation = new();
     private bool webViewReady;
 
     public MainWindow()
     {
         InitializeComponent();
         presenter.StateChanged += Presenter_OnStateChanged;
+        runtime.SnapshotChanged += Runtime_OnSnapshotChanged;
         Loaded += MainWindow_OnLoaded;
         Closed += MainWindow_OnClosed;
         SourceInitialized += (_, _) => WindowBackdrop.TryEnableLightBackdrop(this);
@@ -26,10 +32,9 @@ public partial class MainWindow : Window
 
     private async void MainWindow_OnLoaded(object sender, RoutedEventArgs e)
     {
-        presenter.SetConnectionState(ConnectionState.Searching);
         var webViewInitialization = InitializeWebViewAsync();
-        var connection = ConnectToFlowCastAsync(connectionCancellation.Token);
-        await Task.WhenAll(webViewInitialization, connection);
+        await runtime.StartAsync(lifetimeCancellation.Token);
+        await webViewInitialization;
     }
 
     private async Task InitializeWebViewAsync()
@@ -63,28 +68,93 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ConnectToFlowCastAsync(CancellationToken cancellationToken)
+    private void Runtime_OnSnapshotChanged(object? sender, IslandSnapshot snapshot)
     {
-        if (RadminAdapterSelector.SelectActiveAdapter() is null)
+        _ = Dispatcher.BeginInvoke(() => ApplySnapshot(snapshot));
+    }
+
+    private void ApplySnapshot(IslandSnapshot snapshot)
+    {
+        presenter.Show(snapshot);
+        FallbackStatusText.Text = presenter.DisplayText;
+        FallbackStatusText.FontSize = snapshot.Mode is IslandMode.Playing or IslandMode.Paused ? 27 : 16;
+
+        var size = IslandDimensions.For(snapshot.Mode);
+        WindowSurface.CornerRadius = new CornerRadius(size.Height / 2);
+        NativeFallback.CornerRadius = new CornerRadius(Math.Max(0, (size.Height / 2) - 4));
+        ResizeIsland(size);
+    }
+
+    private void ResizeIsland(IslandSize size)
+    {
+        var currentWidth = Width;
+        var currentHeight = Height;
+        if (Math.Abs(currentWidth - size.Width) < 0.1 && Math.Abs(currentHeight - size.Height) < 0.1)
         {
-            presenter.SetConnectionState(ConnectionState.Unavailable);
             return;
         }
 
-        receiver = new RadminLyricsReceiver();
-        try
+        var centerX = Left + (currentWidth / 2);
+        var centerY = Top + (currentHeight / 2);
+        var workArea = GetCurrentMonitorWorkArea();
+        var targetLeft = Math.Clamp(
+            centerX - (size.Width / 2),
+            workArea.Left,
+            Math.Max(workArea.Left, workArea.Right - size.Width));
+        var targetTop = Math.Clamp(
+            centerY - (size.Height / 2),
+            workArea.Top,
+            Math.Max(workArea.Top, workArea.Bottom - size.Height));
+
+        if (!SystemParameters.ClientAreaAnimation)
         {
-            presenter.SetConnectionState(ConnectionState.Searching);
-            var connected = await receiver.DiscoverAndConnectOnRadminAsync(cancellationToken);
-            presenter.SetConnectionState(connected ? ConnectionState.Connected : ConnectionState.Disconnected);
+            Width = size.Width;
+            Height = size.Height;
+            Left = targetLeft;
+            Top = targetTop;
+            return;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+
+        var easing = new BackEase { Amplitude = 0.18, EasingMode = EasingMode.EaseOut };
+        AnimateTo(WidthProperty, currentWidth, size.Width, easing);
+        AnimateTo(HeightProperty, currentHeight, size.Height, easing);
+        AnimateTo(LeftProperty, Left, targetLeft, easing);
+        AnimateTo(TopProperty, Top, targetTop, easing);
+    }
+
+    private void AnimateTo(
+        DependencyProperty property,
+        double from,
+        double to,
+        IEasingFunction easing)
+    {
+        SetValue(property, to);
+        BeginAnimation(
+            property,
+            new DoubleAnimation(from, to, IslandAnimationDuration)
+            {
+                EasingFunction = easing,
+                FillBehavior = FillBehavior.Stop
+            },
+            HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private Rect GetCurrentMonitorWorkArea()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var monitor = MonitorFromWindow(handle, MonitorDefaultToNearest);
+        var information = new MonitorInformation { Size = Marshal.SizeOf<MonitorInformation>() };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref information))
         {
+            return SystemParameters.WorkArea;
         }
-        catch (Exception)
-        {
-            presenter.SetConnectionState(ConnectionState.Disconnected);
-        }
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return new Rect(
+            information.WorkArea.Left / dpi.DpiScaleX,
+            information.WorkArea.Top / dpi.DpiScaleY,
+            (information.WorkArea.Right - information.WorkArea.Left) / dpi.DpiScaleX,
+            (information.WorkArea.Bottom - information.WorkArea.Top) / dpi.DpiScaleY);
     }
 
     private void CoreWebView2_OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -130,21 +200,45 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void MainWindow_OnClosed(object? sender, EventArgs e)
+    private void MainWindow_OnClosed(object? sender, EventArgs e)
     {
-        connectionCancellation.Cancel();
+        lifetimeCancellation.Cancel();
         presenter.StateChanged -= Presenter_OnStateChanged;
+        runtime.SnapshotChanged -= Runtime_OnSnapshotChanged;
         if (OverlayWebView.CoreWebView2 is not null)
         {
             OverlayWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_OnWebMessageReceived;
         }
 
         OverlayWebView.Dispose();
-        if (receiver is not null)
-        {
-            await receiver.DisposeAsync();
-        }
+        runtime.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        lifetimeCancellation.Dispose();
+    }
 
-        connectionCancellation.Dispose();
+    private const uint MonitorDefaultToNearest = 2;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr windowHandle, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInformation information);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRectangle
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MonitorInformation
+    {
+        public int Size;
+        public NativeRectangle Monitor;
+        public NativeRectangle WorkArea;
+        public uint Flags;
     }
 }

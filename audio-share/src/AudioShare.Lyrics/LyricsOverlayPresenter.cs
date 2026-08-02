@@ -35,25 +35,6 @@ public sealed class LyricsOverlayPresenter : ILyricsOverlaySink
         RaiseStateChanged();
     }
 
-    public void SetConnectionState(ConnectionState state)
-    {
-        Show(state switch
-        {
-            ConnectionState.Searching => new IslandSnapshot(IslandMode.Idle, "等待播放", null, LyricSource.None),
-            ConnectionState.Unavailable => new IslandSnapshot(IslandMode.Idle, "等待播放", null, LyricSource.None),
-            ConnectionState.Connected => new IslandSnapshot(IslandMode.Resolving, "正在取得歌詞", null, LyricSource.RemoteRadmin),
-            ConnectionState.Disconnected => new IslandSnapshot(IslandMode.Idle, "等待播放", null, LyricSource.None),
-            _ => throw new InvalidOperationException("Unknown Lyrics connection state.")
-        });
-    }
-
-    public void ShowLyricLine(LyricLine? line)
-    {
-        Show(line is not null && !string.IsNullOrWhiteSpace(line.Text)
-            ? new IslandSnapshot(IslandMode.Playing, line.Text, line, LyricSource.RemoteRadmin)
-            : new IslandSnapshot(IslandMode.Resolving, "正在取得歌詞", null, LyricSource.RemoteRadmin));
-    }
-
     public string GetSnapshotJson() => JsonSerializer.Serialize(currentSnapshot, JsonOptions);
 
     private static string NormalizeDisplayText(IslandMode mode, string displayText)

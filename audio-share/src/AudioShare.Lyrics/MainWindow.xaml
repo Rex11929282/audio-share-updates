@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="FlowCast Lyrics"
-        Height="92"
-        Width="680"
-        MinHeight="92"
-        MinWidth="680"
+        Height="44"
+        Width="180"
+        MinHeight="44"
+        MinWidth="180"
         MaxHeight="92"
         MaxWidth="680"
         WindowStyle="None"
@@ -21,7 +21,7 @@
             Background="#F2EFFAFF"
             BorderBrush="#D8FFFFFF"
             BorderThickness="1"
-            CornerRadius="46"
+            CornerRadius="22"
             PreviewMouseLeftButtonDown="WindowSurface_OnPreviewMouseLeftButtonDown">
         <Grid ClipToBounds="True">
             <wv2:WebView2CompositionControl x:Name="OverlayWebView"
@@ -33,16 +33,17 @@
                     Background="#ECF3FBFF"
                     BorderBrush="#C8FFFFFF"
                     BorderThickness="1"
-                    CornerRadius="42">
+                    CornerRadius="18">
                 <TextBlock x:Name="FallbackStatusText"
-                           Margin="30,0"
+                           Margin="20,0"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="#17384F"
                            FontFamily="Segoe UI Variable, Segoe UI"
-                           FontSize="21"
+                           FontSize="16"
                            FontWeight="SemiBold"
-                           Text="正在尋找 FlowCast"
+                           Text="等待播放"
+                           TextAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
             </Border>
         </Grid>
