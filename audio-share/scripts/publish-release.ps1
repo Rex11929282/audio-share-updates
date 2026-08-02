@@ -9,6 +9,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
+$PythonEmbedZip = [System.IO.Path]::GetFullPath($PythonEmbedZip)
+if (-not [string]::IsNullOrWhiteSpace($HostPython)) {
+    $HostPython = [System.IO.Path]::GetFullPath($HostPython)
+}
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $projectFile = Join-Path $projectRoot 'src\AudioShare.App\AudioShare.App.csproj'
