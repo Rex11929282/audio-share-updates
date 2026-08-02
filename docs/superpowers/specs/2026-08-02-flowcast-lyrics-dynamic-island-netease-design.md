@@ -260,7 +260,7 @@ Explicitly untouched:
 
 - Unit tests identify only NetEase media sessions.
 - Track-resolution tests accept exact normalized matches and reject ambiguous matches.
-- LRC tests cover timestamp parsing, metadata removal, malformed rows, empty lyrics, and translated lyric coexistence.
+- LRC tests cover timestamp parsing, metadata removal, malformed rows, multiple timestamps, and empty lyrics.
 - Synchronization tests cover play, pause, resume, seek, track change, and end of track.
 - Source-priority tests prove that remote wins and local resumes after remote expiry.
 - Wire tests cover versioning, ordering, frame-size limits, malformed JSON, disconnect, and heartbeat expiry.
