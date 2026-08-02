@@ -9,7 +9,8 @@
         MaxWidth="1500"
         MinHeight="860"
         MaxHeight="860"
-        ResizeMode="CanMinimize"
+        ResizeMode="NoResize"
+        WindowStyle="None"
         Background="#F4F8FC"
         FontFamily="Microsoft YaHei UI"
         WindowStartupLocation="CenterScreen">
@@ -83,9 +84,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Box" Property="Background" Value="#1677F4" />
-                                <Setter TargetName="Box" Property="BorderBrush" Value="#1677F4" />
+                                <Setter TargetName="Box" Property="Background" Value="#006CFF" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#006CFF" />
+                                <Setter TargetName="Check" Property="StrokeThickness" Value="2.8" />
                                 <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="1" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Box" Property="Opacity" Value="0.4" />
@@ -104,6 +109,37 @@
         <Style TargetType="ListBox">
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        </Style>
+        <Style x:Key="WindowCommandButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Width" Value="42" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="#3A526B" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="CommandSurface" Margin="3" Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CommandSurface" Property="Background" Value="#E6EFF7" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="CommandSurface" Property="Background" Value="#D5E4F0" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
@@ -134,7 +170,7 @@
             </Ellipse.Fill>
         </Ellipse>
 
-        <Grid x:Name="MainContent" Margin="28">
+        <Grid x:Name="MainContent" Margin="28,58,28,28" Opacity="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -159,6 +195,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Style="{StaticResource UtilityButton}" Click="SettingsButton_Click" Content="设置" />
                     <Button Style="{StaticResource UtilityButton}" Click="TutorialButton_Click" Content="教程" />
+                    <Button Style="{StaticResource UtilityButton}" Click="ShareHistoryButton_Click" Content="历史" />
                     <Button x:Name="UpdateButton" Style="{StaticResource UtilityButton}" Visibility="Collapsed" Click="UpdateButton_Click" Content="更新" />
                     <Button x:Name="RefreshButton" Style="{StaticResource UtilityButton}" Margin="0" Click="RefreshButton_Click" Content="刷新" />
                 </StackPanel>
@@ -203,6 +240,7 @@
                             <TextBlock x:Name="B1MeterValueText" Margin="8,0,0,0" FontSize="12" Foreground="#70869A" Text="0%" />
                         </StackPanel>
                         <TextBlock x:Name="B1SelfTestText" Margin="0,6,0,0" FontSize="12" Foreground="#70869A" Text="B1 自测：开始分享后会在这里确认音频信号。" />
+                        <TextBlock x:Name="TotalShareDurationText" Margin="0,6,0,0" FontSize="12" FontWeight="SemiBold" Foreground="#278093" Text="累计分享 00:00:00" />
                         <TextBlock x:Name="RecentActivityText" Margin="0,8,0,0" FontSize="12" Foreground="#70869A" TextWrapping="Wrap" />
                         <StackPanel x:Name="B1ActivityBars" Margin="0,13,0,0" Orientation="Horizontal" Opacity="0.65">
                             <Rectangle Width="4" Height="10" Margin="0,0,4,0" Fill="#36C8C2" RadiusX="2" RadiusY="2" />
@@ -291,7 +329,23 @@
                         </StackPanel>
                     </Grid>
                     <TextBlock x:Name="EmptyStateText" Grid.Row="1" Margin="0,18,0,2" Foreground="#72879A" Text="正在检测音频会话..." />
-                    <ListBox x:Name="ApplicationList" Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding Applications}" AllowDrop="True" ScrollViewer.VerticalScrollBarVisibility="Auto" PreviewMouseLeftButtonDown="ApplicationList_PreviewMouseLeftButtonDown" PreviewMouseMove="ApplicationList_PreviewMouseMove" Drop="ApplicationList_Drop">
+                    <ListBox x:Name="ApplicationList" Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding Applications}" AllowDrop="True" Focusable="False" FocusVisualStyle="{x:Null}" KeyboardNavigation.IsTabStop="False" ScrollViewer.VerticalScrollBarVisibility="Auto" PreviewMouseLeftButtonDown="ApplicationList_PreviewMouseLeftButtonDown" PreviewMouseMove="ApplicationList_PreviewMouseMove" Drop="ApplicationList_Drop">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Margin="0,5" Padding="14,12" Background="#BFFFFFFF" BorderBrush="#C8DAE8" BorderThickness="1" CornerRadius="16">
@@ -301,25 +355,40 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <CheckBox Grid.Column="0" Margin="0,0,14,0" Style="{StaticResource ProgramCheckBox}" IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding IsSelectable}" Checked="ApplicationSelectionChanged" Unchecked="ApplicationSelectionChanged" />
+                                        <CheckBox Grid.Column="0" Margin="0,0,14,0" Style="{StaticResource ProgramCheckBox}" IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding CanRequestSelection}" Checked="ApplicationSelectionChanged" Unchecked="ApplicationSelectionChanged" />
                                         <StackPanel Grid.Column="1">
                                             <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#253F5B" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
                                             <TextBlock Margin="0,3,0,0" FontSize="12" Foreground="#788A9C" Text="{Binding DetailText}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="#277E91" Text="{Binding RouteHint}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="#277E91" Text="{Binding RouteStatusText}" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="12,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Button Padding="9,5" Margin="0,0,7,0" Click="FixToLocalRouteButton_Click" Content="改为仅自己听">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource UtilityButton}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding CanAdjustRoute}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
+                                            <Grid Width="248" Margin="0,0,7,0">
+                                                <ComboBox ItemsSource="{Binding RouteOptions}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedRoute, Mode=TwoWay}" IsEnabled="{Binding CanEditRoute}" SelectionChanged="ApplicationRouteSelectionChanged">
+                                                    <ComboBox.Style>
+                                                        <Style TargetType="ComboBox">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ComboBox.Style>
+                                                </ComboBox>
+                                                <Border Padding="12,7" Background="#E8F8F7" BorderBrush="#9BDBD6" BorderThickness="1" CornerRadius="11" Visibility="Collapsed">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold" Foreground="#167C78" Text="{Binding RouteDisplayText}" />
+                                                </Border>
+                                            </Grid>
                                             <Button Padding="9,5" Margin="0,0,7,0" Style="{StaticResource UtilityButton}" Click="HideProgramButton_Click" Content="不再显示" />
                                             <Button Padding="9,5" Margin="0,0,7,0" Style="{StaticResource UtilityButton}" Click="FavoriteButton_Click" Content="{Binding FavoriteButtonText}" />
                                             <Border Padding="10,5" Background="#E8F1FF" CornerRadius="12">
@@ -360,7 +429,7 @@
                             <TextBlock x:Name="ExperimentalRoutingStatusText" Foreground="#426985" TextWrapping="Wrap" Text="正在检查音频路由..." />
                             <TextBlock x:Name="InstructionText" Visibility="Collapsed" />
                         </StackPanel>
-                        <Button x:Name="ApplyRoutingButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" IsEnabled="False" Click="ApplyRoutingButton_Click" Content="开始分享" />
+                        <Button x:Name="ApplyRoutingButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" IsEnabled="False" Visibility="Collapsed" Click="ApplyRoutingButton_Click" Content="开始分享" />
                         <Button x:Name="ScheduleStopButton" Grid.Column="2" Style="{StaticResource UtilityButton}" Margin="0" Click="ScheduleStopButton_Click" Content="定时" />
                     </Grid>
                 </Border>
@@ -400,26 +469,49 @@
             </StackPanel>
         </Grid>
 
-        <Border x:Name="LaunchOverlay" Panel.ZIndex="20" Background="#F4F8FC" Opacity="1" IsHitTestVisible="True">
+        <Grid Height="42" VerticalAlignment="Top" Background="#ECFFFFFF" Panel.ZIndex="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.ColumnSpan="2" BorderBrush="#C9DCE9" BorderThickness="0,0,0,1" />
+            <Border Grid.Column="0" Background="Transparent" MouseLeftButtonDown="WindowHeader_MouseLeftButtonDown" />
+            <StackPanel Grid.Column="0" Margin="14,0" HorizontalAlignment="Left" IsHitTestVisible="False" Orientation="Horizontal" VerticalAlignment="Center">
+                <Image Width="20" Height="20" Source="/Assets/flowcast-logo.png" Stretch="Uniform" />
+                <TextBlock Margin="8,0,0,0" FontSize="13" FontWeight="SemiBold" Foreground="#25415D" Text="FlowCast" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource WindowCommandButton}" Click="MinimizeWindow_Click" ToolTip="最小化" Content="-" />
+                <Button Style="{StaticResource WindowCommandButton}" Click="CloseWindow_Click" ToolTip="关闭" Content="&#215;" />
+            </StackPanel>
+        </Grid>
+
+        <Border x:Name="LaunchOverlay" Panel.ZIndex="20" Opacity="1" IsHitTestVisible="True">
+            <Border.Background>
+                <SolidColorBrush Color="#FBFCFF" />
+            </Border.Background>
             <Grid>
-                <Ellipse Width="560" Height="560" Fill="#B6EDF5" Opacity="0.32" />
-                <Ellipse x:Name="LaunchRingOuter" Width="240" Height="240" HorizontalAlignment="Center" VerticalAlignment="Center" Stroke="#8DE2DE" StrokeThickness="1.4" Opacity="0" />
-                <Ellipse x:Name="LaunchRingInner" Width="178" Height="178" HorizontalAlignment="Center" VerticalAlignment="Center" Stroke="#4BCBCE" StrokeThickness="2" Opacity="0" />
-                <StackPanel x:Name="LaunchBrand" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Border Width="118" Height="118" HorizontalAlignment="Center" Background="#EFFFFFFF" CornerRadius="38" Effect="{StaticResource SoftShadow}">
-                        <Image Margin="22" Source="/Assets/flowcast-logo.png" Stretch="Uniform" />
-                    </Border>
-                    <TextBlock Margin="0,22,0,0" HorizontalAlignment="Center" FontSize="31" FontWeight="SemiBold" Foreground="#173452" Text="FlowCast" />
-                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="15" Foreground="#5F7891" Text="音乐分享" />
-                    <StackPanel HorizontalAlignment="Center" Margin="0,22,0,0" Orientation="Horizontal" VerticalAlignment="Bottom">
-                        <Rectangle x:Name="LaunchWaveOne" Width="5" Height="14" Margin="3,0" Fill="#28BFC3" RadiusX="3" RadiusY="3" />
-                        <Rectangle x:Name="LaunchWaveTwo" Width="5" Height="26" Margin="3,0" Fill="#42D0CC" RadiusX="3" RadiusY="3" />
-                        <Rectangle x:Name="LaunchWaveThree" Width="5" Height="38" Margin="3,0" Fill="#1FAFC2" RadiusX="3" RadiusY="3" />
-                        <Rectangle x:Name="LaunchWaveFour" Width="5" Height="26" Margin="3,0" Fill="#42D0CC" RadiusX="3" RadiusY="3" />
-                        <Rectangle x:Name="LaunchWaveFive" Width="5" Height="14" Margin="3,0" Fill="#28BFC3" RadiusX="3" RadiusY="3" />
-                    </StackPanel>
-                    <TextBlock x:Name="LaunchStatusText" Margin="0,18,0,0" HorizontalAlignment="Center" FontSize="13" Foreground="#5F7891" Text="正在准备音频分享" />
-                </StackPanel>
+                <Border x:Name="LaunchRingOuter" Visibility="Collapsed" />
+                <Ellipse x:Name="LaunchRingInner" Visibility="Collapsed" />
+                <Grid x:Name="LaunchBrand" Width="460" Height="190" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Canvas Width="430" Height="112" HorizontalAlignment="Center" VerticalAlignment="Top">
+                        <Canvas.Effect>
+                            <BlurEffect x:Name="LaunchBrandBlur" Radius="16" />
+                        </Canvas.Effect>
+                        <Rectangle x:Name="LaunchWaveOne" Canvas.Left="48" Canvas.Top="51" Width="8" Height="20" Fill="#31C2C7" RadiusX="4" RadiusY="4" RenderTransformOrigin="0.5,0.5" />
+                        <Rectangle x:Name="LaunchWaveTwo" Canvas.Left="66" Canvas.Top="38" Width="8" Height="46" Fill="#38C9CC" RadiusX="4" RadiusY="4" RenderTransformOrigin="0.5,0.5" />
+                        <Rectangle x:Name="LaunchWaveThree" Canvas.Left="84" Canvas.Top="22" Width="8" Height="78" Fill="#20B6C3" RadiusX="4" RadiusY="4" RenderTransformOrigin="0.5,0.5" />
+                        <Rectangle x:Name="LaunchWaveFour" Canvas.Left="102" Canvas.Top="38" Width="8" Height="46" Fill="#38C9CC" RadiusX="4" RadiusY="4" RenderTransformOrigin="0.5,0.5" />
+                        <Rectangle x:Name="LaunchWaveFive" Canvas.Left="120" Canvas.Top="51" Width="8" Height="20" Fill="#31C2C7" RadiusX="4" RadiusY="4" RenderTransformOrigin="0.5,0.5" />
+                        <Path x:Name="LaunchNote" Data="M210,70 L210,26 L249,38 L249,70" Stroke="#25B9C4" StrokeThickness="7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" RenderTransformOrigin="0.5,0.5" />
+                        <Ellipse x:Name="LaunchNoteHeadOne" Canvas.Left="194" Canvas.Top="62" Width="27" Height="20" Fill="#25B9C4" RenderTransformOrigin="0.5,0.5" />
+                        <Ellipse x:Name="LaunchNoteHeadTwo" Canvas.Left="233" Canvas.Top="62" Width="27" Height="20" Fill="#25B9C4" RenderTransformOrigin="0.5,0.5" />
+                        <Path x:Name="LaunchSignal" Data="M278,38 Q305,56 278,74 M292,24 Q334,56 292,88" Stroke="#456080" StrokeThickness="6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent" RenderTransformOrigin="0.5,0.5" />
+                        <Path x:Name="LaunchSignalArrow" Data="M346,46 L362,56 L346,66 Z" Fill="#456080" RenderTransformOrigin="0.5,0.5" />
+                    </Canvas>
+                    <TextBlock x:Name="LaunchTitle" Margin="0,129,0,0" HorizontalAlignment="Center" VerticalAlignment="Top" FontFamily="Segoe UI Variable Display" FontSize="34" FontWeight="SemiBold" Foreground="#163653" Text="FlowCast" />
+                    <TextBlock x:Name="LaunchStatusText" Visibility="Collapsed" />
+                </Grid>
             </Grid>
         </Border>
     </Grid>

@@ -4,12 +4,13 @@ using AudioShare.Core;
 
 namespace AudioShare.App;
 
-public sealed class UpdateAvailableDialog : Window
+public sealed class UpdateAvailableDialog : FlowCastDialogWindow
 {
     public UpdateAvailableDialog(Window owner, Version currentVersion, ReleaseUpdate update)
     {
         Owner = owner;
         Title = "FlowCast 更新";
+        Tone = FlowCastWindowTone.Update;
         Width = 440;
         Height = 300;
         ResizeMode = ResizeMode.NoResize;

@@ -33,7 +33,22 @@ public sealed class RouteCoordinatorTests
     }
 
     [Fact]
-    public async Task GetSelectedSessions_ReturnsOnlyActiveNonDiscordSelections()
+    public async Task SelectOnlyAsync_ReplacesThePreviousSelection()
+    {
+        var coordinator = new RouteCoordinator();
+        var chrome = new AudioSession(10, 100, "chrome.exe", "Chrome", true);
+        var cloudMusic = new AudioSession(11, 101, "cloudmusic.exe", "NetEase Cloud Music", true);
+
+        await coordinator.ShareAsync(chrome, CancellationToken.None);
+        var result = await coordinator.SelectOnlyAsync(cloudMusic, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.False(coordinator.IsSelected(chrome));
+        Assert.True(coordinator.IsSelected(cloudMusic));
+    }
+
+    [Fact]
+    public async Task GetSelectedSessions_ReturnsAllNonDiscordSelectionsIncludingSilentApps()
     {
         var coordinator = new RouteCoordinator();
         var chrome = new AudioSession(10, 100, "chrome.exe", "Chrome", true);
@@ -46,7 +61,7 @@ public sealed class RouteCoordinatorTests
 
         var selected = coordinator.GetSelectedSessions([chrome, discord, silent]);
 
-        Assert.Equal([chrome], selected);
+        Assert.Equal([chrome, silent], selected);
     }
 
     [Fact]

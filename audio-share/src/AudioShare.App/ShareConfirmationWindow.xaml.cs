@@ -3,7 +3,7 @@ using AudioShare.Core;
 
 namespace AudioShare.App;
 
-public partial class ShareConfirmationWindow : Window
+public partial class ShareConfirmationWindow : FlowCastDialogWindow
 {
     public ShareConfirmationWindow(Window owner, ShareConfirmation confirmation)
     {

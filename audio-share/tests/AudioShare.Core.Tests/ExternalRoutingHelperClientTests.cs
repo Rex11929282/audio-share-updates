@@ -148,6 +148,7 @@ public sealed class ExternalRoutingHelperClientTests
 
         var route = await client.GetRouteAsync(41, processStartUtcTicks, "chrome", CancellationToken.None);
         await client.SetRouteAsync(41, processStartUtcTicks, "chrome", "device-a", CancellationToken.None);
+        await client.ClearRouteAsync(41, processStartUtcTicks, "chrome", CancellationToken.None);
         await client.RestoreRouteAsync(41, processStartUtcTicks, "chrome", previousRoute, CancellationToken.None);
 
         Assert.Equal(previousRoute, route);
@@ -155,6 +156,7 @@ public sealed class ExternalRoutingHelperClientTests
             fixture.Requests,
             request => AssertRouteRequest(request, "get-route", 41, processStartUtcTicks, "chrome", null),
             request => AssertRouteRequest(request, "set-route", 41, processStartUtcTicks, "chrome", "device-a"),
+            request => AssertRouteRequest(request, "clear-route", 41, processStartUtcTicks, "chrome", null),
             request =>
             {
                 AssertRouteRequest(request, "restore-route", 41, processStartUtcTicks, "chrome", null);

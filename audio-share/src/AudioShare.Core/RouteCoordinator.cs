@@ -27,6 +27,21 @@ public sealed class RouteCoordinator
         return Task.FromResult(RouteResult.Success());
     }
 
+    public Task<RouteResult> SelectOnlyAsync(AudioSession session, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        token.ThrowIfCancellationRequested();
+
+        if (DeniedProcessNames.Contains(session.ProcessName))
+        {
+            return Task.FromResult(RouteResult.Failed("Discord cannot be shared."));
+        }
+
+        selectedProcesses.Clear();
+        selectedProcesses.TryAdd(ProcessKey.From(session), 0);
+        return Task.FromResult(RouteResult.Success());
+    }
+
     public Task<RouteResult> UnshareAsync(AudioSession session, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -69,7 +84,6 @@ public sealed class RouteCoordinator
         }
 
         return sessions
-            .Where(session => session.HasAudio)
             .Where(session => !DeniedProcessNames.Contains(session.ProcessName))
             .Where(IsSelected)
             .ToArray();

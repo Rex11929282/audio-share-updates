@@ -13,9 +13,9 @@ FlowCast never lets Discord, Voicemeeter, or its own helper be selected for shar
 ## Use
 
 1. Open Voicemeeter Banana and choose your headphones or speakers as A1.
-2. Start playing audio in Chrome, NetEase Cloud Music, or another application. FlowCast shows the current output device for every detected program.
-3. If a program is using speakers, headphones, or another non-Voicemeeter route, click `改为仅自己听` in FlowCast, then pause and resume playback.
-4. Select the programs you want friends to hear, click `开始分享`, then confirm the prompt. FlowCast changes only the selected application routes.
+2. Open Chrome, NetEase Cloud Music, or another audio application. FlowCast keeps its inactive audio session visible so you can choose a route before playback begins.
+3. Choose the application output route directly in FlowCast: Windows default, Voicemeeter Input (share path), Voicemeeter AUX Input (local only), or an enabled speaker/headphone device. Pause and resume the application after changing it. Choosing a route never starts sharing.
+4. Start playback, select the programs you want friends to hear, click `开始分享`, then confirm the prompt. FlowCast changes only the selected application routes.
 5. Use `静音分享` to mute only the shared program path. Your local listening continues.
 6. Click `停止分享` to restore local-only playback. Closing the main window lets you choose the system tray or a full exit.
 
@@ -38,7 +38,7 @@ If a selected application closes, a required endpoint disappears, or Windows cha
 
 FlowCast checks the latest GitHub release in the background after startup. It shows an update dialog only when a newer approved release exists. Choosing `立即更新` downloads the signed release asset, verifies SHA-256, safely stops an active share, installs the update, and restarts FlowCast.
 
-Only approved major releases are published. Small local changes are not uploaded and therefore do not create an update notice for users. A release must include:
+Only approved major releases are published. Small local changes are not uploaded and therefore do not create an update notice for users. The installer includes FlowCast and FlowCast Lyrics. A release must include:
 
 - `FlowCast-Setup.exe`
 - `FlowCast-Setup.exe.sha256` or a GitHub-provided SHA-256 digest
@@ -46,7 +46,7 @@ Only approved major releases are published. Small local changes are not uploaded
 Create an installer locally without uploading build output:
 
 ```powershell
-.\audio-share\scripts\publish-release.ps1 -OutputDirectory C:\release\FlowCast-1.0.0
+.\audio-share\scripts\publish-release.ps1 -OutputDirectory C:\release\FlowCast-1.1.0
 ```
 
 ## Build And Test

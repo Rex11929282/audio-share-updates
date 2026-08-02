@@ -36,7 +36,6 @@ public partial class MainWindow : Window
     private readonly SharingRecoveryScope sharingRecoveryScope = new();
     private readonly ExternalRoutingHelperClient routingHelper = new(Path.Combine(AppContext.BaseDirectory, "router-helper"));
     private readonly IApplicationRouteExecutor routeExecutor;
-    private readonly DefaultPlaybackDeviceService defaultPlaybackDeviceService = new();
     private readonly VoicemeeterSharingBusService voicemeeterSharingBusService = new();
     private readonly FlowCastHealthProbe healthProbe;
     private readonly DispatcherTimer refreshTimer = new() { Interval = PassiveRefreshInterval };
@@ -48,11 +47,16 @@ public partial class MainWindow : Window
     private readonly FavoritePrograms favoritePrograms;
     private readonly ApplicationOrder applicationOrder;
     private readonly FlowCastPreferencesStore preferencesStore = new();
+    private readonly ShareHistoryStore shareHistoryStore = new();
     private readonly FlowCastTrayIcon trayIcon;
     private FlowCastPreferences preferences;
     private readonly MotionController motionController;
     private readonly List<string> activityLog = [];
+    private readonly List<ShareHistoryEntry> shareHistory = [];
+    private DateTimeOffset? currentShareStartedAt;
+    private string? currentShareProgramName;
     private IReadOnlyList<AudioSession> activeSessions = [];
+    private IReadOnlyList<ExternalAudioDevice> outputDevices = [];
     private string? inputDeviceId;
     private string? auxDeviceId;
     private string experimentalRoutingStatus = "正在检查音频路由组件和输出设备。";
@@ -86,6 +90,7 @@ public partial class MainWindow : Window
         favoritePrograms = new FavoritePrograms(LoadFavoritePrograms());
         applicationOrder = new ApplicationOrder(LoadApplicationOrder());
         preferences = preferencesStore.Load();
+        shareHistory.AddRange(shareHistoryStore.Load());
         motionController = new MotionController(
             this,
             MainContent,
@@ -93,9 +98,13 @@ public partial class MainWindow : Window
             LaunchSheen,
             LaunchOverlay,
             LaunchBrand,
+            LaunchTitle,
+            LaunchBrandBlur,
             LaunchRingOuter,
             LaunchRingInner,
             [LaunchWaveOne, LaunchWaveTwo, LaunchWaveThree, LaunchWaveFour, LaunchWaveFive],
+            [LaunchNote, LaunchNoteHeadOne, LaunchNoteHeadTwo],
+            [LaunchSignal, LaunchSignalArrow],
             LaunchStatusText,
             TopStatusCard,
             StatusPulse,
@@ -110,6 +119,7 @@ public partial class MainWindow : Window
             preferences.ReduceMotion);
 
         ProcessStatuses.Add(new ProcessStatus("Voicemeeter Banana", "voicemeeterpro"));
+        UpdateShareStatistics();
 
         Loaded += MainWindow_Loaded;
         ContentRendered += MainWindow_ContentRendered;
@@ -148,7 +158,22 @@ public partial class MainWindow : Window
         refreshTimer.Start();
         signalTimer.Start();
         _ = ResetStartupToLocalOnlyAfterWindowIsReadyAsync();
+        _ = ShowQuickStartAfterLaunchAsync();
     }
+
+    private void WindowHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    private void MinimizeWindow_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) =>
+        Close();
 
     private void MainWindow_ContentRendered(object? sender, EventArgs e)
     {
@@ -169,10 +194,34 @@ public partial class MainWindow : Window
             return;
         }
 
-        SetDefaultPlaybackToAux();
         SetMainInputSharing(false);
-        await ResetToLocalOnlyAsync("已打开 FlowCast，正在重置为只自己听。");
-        AddActivity("FlowCast 已启动，当前为只自己听。");
+        await ResetToLocalOnlyAsync("已打开 FlowCast，正在确认未分享。");
+        AddActivity("FlowCast 已启动，当前不分享音频。");
+    }
+
+    private async Task ShowQuickStartAfterLaunchAsync()
+    {
+        if (preferences.QuickStartCompleted)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3), lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (isClosing)
+        {
+            return;
+        }
+        if (isClosing)
+        {
+            return;
+        }
+
+        new TutorialWindow(this).ShowDialog();
+        preferences = preferences.CompleteQuickStart();
+        preferencesStore.Save(preferences);
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
@@ -226,14 +275,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (CanResetToLocalOnly())
+        if (HasActiveResetGate())
         {
             e.Cancel = true;
-            experimentalRoutingStatus = "正在重置为只自己听，然后关闭窗口...";
+            experimentalRoutingStatus = "正在恢复分享前的播放路径，然后关闭窗口...";
             UpdateRoutingSetupState();
             try
             {
-                if (!await ResetToLocalOnlyAsync("正在重置为只自己听，然后关闭窗口...", CancellationToken.None))
+                if (!await RestoreRoutesBeforeExitAsync(CancellationToken.None))
                 {
                     exitRequested = false;
                     return;
@@ -244,8 +293,8 @@ public partial class MainWindow : Window
             catch (Exception)
             {
                 exitRequested = false;
-                experimentalRoutingStatus = "关闭前无法确认声音已回到只自己听，因此已取消关闭。";
-                ShowError("请先点击“停止分享，只自己听”，确认完成后再关闭 FlowCast。", null);
+                experimentalRoutingStatus = "关闭前无法确认声音已恢复分享前的路径，因此已取消关闭。";
+                ShowError("请先点击“停止分享”，确认完成后再关闭 FlowCast。", null);
                 return;
             }
             finally
@@ -313,7 +362,7 @@ public partial class MainWindow : Window
         UpdateRoutingSetupState();
         try
         {
-            return await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+            return await StopSharingAndRestoreRoutesAsync(lifetimeCancellation.Token);
         }
         catch (OperationCanceledException) when (isClosing)
         {
@@ -322,7 +371,7 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             SetExperimentalRoutingUnavailable("暂时无法确认是否已停止分享，请重新打开主窗口后再试。", exception);
-            ShowError("FlowCast 还没能确认声音已回到只自己听。", null);
+            ShowError("FlowCast 还没能确认声音已恢复分享前的播放路径。", null);
             return false;
         }
         finally
@@ -410,6 +459,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        var previousRouteState = sharingRouteState;
+        var previousAttention = requiresAttention;
+        var previousMainInputShared = sharingBusStatus?.IsMainInputShared;
         try
         {
             sharingBusStatus = voicemeeterSharingBusService.GetStatus();
@@ -423,14 +475,22 @@ public partial class MainWindow : Window
             {
                 motionController.SetAtmosphereLevel(0);
             }
-            UpdateRoutingSetupState();
         }
         catch
         {
             sharingBusStatus = null;
             motionController.SetAtmosphereLevel(0);
-            UpdateRoutingSetupState();
         }
+
+        if (previousRouteState != sharingRouteState ||
+            previousAttention != requiresAttention ||
+            previousMainInputShared != sharingBusStatus?.IsMainInputShared)
+        {
+            UpdateRoutingSetupState();
+            return;
+        }
+
+        UpdateLiveSignalVisuals();
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
@@ -540,6 +600,10 @@ public partial class MainWindow : Window
             var selectedProgramClosed = UpdateApplications(activeSessions);
             var refreshEndpoints = refreshRouting || ++backgroundRefreshCount % 4 == 0;
             var endpointsChanged = refreshEndpoints && await RefreshExperimentalRoutingAvailabilityAsync();
+            if (refreshEndpoints)
+            {
+                UpdateApplications(activeSessions);
+            }
             var refreshRouteState = refreshRouting || sharingRouteState == SharingRouteState.Sharing;
             if (refreshRouteState)
             {
@@ -607,9 +671,10 @@ public partial class MainWindow : Window
         var selectedProgramClosed = routeCoordinator.RemoveSelectionsAbsentFrom(sessions);
         Applications.Clear();
 
-        var audibleSessions = favoritePrograms.Order(eligibleSessions.Where(session => session.HasAudio));
-        applicationOrder.Synchronize(audibleSessions);
-        foreach (var session in applicationOrder.Order(audibleSessions))
+        var visibleSessions = favoritePrograms.Order(eligibleSessions
+            .OrderByDescending(session => session.HasAudio));
+        applicationOrder.Synchronize(visibleSessions);
+        foreach (var session in applicationOrder.Order(visibleSessions))
         {
             var isProtected = AudioRoutingPolicy.IsProtectedProcess(session.ProcessName);
             Applications.Add(new AudioApplicationRow(
@@ -617,6 +682,7 @@ public partial class MainWindow : Window
                 isProtected,
                 !isProtected && routeCoordinator.IsSelected(session),
                 favoritePrograms.Contains(session.ProcessName),
+                outputDevices,
                 inputDeviceId,
                 auxDeviceId));
         }
@@ -651,12 +717,13 @@ public partial class MainWindow : Window
 
     private async void ApplicationSelectionChanged(object sender, RoutedEventArgs e)
     {
-        if (sender is not CheckBox checkBox || checkBox.DataContext is not AudioApplicationRow row || !row.IsSelectable)
+        if (sender is not CheckBox checkBox || checkBox.DataContext is not AudioApplicationRow row || row.IsProtected)
         {
             return;
         }
 
         var shouldShare = checkBox.IsChecked == true;
+
         if (routeCoordinator.IsSelected(row.Session) == shouldShare)
         {
             return;
@@ -665,11 +732,68 @@ public partial class MainWindow : Window
         checkBox.IsEnabled = false;
         try
         {
+            var previousSelection = shouldShare
+                ? Applications.FirstOrDefault(application =>
+                    !ReferenceEquals(application, row) && routeCoordinator.IsSelected(application.Session))
+                : null;
+            if (previousSelection is not null)
+            {
+                var message = $"选择“{row.DisplayName}”会停止分享“{previousSelection.DisplayName}”，并恢复它原来的播放路径。\n\n要继续吗？";
+                if (!FlowCastMessageDialog.Confirm(this, "切换分享程序", message, "确认切换", "取消", FlowCastWindowTone.Share))
+                {
+                    row.IsSelected = false;
+                    checkBox.IsChecked = false;
+                    return;
+                }
+
+                if (shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted)
+                {
+                    isRoutingOperation = true;
+                    UpdateRoutingSetupState();
+                    bool restored;
+                    try
+                    {
+                        restored = await StopSharingAndRestoreRoutesAsync(lifetimeCancellation.Token);
+                    }
+                    finally
+                    {
+                        isRoutingOperation = false;
+                    }
+
+                    if (!restored)
+                    {
+                        row.IsSelected = false;
+                        checkBox.IsChecked = false;
+                        return;
+                    }
+                }
+                else
+                {
+                    await routeCoordinator.UnshareAsync(previousSelection.Session, lifetimeCancellation.Token);
+                }
+            }
+            else if (shouldShare &&
+                     !FlowCastMessageDialog.Confirm(
+                         this,
+                         "确认分享",
+                         $"要开始分享“{row.DisplayName}”的声音吗？\n\n分享开始后，其他人会听到这个程序的音频。",
+                         "开始分享",
+                         "取消",
+                         FlowCastWindowTone.Share))
+            {
+                row.IsSelected = false;
+                checkBox.IsChecked = false;
+                return;
+            }
+
             var result = shouldShare
-                ? await routeCoordinator.ShareAsync(row.Session, lifetimeCancellation.Token)
+                ? await routeCoordinator.SelectOnlyAsync(row.Session, lifetimeCancellation.Token)
                 : await routeCoordinator.UnshareAsync(row.Session, lifetimeCancellation.Token);
 
-            row.IsSelected = routeCoordinator.IsSelected(row.Session);
+            foreach (var application in Applications)
+            {
+                application.IsSelected = routeCoordinator.IsSelected(application.Session);
+            }
             if (!result.Succeeded)
             {
                 ShowError(result.Message ?? "无法更新本地勾选状态。", null);
@@ -681,6 +805,17 @@ public partial class MainWindow : Window
             if (!shouldShare)
             {
                 return;
+            }
+
+            isStartingShare = true;
+            UpdateRoutingSetupState();
+            try
+            {
+                await StartSharingAsync(showConfirmation: false);
+            }
+            finally
+            {
+                isStartingShare = false;
             }
         }
         catch (OperationCanceledException) when (isClosing)
@@ -695,7 +830,7 @@ public partial class MainWindow : Window
         {
             if (!isClosing)
             {
-                checkBox.IsEnabled = true;
+                checkBox.ClearValue(IsEnabledProperty);
                 UpdateRoutingSetupState();
             }
         }
@@ -708,14 +843,7 @@ public partial class MainWindow : Window
         motionController.SetRouteActive(shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted);
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
-        B1StatusText.Text = GetB1StatusText();
-        var b1Percent = Math.Clamp((sharingBusStatus?.B1Level ?? 0f) * 100f, 0f, 100f);
-        B1MeterFill.Width = b1Percent;
-        B1MeterValueText.Text = $"{b1Percent:0}%";
-        B1SelfTestText.Text = ShareSignalSelfTest.GetMessage(
-            sharingRouteState == SharingRouteState.Sharing,
-            sharingBusStatus?.IsMainInputShared == true,
-            sharingBusStatus?.B1Level ?? 0f);
+        UpdateLiveSignalVisuals();
         UpdateHealthChips();
         (FlowCastStatusText.Text, FlowCastStatusHintText.Text) = requiresAttention
             ? ("需要处理", experimentalRoutingStatus)
@@ -748,12 +876,48 @@ public partial class MainWindow : Window
                 ? SharingRefreshInterval
                 : PassiveRefreshInterval;
 
+        var canEditRoutes = experimentalRoutingAvailable && !isRoutingOperation;
+        foreach (var row in Applications)
+        {
+            row.SetSelectionEditingEnabled(!isRoutingOperation);
+            row.SetRouteEditingEnabled(canEditRoutes);
+            row.SetSharingState(shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted);
+        }
+
         if (requiresAttention && !wasAttention)
         {
             motionController.PlayAttention();
         }
 
         wasAttention = requiresAttention;
+    }
+
+    private void UpdateLiveSignalVisuals()
+    {
+        B1StatusText.Text = GetB1StatusText();
+        if (GetSelectedSessions().Count == 0)
+        {
+            B1MeterFill.Width = 0;
+            B1MeterValueText.Text = "0%";
+            B1SelfTestText.Text = "选择程序后才会检查 B1 音频信号。";
+            return;
+        }
+
+        var b1Percent = Math.Clamp((sharingBusStatus?.B1Level ?? 0f) * 100f, 0f, 100f);
+        B1MeterFill.Width = b1Percent;
+        B1MeterValueText.Text = $"{b1Percent:0}%";
+        B1SelfTestText.Text = ShareSignalSelfTest.GetMessage(
+            sharingRouteState == SharingRouteState.Sharing,
+            sharingBusStatus?.IsMainInputShared == true,
+            sharingBusStatus?.B1Level ?? 0f);
+
+        if (!requiresAttention &&
+            (shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted))
+        {
+            FlowCastStatusHintText.Text = shareSession.State == ShareSessionState.Sharing
+                ? $"已分享 {shareSession.Duration(DateTimeOffset.Now):hh\\:mm\\:ss}"
+                : $"分享仍在继续 {shareSession.Duration(DateTimeOffset.Now):hh\\:mm\\:ss}";
+        }
     }
 
     private IReadOnlyList<AudioSession> GetSelectedSessions() =>
@@ -768,7 +932,7 @@ public partial class MainWindow : Window
 
     private IReadOnlyList<AudioSession> GetRecoverySessions() =>
         sharingRecoveryScope.IncludeCurrent(
-            activeSessions.Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)));
+            GetSelectedSessions().Where(session => !AudioRoutingPolicy.IsProtectedProcess(session.ProcessName)));
 
     private bool CanApplyRouting() =>
         ShareStartPolicy.CanStart(
@@ -816,6 +980,11 @@ public partial class MainWindow : Window
 
     private string GetB1StatusText()
     {
+        if (GetSelectedSessions().Count == 0)
+        {
+            return "B1：未选择分享程序";
+        }
+
         if (sharingBusStatus is null)
         {
             return "B1：无法读取 Banana 状态";
@@ -857,6 +1026,24 @@ public partial class MainWindow : Window
     private bool IsConfirmedLocalOnly() =>
         sharingRouteState == SharingRouteState.LocalOnly &&
         sharingBusStatus is { IsMainInputShared: false, IsAuxShared: false };
+
+    private async Task<bool> RestoreRoutesBeforeExitAsync(CancellationToken token)
+    {
+        if (!HasActiveResetGate())
+        {
+            return true;
+        }
+
+        if (!CanResetToLocalOnly())
+        {
+            experimentalRoutingStatus = "无法在关闭前确认声音已恢复。请先恢复 Banana 后重试。";
+            ShowError("FlowCast 仍可能在分享声音，为避免朋友继续听到声音，程序暂时不会关闭。请先恢复 Voicemeeter Banana，然后再关闭。", null);
+            return false;
+        }
+
+        return await ResetToLocalOnlyAsync("正在恢复分享前的播放路径，然后关闭窗口...", token) &&
+            IsConfirmedLocalOnly();
+    }
 
     private async Task RefreshSharingRouteStateAsync()
     {
@@ -929,6 +1116,25 @@ public partial class MainWindow : Window
 
     private void ReconcileSharingStateWithB1()
     {
+        if (GetSelectedSessions().Count == 0 &&
+            !hasOwnedRoutingTransaction &&
+            GetRecoverySessions().Count == 0)
+        {
+            if (sharingBusStatus is { IsMainInputShared: false, IsAuxShared: false })
+            {
+                if (shareSession.Stop(DateTimeOffset.Now, "未选择分享程序。"))
+                {
+                    RecordCompletedShare("未选择分享程序。");
+                }
+
+                sharingRouteState = SharingRouteState.LocalOnly;
+                requiresAttention = false;
+                experimentalRoutingStatus = "当前未选择分享程序，声音只在本机播放。";
+            }
+
+            return;
+        }
+
         if (shareSession.State == ShareSessionState.Muted &&
             sharingBusStatus is { IsMainInputShared: false, IsAuxShared: false })
         {
@@ -959,6 +1165,7 @@ public partial class MainWindow : Window
 
         var probe = await healthProbe.CheckAsync(lifetimeCancellation.Token);
         healthSummary = probe.Summary;
+        outputDevices = probe.OutputDevices;
         SetVoicemeeterBananaInstalled(probe.BananaInstalled);
         if (!probe.RoutingAvailable)
         {
@@ -991,8 +1198,8 @@ public partial class MainWindow : Window
             auxDeviceId = probe.Endpoints.AuxInput.Id;
             experimentalRoutingAvailable = true;
             experimentalRoutingStatus = hasOwnedRoutingTransaction
-                ? "本次音频路由已生效。再次应用会按当前勾选替换；停止分享会让声音只在本机播放。"
-                : "音频路由已就绪。点击应用并确认后才会更改 Windows 路由；停止分享会让声音只在本机播放。";
+                ? "本次音频路由已生效。再次应用会按当前勾选替换；停止分享会恢复分享前的播放路径。"
+                : "音频路由已就绪。点击应用并确认后才会更改 Windows 路由；停止分享会恢复分享前的播放路径。";
             requiresAttention = false;
             return endpointsChanged;
         }
@@ -1032,7 +1239,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task StartSharingAsync()
+    private async Task StartSharingAsync(bool showConfirmation = true)
     {
         var selected = GetSelectedSessions();
         if (!CanApplyRouting())
@@ -1078,7 +1285,7 @@ public partial class MainWindow : Window
         }
 
         var confirmation = ShareConfirmation.Create(routableSessions, selected);
-        if (new ShareConfirmationWindow(this, confirmation).ShowDialog() != true)
+        if (showConfirmation && new ShareConfirmationWindow(this, confirmation).ShowDialog() != true)
         {
             return;
         }
@@ -1132,12 +1339,15 @@ public partial class MainWindow : Window
                 await RecoverFromShareStartFailureAsync("开始分享状态无效。", null);
                 return;
             }
+            currentShareStartedAt = DateTimeOffset.Now;
+            currentShareProgramName = selected.FirstOrDefault()?.DisplayName ?? "未知程序";
+            UpdateShareStatistics();
             sharingRouteState = SharingRouteState.Sharing;
             motionController.PlaySharingConfirmed();
-            experimentalRoutingStatus = "音频路由已应用。更改勾选后再次应用即可替换；停止分享会让声音只在本机播放。";
+            experimentalRoutingStatus = "音频路由已应用。更改勾选后再次应用即可替换；停止分享会恢复分享前的播放路径。";
             AddActivity("分享已确认。");
             ErrorPanel.Visibility = Visibility.Collapsed;
-            MessageBox.Show(this, "分享已确认", "FlowCast", MessageBoxButton.OK, MessageBoxImage.Information);
+            FlowCastMessageDialog.Show(this, "分享已开始", "已确认分享。朋友现在会听到你勾选的程序音频。", FlowCastWindowTone.Share);
         }
         catch (OperationCanceledException) when (isClosing)
         {
@@ -1162,7 +1372,7 @@ public partial class MainWindow : Window
         bool recovered;
         try
         {
-            recovered = await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+            recovered = await StopSharingAndRestoreRoutesAsync(lifetimeCancellation.Token);
         }
         catch (OperationCanceledException) when (isClosing)
         {
@@ -1199,9 +1409,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var confirmationText = "停止分享后，所有当前检测到的程序都会改为只在你的耳机播放，不会送到 B1。\n\n" +
-                               "现在停止分享吗？";
-        if (MessageBox.Show(confirmationText, "停止分享，只自己听", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        var confirmationText = "停止分享会关闭 B1，并恢复你开始分享前的播放路径。\n\n现在停止分享吗？";
+        if (!FlowCastMessageDialog.Confirm(this, "停止分享", confirmationText, "停止分享", "取消", FlowCastWindowTone.Error))
         {
             return;
         }
@@ -1210,7 +1419,7 @@ public partial class MainWindow : Window
         UpdateRoutingSetupState();
         try
         {
-            await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token);
+            await StopSharingAndRestoreRoutesAsync(lifetimeCancellation.Token);
         }
         catch (OperationCanceledException) when (isClosing)
         {
@@ -1264,7 +1473,7 @@ public partial class MainWindow : Window
         UpdateRoutingSetupState();
     }
 
-    private async Task<bool> StopSharingAndKeepLocalOnlyAsync(
+    private async Task<bool> StopSharingAndRestoreRoutesAsync(
         CancellationToken token,
         bool disconnected = false,
         string? stopReason = null)
@@ -1274,11 +1483,6 @@ public partial class MainWindow : Window
             string.IsNullOrWhiteSpace(inputDeviceId) || string.IsNullOrWhiteSpace(auxDeviceId))
         {
             ShowError("无法停止分享：Voicemeeter Banana 尚未就绪。", null);
-            return false;
-        }
-
-        if (!SetDefaultPlaybackToAux())
-        {
             return false;
         }
 
@@ -1299,33 +1503,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var routableSessions = preferences.RestoreLocalPlayback
-            ? applicationOrder.Order(GetRecoverySessions()).Reverse().ToArray()
-            : [];
-        var routeableSessions = await GetRouteableSessionsAsync(routableSessions, token);
         var routesVerified = true;
-        if (routeableSessions.Count > 0)
-        {
-            var localOnlyPlan = ApplicationRoutePlanner.Create(routeableSessions, [], inputDeviceId, auxDeviceId);
-            var applyResult = await routeExecutor.ApplyAsync(localOnlyPlan, token);
-            hasOwnedRoutingTransaction = applyResult.HasPendingTransaction;
-            if (!applyResult.Succeeded)
-            {
-                experimentalRoutingStatus = $"停止分享失败：{applyResult.Message}";
-                ShowError("无法将所有程序改为仅本机收听。", null);
-                return false;
-            }
-
-            routesVerified = await VerifyRoutePlanAsync(localOnlyPlan, token);
-            if (!routesVerified)
-            {
-                requiresAttention = true;
-                experimentalRoutingStatus = "未能确认所有程序已回到本机收听。";
-                ShowError("停止分享后无法验证音频路由。", null);
-                return false;
-            }
-
-        }
 
         SharingBusStatus status;
         try
@@ -1356,10 +1534,13 @@ public partial class MainWindow : Window
 
         hasOwnedRoutingTransaction = false;
         sharingRouteState = resultingRouteState;
-        shareSession.Stop(
+        if (shareSession.Stop(
             DateTimeOffset.Now,
             stopReason ?? "已停止分享。",
-            disconnected);
+            disconnected))
+        {
+            RecordCompletedShare(stopReason ?? "已停止分享。");
+        }
         foreach (var session in GetRecoverySessions())
         {
             await routeCoordinator.UnshareAsync(session, token);
@@ -1368,8 +1549,8 @@ public partial class MainWindow : Window
         UpdateApplications(activeSessions);
 
         experimentalRoutingStatus = disconnected
-            ? stopReason ?? "分享已断开，已恢复为只自己听。"
-            : "已停止分享。所有当前检测到的程序只会在本机播放。";
+            ? stopReason ?? "分享已断开，已恢复分享前的播放路径。"
+            : "已停止分享，已恢复分享前的播放路径。";
         requiresAttention = false;
         if (wasSharing && preferences.EndSharingSoundEnabled)
         {
@@ -1381,7 +1562,7 @@ public partial class MainWindow : Window
         }
         motionController.PlayLocalOnlyConfirmed();
         stopSchedule.Cancel();
-        AddActivity(disconnected ? "分享已断开并恢复为只自己听。" : "已停止分享并取消勾选。");
+        AddActivity(disconnected ? "分享已断开并恢复分享前的播放路径。" : "已停止分享并取消勾选。");
         ErrorPanel.Visibility = Visibility.Collapsed;
         return true;
     }
@@ -1405,7 +1586,8 @@ public partial class MainWindow : Window
             catch (InvalidOperationException exception) when (
                 exception.Message.Contains("Active output session not found", StringComparison.OrdinalIgnoreCase))
             {
-                // The app already sends audio directly to Voicemeeter Input, so B1 is its safe gate.
+                // Windows stores app routes by process identity, so a silent process can be prepared safely.
+                routeable.Add(session);
             }
         }
 
@@ -1448,7 +1630,10 @@ public partial class MainWindow : Window
 
                 pendingLocalOnlyReset = true;
                 requiresAttention = false;
-                shareSession.Stop(DateTimeOffset.Now, reason, disconnected: true);
+                if (shareSession.Stop(DateTimeOffset.Now, reason, disconnected: true))
+                {
+                    RecordCompletedShare(reason);
+                }
                 experimentalRoutingStatus = reason;
                 AddActivity("分享程序已关闭，等待自动恢复本机播放。");
                 if (wasSharing && preferences.EndSharingSoundEnabled)
@@ -1473,7 +1658,7 @@ public partial class MainWindow : Window
         isRoutingOperation = true;
         try
         {
-            if (!await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token, disconnected: true, stopReason: reason))
+            if (!await StopSharingAndRestoreRoutesAsync(lifetimeCancellation.Token, disconnected: true, stopReason: reason))
             {
                 requiresAttention = true;
                 experimentalRoutingStatus = reason;
@@ -1549,7 +1734,7 @@ public partial class MainWindow : Window
         isRoutingOperation = true;
         try
         {
-            if (!await StopSharingAndKeepLocalOnlyAsync(lifetimeCancellation.Token))
+            if (!await StopSharingAndRestoreRoutesAsync(lifetimeCancellation.Token))
             {
                 requiresAttention = true;
                 experimentalRoutingStatus = "定时停止未完成，将继续重试。";
@@ -1572,6 +1757,49 @@ public partial class MainWindow : Window
         }
 
         RecentActivityText.Text = string.Join("  ·  ", activityLog);
+    }
+
+    private void UpdateShareStatistics()
+    {
+        var total = shareHistory.Aggregate(TimeSpan.Zero, (sum, entry) => sum + entry.Duration);
+        if (currentShareStartedAt is { } startedAt)
+        {
+            total += DateTimeOffset.Now > startedAt ? DateTimeOffset.Now - startedAt : TimeSpan.Zero;
+        }
+
+        TotalShareDurationText.Text = $"累计分享 {total:hh\\:mm\\:ss} · {shareHistory.Count} 次";
+    }
+
+    private void RecordCompletedShare(string reason)
+    {
+        if (currentShareStartedAt is not { } startedAt || shareSession.FinalDuration <= TimeSpan.Zero)
+        {
+            currentShareStartedAt = null;
+            currentShareProgramName = null;
+            UpdateShareStatistics();
+            return;
+        }
+
+        shareHistory.Add(new ShareHistoryEntry(
+            startedAt,
+            currentShareProgramName ?? "未知程序",
+            shareSession.FinalDuration,
+            reason));
+        currentShareStartedAt = null;
+        currentShareProgramName = null;
+        shareHistoryStore.Save(shareHistory);
+        UpdateShareStatistics();
+    }
+
+    private void ShareHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var entries = shareHistory
+            .OrderByDescending(entry => entry.StartedAt)
+            .Select(entry => $"{entry.StartedAt:MM-dd HH:mm}  {entry.ProgramName}  {entry.Duration:hh\\:mm\\:ss}  {entry.StopReason}");
+        var total = shareHistory.Aggregate(TimeSpan.Zero, (sum, entry) => sum + entry.Duration);
+        var message = $"累计分享 {total:hh\\:mm\\:ss}，共 {shareHistory.Count} 次。\n\n" +
+                      (entries.Any() ? string.Join("\n", entries) : "还没有完成的分享记录。");
+        FlowCastMessageDialog.Show(this, "分享历史", message, FlowCastWindowTone.Soft);
     }
 
     private void FavoriteButton_Click(object sender, RoutedEventArgs e)
@@ -1645,13 +1873,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var result = MessageBox.Show(
-            $"确定不再显示“{row.DisplayName}”吗？\n之后可在“设置”中恢复。",
-            "不再显示程序",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question,
-            MessageBoxResult.No);
-        if (result != MessageBoxResult.Yes)
+        if (!FlowCastMessageDialog.Confirm(
+                this,
+                "不再显示程序",
+                $"确定不再显示“{row.DisplayName}”吗？\n之后可在“设置”中恢复。",
+                "不再显示",
+                "取消"))
         {
             return;
         }
@@ -1713,7 +1940,7 @@ public partial class MainWindow : Window
         UpdateRoutingSetupState();
         try
         {
-            var resetSucceeded = await StopSharingAndKeepLocalOnlyAsync(token ?? lifetimeCancellation.Token);
+            var resetSucceeded = await StopSharingAndRestoreRoutesAsync(token ?? lifetimeCancellation.Token);
             if (resetSucceeded)
             {
                 await RefreshSharingRouteStateAsync();
@@ -1734,27 +1961,6 @@ public partial class MainWindow : Window
             {
                 UpdateRoutingSetupState();
             }
-        }
-    }
-
-    private bool SetDefaultPlaybackToAux()
-    {
-        if (string.IsNullOrWhiteSpace(auxDeviceId))
-        {
-            return false;
-        }
-
-        try
-        {
-            defaultPlaybackDeviceService.SetDefaultForAllRoles(auxDeviceId);
-            return true;
-        }
-        catch (Exception exception)
-        {
-            requiresAttention = true;
-            experimentalRoutingStatus = "暂时无法切回本机播放。你的声音不会被自动分享，请点击“刷新”后再试。";
-            ShowError("还没能恢复只自己听的设置。", exception);
-            return false;
         }
     }
 
@@ -1783,6 +1989,50 @@ public partial class MainWindow : Window
         foreach (var status in ProcessStatuses)
         {
             status.IsInstalled = installed;
+        }
+    }
+
+    private async void ApplicationRouteSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox { DataContext: AudioApplicationRow row } ||
+            !row.TryGetRouteChange(out var route) ||
+            !row.CanEditRoute)
+        {
+            return;
+        }
+
+        try
+        {
+            if (route.IsWindowsDefault)
+            {
+                await routingHelper.ClearRouteAsync(
+                    row.Session.ProcessId,
+                    row.Session.ProcessStartUtcTicks,
+                    row.Session.ProcessName,
+                    lifetimeCancellation.Token);
+            }
+            else
+            {
+                await routingHelper.SetRouteAsync(
+                    row.Session.ProcessId,
+                    row.Session.ProcessStartUtcTicks,
+                    row.Session.ProcessName,
+                    route.DeviceId!,
+                    lifetimeCancellation.Token);
+            }
+
+            row.MarkRouteApplied();
+            experimentalRoutingStatus = $"已为 {row.DisplayName} 选择“{route.DisplayName}”。暂停后重新播放即可生效；这不会开始分享。";
+            AddActivity(experimentalRoutingStatus);
+            ErrorPanel.Visibility = Visibility.Collapsed;
+        }
+        catch (OperationCanceledException) when (isClosing)
+        {
+        }
+        catch (Exception exception)
+        {
+            row.RevertRouteSelection();
+            ShowError($"暂时无法为 {row.DisplayName} 修改播放路径。请点击“刷新”后再试。", exception);
         }
     }
 
@@ -1826,6 +2076,12 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
 {
     private bool isSelected;
     private bool localRouteRequested;
+    private bool selectionEditingEnabled = true;
+    private bool routeEditingEnabled;
+    private bool routeChangedByUser;
+    private bool isSharing;
+    private AudioRouteOption appliedRoute;
+    private AudioRouteOption selectedRoute;
     private readonly string? inputDeviceId;
     private readonly string? auxDeviceId;
 
@@ -1834,6 +2090,7 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
         bool isProtected,
         bool isSelected,
         bool isFavorite,
+        IReadOnlyList<ExternalAudioDevice> outputDevices,
         string? inputDeviceId,
         string? auxDeviceId)
     {
@@ -1843,6 +2100,11 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
         IsFavorite = isFavorite;
         this.inputDeviceId = inputDeviceId;
         this.auxDeviceId = auxDeviceId;
+        RouteOptions = CreateRouteOptions(outputDevices, inputDeviceId, auxDeviceId);
+        appliedRoute = RouteOptions.FirstOrDefault(option =>
+                           string.Equals(option.DeviceId, session.OutputDeviceId, StringComparison.OrdinalIgnoreCase)) ??
+                       RouteOptions[0];
+        selectedRoute = appliedRoute;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -1851,15 +2113,50 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
 
     public string DisplayName => string.IsNullOrWhiteSpace(Session.DisplayName) ? Session.ProcessName : Session.DisplayName;
 
-    public string DetailText => $"{Session.ProcessName}  |  PID {Session.ProcessId}  |  当前：{GetOutputDeviceName()}";
+    public string DetailText => $"{Session.ProcessName}  |  PID {Session.ProcessId}  |  {GetRouteDisplayText()}";
 
     public bool IsProtected { get; }
 
     public bool IsFavorite { get; }
 
+    public IReadOnlyList<AudioRouteOption> RouteOptions { get; }
+
+    public AudioRouteOption SelectedRoute
+    {
+        get => selectedRoute;
+        set
+        {
+            if (value is null || Equals(selectedRoute, value))
+            {
+                return;
+            }
+
+            selectedRoute = value;
+            routeChangedByUser = true;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RouteStatusText));
+        }
+    }
+
     public string FavoriteButtonText => IsFavorite ? "已置顶" : "置顶";
 
-    public bool IsSelectable => !IsProtected;
+    public bool IsSelectable => !IsProtected && Session.HasAudio;
+
+    public bool CanRequestSelection => !IsProtected && selectionEditingEnabled && !IsSelected;
+
+    public bool IsSharing => isSharing && IsSelected;
+
+    public string RouteDisplayText => IsSharing ? "正在分享路径" : "分享路径";
+
+    public bool CanEditRoute => !IsProtected && !IsSelected && routeEditingEnabled && RouteOptions.Count > 1;
+
+    public string RouteStatusText => IsProtected
+        ? "此程序受保护，不会被 FlowCast 路由。"
+        : !Session.HasAudio
+            ? "暂时没有播放声音；你仍可先选择播放路径，下一次播放会使用它。"
+            : !routeEditingEnabled
+                ? "分享进行中或正在切换，停止分享后才能调整播放路径。"
+                : "可直接选择播放路径；修改后暂停并重新播放即可生效，不会自动开始分享。";
 
     public bool CanAdjustRoute =>
         IsSelectable &&
@@ -1873,6 +2170,8 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
             ? "已设为仅自己听；暂停后重新播放即可生效。"
             : CanAdjustRoute
                 ? "当前走其他播放路径。可在这里改为仅自己听；开始分享时会自动改到分享路径。"
+            : IsSelected && !Session.HasAudio
+                ? "已选中；检测到实际音量后，才可以开始分享。"
                 : IsSelected
                     ? "已选中；开始分享时会自动切换到分享路径。"
                     : "勾选后，开始分享会自动切换到分享路径。";
@@ -1891,6 +2190,11 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectionStatus));
             OnPropertyChanged(nameof(RouteHint));
+            OnPropertyChanged(nameof(DetailText));
+            OnPropertyChanged(nameof(IsSharing));
+            OnPropertyChanged(nameof(CanRequestSelection));
+            OnPropertyChanged(nameof(CanEditRoute));
+            OnPropertyChanged(nameof(RouteDisplayText));
         }
     }
 
@@ -1905,14 +2209,110 @@ public sealed class AudioApplicationRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(RouteHint));
     }
 
+    public void SetRouteEditingEnabled(bool enabled)
+    {
+        if (routeEditingEnabled == enabled)
+        {
+            return;
+        }
+
+        routeEditingEnabled = enabled;
+        OnPropertyChanged(nameof(CanEditRoute));
+        OnPropertyChanged(nameof(RouteStatusText));
+    }
+
+    public void SetSelectionEditingEnabled(bool enabled)
+    {
+        if (selectionEditingEnabled == enabled)
+        {
+            return;
+        }
+
+        selectionEditingEnabled = enabled;
+        OnPropertyChanged(nameof(CanRequestSelection));
+    }
+
+    public void SetSharingState(bool value)
+    {
+        if (isSharing == value)
+        {
+            return;
+        }
+
+        isSharing = value;
+        OnPropertyChanged(nameof(IsSharing));
+        OnPropertyChanged(nameof(DetailText));
+    }
+
+    public bool TryGetRouteChange(out AudioRouteOption route)
+    {
+        route = selectedRoute;
+        if (!routeChangedByUser || Equals(appliedRoute, selectedRoute))
+        {
+            return false;
+        }
+
+        routeChangedByUser = false;
+        return true;
+    }
+
+    public void MarkRouteApplied()
+    {
+        appliedRoute = selectedRoute;
+        routeChangedByUser = false;
+        OnPropertyChanged(nameof(RouteStatusText));
+    }
+
+    public void RevertRouteSelection()
+    {
+        selectedRoute = appliedRoute;
+        routeChangedByUser = false;
+        OnPropertyChanged(nameof(SelectedRoute));
+        OnPropertyChanged(nameof(RouteStatusText));
+    }
+
+    private static IReadOnlyList<AudioRouteOption> CreateRouteOptions(
+        IReadOnlyList<ExternalAudioDevice> outputDevices,
+        string? inputDeviceId,
+        string? auxDeviceId)
+    {
+        var options = new List<AudioRouteOption>
+        {
+            new(null, "跟随 Windows 默认播放设备"),
+        };
+
+        foreach (var device in outputDevices
+                     .Where(device => !string.IsNullOrWhiteSpace(device.Id))
+                     .Where(device => !AudioRouteVisibilityPolicy.IsHiddenNonSharingDevice(device.Name))
+                     // FlowCast owns these internal buses; never expose them as manual destinations.
+                     .Where(device => !string.Equals(device.Id, inputDeviceId, StringComparison.OrdinalIgnoreCase))
+                     .Where(device => !string.Equals(device.Id, auxDeviceId, StringComparison.OrdinalIgnoreCase))
+                     .GroupBy(device => device.Id, StringComparer.OrdinalIgnoreCase)
+                     .Select(group => group.First())
+                     .OrderBy(device => device.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            options.Add(new AudioRouteOption(device.Id, device.Name));
+        }
+
+        return options;
+    }
+
     private bool IsUsingVoicemeeterRoute() =>
         !string.IsNullOrWhiteSpace(Session.OutputDeviceId) &&
         (string.Equals(Session.OutputDeviceId, inputDeviceId, StringComparison.OrdinalIgnoreCase) ||
          string.Equals(Session.OutputDeviceId, auxDeviceId, StringComparison.OrdinalIgnoreCase));
 
-    private string GetOutputDeviceName() => string.IsNullOrWhiteSpace(Session.OutputDeviceName)
-        ? "正在确认输出设备"
-        : Session.OutputDeviceName;
+    private string GetRouteDisplayText() => IsSelected
+        ? IsSharing ? "当前：正在分享路径" : "当前：分享路径"
+        : $"当前：{GetOutputDeviceName()}";
+
+    private string GetOutputDeviceName() => IsUsingVoicemeeterRoute()
+        ? "由 FlowCast 管理"
+        : AudioRouteVisibilityPolicy.IsHiddenNonSharingDevice(Session.OutputDeviceName)
+        ? "已隐藏的非共享路径"
+        : string.IsNullOrWhiteSpace(Session.OutputDeviceName)
+            ? "正在确认输出设备"
+            : Session.OutputDeviceName;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -1932,6 +2332,11 @@ public sealed record HealthChip(string Key, string Title, HealthState State, str
         "A1" => "A1 / 默认播放",
         _ => key,
     };
+}
+
+public sealed record AudioRouteOption(string? DeviceId, string DisplayName)
+{
+    public bool IsWindowsDefault => string.IsNullOrWhiteSpace(DeviceId);
 }
 
 public sealed class ProcessStatus : INotifyPropertyChanged

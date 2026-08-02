@@ -5,6 +5,19 @@ namespace AudioShare.Core.Tests;
 public sealed class FlowCastPreferencesTests
 {
     [Fact]
+    public void CompleteQuickStart_PreservesExistingPreferences()
+    {
+        var preferences = FlowCastPreferences.Empty
+            .Exclude("cloudmusic.exe") with { ReduceMotion = true };
+
+        var updated = preferences.CompleteQuickStart();
+
+        Assert.True(updated.QuickStartCompleted);
+        Assert.True(updated.ReduceMotion);
+        Assert.True(updated.IsExcluded("cloudmusic"));
+    }
+
+    [Fact]
     public void Empty_DisablesReduceMotionByDefault()
     {
         Assert.False(FlowCastPreferences.Empty.ReduceMotion);

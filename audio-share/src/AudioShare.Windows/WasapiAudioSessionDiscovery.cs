@@ -33,7 +33,7 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
                     try
                     {
                         using var session = sessions[index];
-                        if (session.State != AudioSessionState.AudioSessionStateActive || session.IsSystemSoundsSession)
+                        if (session.State == AudioSessionState.AudioSessionStateExpired || session.IsSystemSoundsSession)
                         {
                             continue;
                         }
@@ -47,12 +47,14 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
                         using var process = Process.GetProcessById(processId);
                         var processStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
                         var initialPeakLevel = session.AudioMeterInformation.MasterPeakValue;
-                        var hasAudio = HasConfirmedOutput(session, initialPeakLevel);
+                        var hasAudio = session.State == AudioSessionState.AudioSessionStateActive &&
+                                       HasConfirmedOutput(session, initialPeakLevel);
                         candidates.Add(new AudioSessionCandidate(
                             processId,
                             processStartUtcTicks,
                             process.ProcessName,
                             session.DisplayName,
+                            // Inactive sessions are still routable and should remain visible for route setup.
                             IsActive: true,
                             IsSystemSession: false,
                             HasAudio: hasAudio,

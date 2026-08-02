@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $projectFile = Join-Path $projectRoot 'src\AudioShare.App\AudioShare.App.csproj'
+$lyricsProjectFile = Join-Path $projectRoot 'src\AudioShare.Lyrics\AudioShare.Lyrics.csproj'
 $routerHelperBuildPath = Join-Path $projectRoot 'scripts\build-router-helper.ps1'
 $thirdPartyNoticesPath = Join-Path $projectRoot 'ThirdPartyNotices.txt'
 $dotNetRuntimeLicensePath = Join-Path $projectRoot 'DotNetRuntimeLicense.txt'
@@ -20,13 +21,15 @@ $publishDirectory = Join-Path $OutputDirectory 'publish'
 $zipPath = Join-Path $OutputDirectory 'AudioShare-win-x64.zip'
 $checksumPath = Join-Path $OutputDirectory 'AudioShare-win-x64.zip.sha256'
 $installerScriptPath = Join-Path $projectRoot 'installer\FlowCast.nsi'
-$installerPath = Join-Path $OutputDirectory 'FlowCast Setup.exe'
+$installerPath = Join-Path $OutputDirectory 'FlowCast-Setup.exe'
+$installerChecksumPath = Join-Path $OutputDirectory 'FlowCast-Setup.exe.sha256'
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 Remove-Item -LiteralPath $publishDirectory -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $checksumPath -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $installerChecksumPath -Force -ErrorAction SilentlyContinue
 
 dotnet publish $projectFile --configuration Release --runtime win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
@@ -34,6 +37,14 @@ dotnet publish $projectFile --configuration Release --runtime win-x64 --self-con
 
 if ($LASTEXITCODE -ne 0) {
     throw 'dotnet publish failed.'
+}
+
+dotnet publish $lyricsProjectFile --configuration Release --runtime win-x64 --self-contained true `
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:DebugType=None -p:DebugSymbols=false --output $publishDirectory
+
+if ($LASTEXITCODE -ne 0) {
+    throw 'FlowCast Lyrics publish failed.'
 }
 
 $helperBuildArguments = @{
@@ -68,6 +79,10 @@ if ($LASTEXITCODE -ne 0) {
     throw 'FlowCast Setup.exe build failed.'
 }
 
+$installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -LiteralPath $installerChecksumPath -Value "$installerHash  FlowCast-Setup.exe" -NoNewline
+
 Write-Host "Created $zipPath"
 Write-Host "Created $checksumPath"
 Write-Host "Created $installerPath"
+Write-Host "Created $installerChecksumPath"

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 
 namespace AudioShare.App;
 
@@ -14,9 +15,13 @@ internal sealed class MotionController
     private readonly FrameworkElement launchSheen;
     private readonly FrameworkElement launchOverlay;
     private readonly FrameworkElement launchBrand;
+    private readonly FrameworkElement launchTitle;
+    private readonly BlurEffect launchBrandBlur;
     private readonly FrameworkElement launchRingOuter;
     private readonly FrameworkElement launchRingInner;
     private readonly IReadOnlyList<FrameworkElement> launchWaveBars;
+    private readonly IReadOnlyList<FrameworkElement> launchNoteParts;
+    private readonly IReadOnlyList<FrameworkElement> launchSignalParts;
     private readonly FrameworkElement launchStatusText;
     private readonly FrameworkElement topCard;
     private readonly FrameworkElement statusPulse;
@@ -42,9 +47,13 @@ internal sealed class MotionController
         FrameworkElement launchSheen,
         FrameworkElement launchOverlay,
         FrameworkElement launchBrand,
+        FrameworkElement launchTitle,
+        BlurEffect launchBrandBlur,
         FrameworkElement launchRingOuter,
         FrameworkElement launchRingInner,
         IReadOnlyList<FrameworkElement> launchWaveBars,
+        IReadOnlyList<FrameworkElement> launchNoteParts,
+        IReadOnlyList<FrameworkElement> launchSignalParts,
         FrameworkElement launchStatusText,
         FrameworkElement topCard,
         FrameworkElement statusPulse,
@@ -64,9 +73,13 @@ internal sealed class MotionController
         this.launchSheen = launchSheen;
         this.launchOverlay = launchOverlay;
         this.launchBrand = launchBrand;
+        this.launchTitle = launchTitle;
+        this.launchBrandBlur = launchBrandBlur;
         this.launchRingOuter = launchRingOuter;
         this.launchRingInner = launchRingInner;
         this.launchWaveBars = launchWaveBars;
+        this.launchNoteParts = launchNoteParts;
+        this.launchSignalParts = launchSignalParts;
         this.launchStatusText = launchStatusText;
         this.topCard = topCard;
         this.statusPulse = statusPulse;
@@ -109,16 +122,12 @@ internal sealed class MotionController
             return;
         }
 
-        PlayEntrance(logo, TimeSpan.Zero, TimeSpan.FromMilliseconds(450), 12, 0.94);
-        PlayEntrance(topCard, TimeSpan.FromMilliseconds(120), TimeSpan.FromMilliseconds(620), 16, 0.98);
-        PlayEntrance(listPanel, TimeSpan.FromMilliseconds(230), TimeSpan.FromMilliseconds(670), 18, 0.985);
         PlayLaunchOverlay();
         PlayLaunchBrand();
-        PlayLaunchRing(launchRingOuter, 0.72, 1.18, TimeSpan.FromMilliseconds(120));
-        PlayLaunchRing(launchRingInner, 0.72, 1.06, TimeSpan.FromMilliseconds(290));
         PlayLaunchWaves();
-        PlayLaunchSheen();
-        PlayAtmosphereEntrance();
+        PlayLaunchSymbol(launchNoteParts, TimeSpan.FromMilliseconds(1120));
+        PlayLaunchSymbol(launchSignalParts, TimeSpan.FromMilliseconds(1580));
+        _ = PlayStartupChimeAsync();
     }
 
     public void PlaySharingConfirmed()
@@ -351,13 +360,13 @@ internal sealed class MotionController
         SetVisual(mainContent, 0, 0, 14, 0.985);
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 1, TimeSpan.FromMilliseconds(2200), TimeSpan.Zero, easing);
-        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(800), TimeSpan.FromMilliseconds(2200), easing);
-        Add(storyboard, mainContent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(700), TimeSpan.FromMilliseconds(2300), easing);
+        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 1, TimeSpan.FromMilliseconds(2740), TimeSpan.Zero, easing);
+        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(260), TimeSpan.FromMilliseconds(2740), easing);
+        Add(storyboard, mainContent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
         var transforms = GetTransforms(mainContent);
-        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 14, 0, TimeSpan.FromMilliseconds(700), TimeSpan.FromMilliseconds(2300), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.985, 1, TimeSpan.FromMilliseconds(700), TimeSpan.FromMilliseconds(2300), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.985, 1, TimeSpan.FromMilliseconds(700), TimeSpan.FromMilliseconds(2300), easing);
+        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 10, 0, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.99, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.99, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
         Start(launchOverlay, storyboard, () =>
         {
             SetVisual(launchOverlay, 0, 0, 0, 1);
@@ -384,20 +393,25 @@ internal sealed class MotionController
 
     private void PlayLaunchBrand()
     {
-        SetVisual(launchBrand, 0, 0, 18, 0.78);
+        SetVisual(launchBrand, 0, 0, 3, 0.92);
+        SetVisual(launchTitle, 0, 0, 10, 1);
         SetVisual(launchStatusText, 0, 0, 0, 1);
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
         var transforms = GetTransforms(launchBrand);
-        Add(storyboard, launchBrand, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(520), TimeSpan.FromMilliseconds(120), easing);
-        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 18, 0, TimeSpan.FromMilliseconds(520), TimeSpan.FromMilliseconds(120), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.78, 1, TimeSpan.FromMilliseconds(520), TimeSpan.FromMilliseconds(120), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.78, 1, TimeSpan.FromMilliseconds(520), TimeSpan.FromMilliseconds(120), easing);
-        Add(storyboard, launchBrand, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(460), TimeSpan.FromMilliseconds(1940), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 1, 0.84, TimeSpan.FromMilliseconds(460), TimeSpan.FromMilliseconds(1940), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 1, 0.84, TimeSpan.FromMilliseconds(460), TimeSpan.FromMilliseconds(1940), easing);
-        Add(storyboard, launchStatusText, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(320), TimeSpan.FromMilliseconds(720), easing);
-        Start(launchBrand, storyboard, () => SetVisual(launchBrand, 0, 0, 0, 1));
+        Add(storyboard, launchBrand, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
+        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 3, 0, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.92, 1, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.92, 1, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
+        Add(storyboard, launchBrandBlur, BlurEffect.RadiusProperty, 16, 0, TimeSpan.FromMilliseconds(620), TimeSpan.FromMilliseconds(320), easing);
+        Add(storyboard, launchTitle, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(420), TimeSpan.FromMilliseconds(2060), easing);
+        var titleTransforms = GetTransforms(launchTitle);
+        Add(storyboard, titleTransforms.Translate, TranslateTransform.YProperty, 10, 0, TimeSpan.FromMilliseconds(420), TimeSpan.FromMilliseconds(2060), easing);
+        Start(launchBrand, storyboard, () =>
+        {
+            launchBrandBlur.Radius = 0;
+            SetVisual(launchBrand, 1, 0, 0, 1);
+        });
     }
 
     private void PlayLaunchRing(FrameworkElement ring, double fromScale, double toScale, TimeSpan beginTime)
@@ -406,10 +420,10 @@ internal sealed class MotionController
         var transforms = GetTransforms(ring);
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, ring, UIElement.OpacityProperty, 0, 0.72, TimeSpan.FromMilliseconds(360), beginTime, easing);
-        Add(storyboard, ring, UIElement.OpacityProperty, 0.72, 0, TimeSpan.FromMilliseconds(1120), beginTime + TimeSpan.FromMilliseconds(800), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, fromScale, toScale, TimeSpan.FromMilliseconds(1920), beginTime, easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, fromScale, toScale, TimeSpan.FromMilliseconds(1920), beginTime, easing);
+        Add(storyboard, ring, UIElement.OpacityProperty, 0, 0.78, TimeSpan.FromMilliseconds(110), beginTime, easing);
+        Add(storyboard, ring, UIElement.OpacityProperty, 0.78, 0, TimeSpan.FromMilliseconds(470), beginTime + TimeSpan.FromMilliseconds(270), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, fromScale, toScale, TimeSpan.FromMilliseconds(740), beginTime, easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, fromScale, toScale, TimeSpan.FromMilliseconds(740), beginTime, easing);
         Start(ring, storyboard, () => SetVisual(ring, 0, 0, 0, 1));
     }
 
@@ -423,12 +437,36 @@ internal sealed class MotionController
             var transforms = GetTransforms(bar);
             var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
             var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-            var beginTime = TimeSpan.FromMilliseconds(650 + index * 70);
+            var beginTime = TimeSpan.FromMilliseconds(500 + index * 110);
             Add(storyboard, bar, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(180), beginTime, easing);
             Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.4, peak, TimeSpan.FromMilliseconds(260), beginTime, easing);
             Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, peak, 0.72, TimeSpan.FromMilliseconds(540), beginTime + TimeSpan.FromMilliseconds(260), easing);
-            Add(storyboard, bar, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(340), TimeSpan.FromMilliseconds(1850 + index * 30), easing);
-            Start(bar, storyboard, () => SetVisual(bar, 0, 0, 0, 1));
+            Start(bar, storyboard, () => SetVisual(bar, 1, 0, 0, 1));
+        }
+    }
+
+    private void PlayLaunchSymbol(IReadOnlyList<FrameworkElement> parts, TimeSpan beginTime)
+    {
+        foreach (var part in parts)
+        {
+            SetVisual(part, 0, -8, 0, 0.82);
+            var transforms = GetTransforms(part);
+            var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+            var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+            Add(storyboard, part, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(340), beginTime, easing);
+            Add(storyboard, transforms.Translate, TranslateTransform.XProperty, -8, 0, TimeSpan.FromMilliseconds(420), beginTime, easing);
+            Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.82, 1, TimeSpan.FromMilliseconds(420), beginTime, easing);
+            Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.82, 1, TimeSpan.FromMilliseconds(420), beginTime, easing);
+            Start(part, storyboard, () => SetVisual(part, 1, 0, 0, 1));
+        }
+    }
+
+    private async Task PlayStartupChimeAsync()
+    {
+        await Task.Delay(1460);
+        if (!suspended && !reduceMotion)
+        {
+            StartupChime.Play();
         }
     }
 
@@ -497,15 +535,21 @@ internal sealed class MotionController
         SetVisual(logo, 1, 0, 0, 1);
         SetVisual(mainContent, 1, 0, 0, 1);
         SetVisual(launchSheen, 0, 0, 0, 1);
+        launchBrandBlur.Radius = 0;
         SetVisual(launchOverlay, 0, 0, 0, 1);
         launchOverlay.IsHitTestVisible = false;
         SetVisual(launchBrand, 0, 0, 0, 1);
+        SetVisual(launchTitle, 0, 0, 0, 1);
         SetVisual(launchRingOuter, 0, 0, 0, 1);
         SetVisual(launchRingInner, 0, 0, 0, 1);
         SetVisual(launchStatusText, 0, 0, 0, 1);
         foreach (var launchWaveBar in launchWaveBars)
         {
             SetVisual(launchWaveBar, 0, 0, 0, 1);
+        }
+        foreach (var launchPart in launchNoteParts.Concat(launchSignalParts))
+        {
+            SetVisual(launchPart, 0, 0, 0, 1);
         }
         SetVisual(topCard, 1, 0, 0, 1);
         SetVisual(statusPulse, 1, 0, 0, 1);
@@ -521,16 +565,22 @@ internal sealed class MotionController
 
     private void PrepareLaunch()
     {
-        SetVisual(mainContent, 0, 0, 14, 0.985);
+        SetVisual(mainContent, 0, 0, 10, 0.99);
         SetVisual(launchOverlay, 1, 0, 0, 1);
         launchOverlay.IsHitTestVisible = true;
-        SetVisual(launchBrand, 0, 0, 18, 0.78);
-        SetVisual(launchRingOuter, 0, 0, 0, 0.72);
+        SetVisual(launchBrand, 0, 0, 3, 0.92);
+        SetVisual(launchTitle, 0, 0, 10, 1);
+        launchBrandBlur.Radius = 16;
+        SetVisual(launchRingOuter, 0, 0, 0, 0.5);
         SetVisual(launchRingInner, 0, 0, 0, 0.72);
         SetVisual(launchStatusText, 0, 0, 0, 1);
         foreach (var launchWaveBar in launchWaveBars)
         {
             SetVisual(launchWaveBar, 0, 0, 0, 0.4);
+        }
+        foreach (var launchPart in launchNoteParts.Concat(launchSignalParts))
+        {
+            SetVisual(launchPart, 0, -8, 0, 0.82);
         }
     }
 

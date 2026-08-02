@@ -5,7 +5,7 @@ using AudioShare.Core;
 
 namespace AudioShare.App;
 
-public partial class PreferencesWindow : Window
+public partial class PreferencesWindow : FlowCastDialogWindow
 {
     public PreferencesWindow(Window owner, FlowCastPreferences preferences)
     {
@@ -13,7 +13,6 @@ public partial class PreferencesWindow : Window
         Owner = owner;
         ExcludedPrograms = new ObservableCollection<string>(preferences.ExcludedProcesses.Order(StringComparer.OrdinalIgnoreCase));
         ReduceMotionCheckBox.IsChecked = preferences.ReduceMotion;
-        RestoreLocalPlaybackCheckBox.IsChecked = preferences.RestoreLocalPlayback;
         EndSharingSoundCheckBox.IsChecked = preferences.EndSharingSoundEnabled;
         DisconnectNotificationsCheckBox.IsChecked = preferences.DisconnectNotificationsEnabled;
         DataContext = this;
@@ -42,7 +41,7 @@ public partial class PreferencesWindow : Window
         UpdatedPreferences = new FlowCastPreferences(
             ExcludedPrograms,
             ReduceMotionCheckBox.IsChecked == true,
-            RestoreLocalPlaybackCheckBox.IsChecked != false,
+            true,
             EndSharingSoundCheckBox.IsChecked != false,
             DisconnectNotificationsCheckBox.IsChecked != false);
         DialogResult = true;

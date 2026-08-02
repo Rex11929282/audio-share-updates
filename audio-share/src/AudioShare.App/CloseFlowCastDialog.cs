@@ -11,12 +11,13 @@ internal enum CloseFlowCastAction
     Exit,
 }
 
-internal sealed class CloseFlowCastDialog : Window
+internal sealed class CloseFlowCastDialog : FlowCastDialogWindow
 {
     public CloseFlowCastDialog(Window owner)
     {
         Owner = owner;
         Title = "关闭 FlowCast";
+        Tone = FlowCastWindowTone.Settings;
         Width = 430;
         Height = 220;
         MinWidth = Width;

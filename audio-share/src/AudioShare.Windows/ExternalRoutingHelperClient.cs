@@ -108,6 +108,18 @@ public sealed class ExternalRoutingHelperClient : IExternalRoutingHelper
             token);
     }
 
+    public async Task ClearRouteAsync(
+        int processId,
+        long processStartUtcTicks,
+        string processName,
+        CancellationToken token)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processName);
+        await InvokeAsync(
+            new { command = "clear-route", processId, processStartUtcTicks, processName },
+            token);
+    }
+
     public async Task RestoreRouteAsync(
         int processId,
         long processStartUtcTicks,

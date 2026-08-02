@@ -29,7 +29,8 @@ public sealed class FlowCastPreferencesStore
                     saved.ReduceMotion,
                     saved.RestoreLocalPlayback ?? true,
                     saved.EndSharingSoundEnabled ?? true,
-                    saved.DisconnectNotificationsEnabled ?? true);
+                    saved.DisconnectNotificationsEnabled ?? true,
+                    saved.QuickStartCompleted ?? false);
         }
         catch (Exception)
         {
@@ -47,7 +48,8 @@ public sealed class FlowCastPreferencesStore
             preferences.ReduceMotion,
             preferences.RestoreLocalPlayback,
             preferences.EndSharingSoundEnabled,
-            preferences.DisconnectNotificationsEnabled);
+            preferences.DisconnectNotificationsEnabled,
+            preferences.QuickStartCompleted);
         File.WriteAllText(PreferencesPath, JsonSerializer.Serialize(saved), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
@@ -56,5 +58,6 @@ public sealed class FlowCastPreferencesStore
         bool ReduceMotion,
         bool? RestoreLocalPlayback = null,
         bool? EndSharingSoundEnabled = null,
-        bool? DisconnectNotificationsEnabled = null);
+        bool? DisconnectNotificationsEnabled = null,
+        bool? QuickStartCompleted = null);
 }

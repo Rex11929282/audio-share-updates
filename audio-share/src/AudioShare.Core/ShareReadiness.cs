@@ -53,6 +53,6 @@ public static class AudioActivityPolicy
 
 public static class ShareStartPolicy
 {
-    public static bool CanStart(bool hasAudibleSelection, bool routeAvailable, bool isRoutingOperation) =>
-        hasAudibleSelection && routeAvailable && !isRoutingOperation;
+    public static bool CanStart(bool hasSelection, bool routeAvailable, bool isRoutingOperation) =>
+        hasSelection && routeAvailable && !isRoutingOperation;
 }

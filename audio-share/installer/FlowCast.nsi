@@ -74,6 +74,7 @@ Section "Install FlowCast"
     StrCmp $INSTDIR "$LOCALAPPDATA\Programs\FlowCast" 0 skipShortcuts
     CreateDirectory "$SMPROGRAMS\FlowCast"
     CreateShortcut "$SMPROGRAMS\FlowCast\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
+    CreateShortcut "$SMPROGRAMS\FlowCast\FlowCast Lyrics.lnk" "$INSTDIR\FlowCast Lyrics.exe"
     StrCmp $CreateDesktopShortcut 1 0 skipDesktopShortcut
     CreateShortcut "$DESKTOP\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
 skipDesktopShortcut:
@@ -83,6 +84,7 @@ SectionEnd
 Section "Uninstall"
     Delete "$DESKTOP\FlowCast.lnk"
     Delete "$SMPROGRAMS\FlowCast\FlowCast.lnk"
+    Delete "$SMPROGRAMS\FlowCast\FlowCast Lyrics.lnk"
     RMDir "$SMPROGRAMS\FlowCast"
     DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowCast"
     DeleteRegKey HKCU "Software\FlowCast"

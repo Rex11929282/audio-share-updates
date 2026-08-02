@@ -33,9 +33,9 @@ public sealed class ShareReadinessTests
     }
 
     [Fact]
-    public void AllowsSharingWithoutPreRoutedInputSignal()
+    public void AllowsSharingWhenAnAppIsSelectedBeforeItProducesAudio()
     {
-        Assert.True(ShareStartPolicy.CanStart(hasAudibleSelection: true, routeAvailable: true, isRoutingOperation: false));
-        Assert.False(ShareStartPolicy.CanStart(hasAudibleSelection: false, routeAvailable: true, isRoutingOperation: false));
+        Assert.True(ShareStartPolicy.CanStart(hasSelection: true, routeAvailable: true, isRoutingOperation: false));
+        Assert.False(ShareStartPolicy.CanStart(hasSelection: false, routeAvailable: true, isRoutingOperation: false));
     }
 }

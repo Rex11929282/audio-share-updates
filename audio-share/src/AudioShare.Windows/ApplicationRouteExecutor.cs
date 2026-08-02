@@ -54,11 +54,21 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
         var snapshots = new List<ApplicationRouteSnapshot>(plan.Commands.Count);
         foreach (var command in plan.Commands)
         {
-            var previousRoute = await helper.GetRouteAsync(
-                command.ProcessId,
-                command.ProcessStartUtcTicks,
-                command.ProcessName,
-                token);
+            ApplicationRouteState previousRoute;
+            try
+            {
+                previousRoute = await helper.GetRouteAsync(
+                    command.ProcessId,
+                    command.ProcessStartUtcTicks,
+                    command.ProcessName,
+                    token);
+            }
+            catch (InvalidOperationException exception) when (IsMissingActiveOutputSession(exception))
+            {
+                // The persisted Windows rule can still be written before the app starts outputting audio.
+                previousRoute = new ApplicationRouteState(null, null);
+            }
+
             snapshots.Add(new ApplicationRouteSnapshot(
                 command.ProcessId,
                 command.ProcessStartUtcTicks,
@@ -161,6 +171,12 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
                     continue;
                 }
 
+                if (IsMissingPlaybackDevice(exception) &&
+                    await RestoreWindowsDefaultAsync(snapshot))
+                {
+                    continue;
+                }
+
                 failedSnapshots.Insert(0, snapshot);
                 messages.Add($"Process {snapshot.ProcessId}: {exception.Message}");
             }
@@ -171,6 +187,33 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
 
     private static bool IsMissingActiveOutputSession(Exception exception) =>
         exception.Message.Contains("Active output session not found", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsMissingPlaybackDevice(Exception exception) =>
+        exception.Message.Contains("device not found", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("endpoint not found", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("device is not connected", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<bool> RestoreWindowsDefaultAsync(ApplicationRouteSnapshot snapshot)
+    {
+        try
+        {
+            await helper.RestoreRouteAsync(
+                snapshot.ProcessId,
+                snapshot.ProcessStartUtcTicks,
+                snapshot.ProcessName,
+                new ApplicationRouteState(null, null),
+                CancellationToken.None);
+            return true;
+        }
+        catch (Exception exception) when (IsMissingActiveOutputSession(exception))
+        {
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private sealed record RecoveryResult(
         IReadOnlyList<ApplicationRouteSnapshot> FailedSnapshots,

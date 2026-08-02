@@ -2,6 +2,7 @@
 using System.Data;
 using System.Windows;
 using AudioShare.Core;
+using AudioShare.Windows;
 
 namespace AudioShare.App;
 
@@ -10,29 +11,135 @@ namespace AudioShare.App;
 /// </summary>
 public partial class App : Application
 {
+    private const string InstanceMutexName = @"Local\FlowCast.SingleInstance";
+    private const string ActivateInstanceEventName = @"Local\FlowCast.ActivateInstance";
     private readonly UpdateService updateService = new();
     private StagedUpdate? stagedUpdate;
     private ReleaseUpdate? availableUpdate;
     private bool isCheckingForUpdates;
+    private Mutex? instanceMutex;
+    private EventWaitHandle? activateInstanceEvent;
+    private RadminLyricsHost? lyricsHost;
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out var isFirstInstance);
+        if (!isFirstInstance)
+        {
+            SignalExistingInstance();
+            Shutdown();
+            return;
+        }
+
+        activateInstanceEvent = new EventWaitHandle(
+            initialState: false,
+            mode: EventResetMode.AutoReset,
+            name: ActivateInstanceEventName);
+        _ = Task.Run(WaitForExistingInstanceActivation);
         base.OnStartup(e);
+        StartLyricsHost();
 
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         mainWindow.Show();
         if (UpdateService.IsUpdateFailedRestart(e.Args))
         {
-            MessageBox.Show(
+            FlowCastMessageDialog.Show(
                 mainWindow,
-                UpdateService.UpdateFailedRestartNotice,
                 "FlowCast 更新",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                UpdateService.UpdateFailedRestartNotice,
+                FlowCastWindowTone.Error);
         }
 
         _ = CheckForUpdatesAsync(mainWindow);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        lyricsHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        activateInstanceEvent?.Dispose();
+        if (instanceMutex is not null)
+        {
+            try
+            {
+                instanceMutex.ReleaseMutex();
+            }
+            catch (ApplicationException)
+            {
+                // The process may already have released the mutex during shutdown.
+            }
+
+            instanceMutex.Dispose();
+        }
+
+        base.OnExit(e);
+    }
+
+    private void StartLyricsHost()
+    {
+        var radminAddress = RadminAdapterSelector.SelectActiveAddress();
+        if (radminAddress is null)
+        {
+            return;
+        }
+
+        try
+        {
+            lyricsHost = new RadminLyricsHost(radminAddress, port: 0);
+            lyricsHost.StartAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception)
+        {
+            lyricsHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            lyricsHost = null;
+        }
+    }
+
+    private void WaitForExistingInstanceActivation()
+    {
+        try
+        {
+            while (activateInstanceEvent?.WaitOne() == true)
+            {
+                Dispatcher.BeginInvoke(ActivateMainWindow);
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Application shutdown ends the activation listener.
+        }
+    }
+
+    private void ActivateMainWindow()
+    {
+        if (MainWindow is null)
+        {
+            return;
+        }
+
+        if (!MainWindow.IsVisible)
+        {
+            MainWindow.Show();
+        }
+
+        MainWindow.WindowState = WindowState.Normal;
+        MainWindow.Activate();
+        MainWindow.Topmost = true;
+        MainWindow.Topmost = false;
+        MainWindow.Focus();
+    }
+
+    private static void SignalExistingInstance()
+    {
+        try
+        {
+            using var signal = EventWaitHandle.OpenExisting(ActivateInstanceEventName);
+            signal.Set();
+        }
+        catch (WaitHandleCannotBeOpenedException)
+        {
+            // The first instance is still starting or has already exited.
+        }
     }
 
     public Task CheckForUpdatesFromUserAsync(Window owner) => CheckForUpdatesAsync(owner);
@@ -46,7 +153,7 @@ public partial class App : Application
 
         if (stagedUpdate is not null)
         {
-            MessageBox.Show(owner, "更新已下载并验证完成。请关闭并重新打开 FlowCast 完成更新。", "FlowCast 更新", MessageBoxButton.OK, MessageBoxImage.Information);
+            FlowCastMessageDialog.Show(owner, "FlowCast 更新", "更新已下载并验证完成。请关闭并重新打开 FlowCast 完成更新。", FlowCastWindowTone.Update);
             return;
         }
 
@@ -78,24 +185,24 @@ public partial class App : Application
 
             if (owner is MainWindow mainWindow && mainWindow.IsSharingActive)
             {
-                if (MessageBox.Show(
+                if (!FlowCastMessageDialog.Confirm(
                         owner,
-                        "更新会停止当前分享并恢复本机播放。要继续吗？",
                         "FlowCast 更新",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                        "更新会停止当前分享并恢复分享前的播放路径。要继续吗？",
+                        "继续更新",
+                        "取消",
+                        FlowCastWindowTone.Update))
                 {
                     return;
                 }
 
                 if (!await mainWindow.StopSharingWithResetAsync())
                 {
-                    MessageBox.Show(
+                    FlowCastMessageDialog.Show(
                         owner,
-                        "为了保护你的声音，FlowCast 还不能确认分享已停止。请先停止分享后再更新。",
                         "FlowCast 更新",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                        "为了保护你的声音，FlowCast 还不能确认分享已停止。请先停止分享后再更新。",
+                        FlowCastWindowTone.Error);
                     return;
                 }
             }
@@ -128,12 +235,11 @@ public partial class App : Application
             progressWindow?.CloseFromApplication();
             SetUpdateStaging(owner, false);
             ReleaseOwner();
-            MessageBox.Show(
+            FlowCastMessageDialog.Show(
                 owner,
-                "这次更新没有完成，FlowCast 仍会使用当前版本。\n\n下一步：请关闭其他 FlowCast 窗口后重试；如果仍然失败，请重新打开 FlowCast 后再试。",
                 "FlowCast 更新",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "这次更新没有完成，FlowCast 仍会使用当前版本。\n\n下一步：请关闭其他 FlowCast 窗口后重试；如果仍然失败，请重新打开 FlowCast 后再试。",
+                FlowCastWindowTone.Error);
         }
         finally
         {

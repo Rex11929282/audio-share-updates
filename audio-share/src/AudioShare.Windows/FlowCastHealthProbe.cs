@@ -9,7 +9,8 @@ public sealed record FlowCastHealthProbeResult(
     bool BananaInstalled,
     bool RoutingAvailable,
     string RoutingMessage,
-    VoicemeeterBananaEndpoints? Endpoints);
+    VoicemeeterBananaEndpoints? Endpoints,
+    IReadOnlyList<ExternalAudioDevice> OutputDevices);
 
 public sealed class FlowCastHealthProbe
 {
@@ -34,7 +35,8 @@ public sealed class FlowCastHealthProbe
                 bananaInstalled,
                 false,
                 helperHealth.Message,
-                null);
+                null,
+                []);
         }
 
         try
@@ -52,7 +54,8 @@ public sealed class FlowCastHealthProbe
                 bananaInstalled,
                 hasEndpoints,
                 hasEndpoints ? "音频路由已就绪。" : "未检测到 Voicemeeter Banana 的必要音频设备。",
-                endpoints);
+                endpoints,
+                devices);
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !token.IsCancellationRequested)
         {
@@ -61,7 +64,8 @@ public sealed class FlowCastHealthProbe
                 bananaInstalled,
                 false,
                 exception.Message,
-                null);
+                null,
+                []);
         }
     }
 

@@ -1,0 +1,12 @@
+<Window x:Class="AudioShare.Lyrics.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FlowCast Lyrics" Height="230" Width="420" WindowStartupLocation="CenterScreen">
+    <Grid Margin="28">
+        <StackPanel>
+            <TextBlock Text="FlowCast Lyrics" FontSize="28" FontWeight="Bold" />
+            <TextBlock Margin="0,8,0,0" Text="Waiting for FlowCast on your Radmin VPN network." TextWrapping="Wrap" />
+            <TextBlock x:Name="statusText" Margin="0,26,0,0" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -5,7 +5,7 @@ using System.Windows.Threading;
 
 namespace AudioShare.App;
 
-public sealed class UpdateProgressWindow : Window
+public sealed class UpdateProgressWindow : FlowCastDialogWindow
 {
     private readonly TextBlock messageText;
     private readonly TextBlock percentageText;
@@ -16,6 +16,7 @@ public sealed class UpdateProgressWindow : Window
     {
         Owner = owner;
         Title = "FlowCast 更新";
+        Tone = FlowCastWindowTone.Update;
         Width = 390;
         Height = 180;
         ResizeMode = ResizeMode.NoResize;

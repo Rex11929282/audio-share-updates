@@ -184,6 +184,44 @@ public sealed class ApplicationRouteExecutorTests
     }
 
     [Fact]
+    public async Task ApplyAsync_WhenAnAppHasNoCurrentAudioSession_WritesItsFuturePlaybackRoute()
+    {
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new(null, null),
+            },
+            missingRouteReadSessions: new HashSet<int>([1]));
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([new(1, 101, "cloudmusic.exe", "input")]);
+
+        var result = await executor.ApplyAsync(plan, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("set:1:101:cloudmusic.exe:input", helper.Calls);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_WhenPreviousPlaybackDeviceIsMissing_FallsBackToWindowsDefault()
+    {
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new("missing-device", "missing-device"),
+            },
+            missingPlaybackDevices: new HashSet<int>([1]));
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([new(1, 101, "chrome.exe", "input")]);
+
+        await executor.ApplyAsync(plan, CancellationToken.None);
+        var result = await executor.RestoreAsync(CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.False(result.HasPendingTransaction);
+        Assert.Contains("restore:1:101:chrome.exe:<default>:<default>", helper.Calls);
+    }
+
+    [Fact]
     public async Task ApplyAsync_WhenPlanIsEmpty_DoesNotCallTheHelper()
     {
         var helper = new RecordingHelper(new Dictionary<int, ApplicationRouteState>());
@@ -268,7 +306,9 @@ public sealed class ApplicationRouteExecutorTests
         private readonly int? cancelDuringSetProcessId;
         private readonly CancellationTokenSource? cancellation;
         private readonly Dictionary<int, int> restoreFailures;
+        private readonly IReadOnlySet<int> missingRouteReadSessions;
         private readonly IReadOnlySet<int> missingOutputSessions;
+        private readonly IReadOnlySet<int> missingPlaybackDevices;
 
         public RecordingHelper(
             IReadOnlyDictionary<int, ApplicationRouteState> routes,
@@ -276,14 +316,18 @@ public sealed class ApplicationRouteExecutorTests
             int? cancelDuringSetProcessId = null,
             CancellationTokenSource? cancellation = null,
             Dictionary<int, int>? restoreFailures = null,
-            IReadOnlySet<int>? missingOutputSessions = null)
+            IReadOnlySet<int>? missingRouteReadSessions = null,
+            IReadOnlySet<int>? missingOutputSessions = null,
+            IReadOnlySet<int>? missingPlaybackDevices = null)
         {
             this.routes = routes;
             this.failAfterSetProcessId = failAfterSetProcessId;
             this.cancelDuringSetProcessId = cancelDuringSetProcessId;
             this.cancellation = cancellation;
             this.restoreFailures = restoreFailures ?? [];
+            this.missingRouteReadSessions = missingRouteReadSessions ?? new HashSet<int>();
             this.missingOutputSessions = missingOutputSessions ?? new HashSet<int>();
+            this.missingPlaybackDevices = missingPlaybackDevices ?? new HashSet<int>();
         }
 
         public List<string> Calls { get; } = [];
@@ -295,6 +339,11 @@ public sealed class ApplicationRouteExecutorTests
             CancellationToken token)
         {
             Calls.Add($"get:{processId}:{processStartUtcTicks}:{processName}");
+            if (missingRouteReadSessions.Contains(processId))
+            {
+                throw new InvalidOperationException("Active output session not found.");
+            }
+
             return Task.FromResult(routes[processId]);
         }
 
@@ -340,6 +389,12 @@ public sealed class ApplicationRouteExecutorTests
             if (missingOutputSessions.Contains(processId))
             {
                 throw new InvalidOperationException("Active output session not found.");
+            }
+
+            if (missingPlaybackDevices.Contains(processId) &&
+                route.ConsoleDeviceId is not null)
+            {
+                throw new InvalidOperationException("Playback device not found.");
             }
 
             return Task.CompletedTask;

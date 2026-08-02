@@ -6,7 +6,7 @@ using System.Windows.Shapes;
 
 namespace AudioShare.App;
 
-public sealed class TutorialWindow : Window
+public sealed class TutorialWindow : FlowCastDialogWindow
 {
     private static readonly Brush PrimaryBrush = new SolidColorBrush(Color.FromRgb(29, 95, 191));
     private static readonly Brush TextBrush = new SolidColorBrush(Color.FromRgb(36, 50, 74));
@@ -17,6 +17,7 @@ public sealed class TutorialWindow : Window
     {
         Owner = owner;
         Title = "FlowCast - 使用教程";
+        Tone = FlowCastWindowTone.Soft;
         Width = 860;
         Height = 760;
         MinWidth = 620;
