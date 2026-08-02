@@ -6,7 +6,7 @@ namespace AudioShare.App;
 
 internal sealed class MotionController
 {
-    private const int MaximumFramesPerSecond = 30;
+    private const int MaximumFramesPerSecond = 60;
     private static readonly TimeSpan AudioPulseCooldown = TimeSpan.FromMilliseconds(850);
     private readonly Window owner;
     private readonly FrameworkElement mainContent;
