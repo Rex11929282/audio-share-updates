@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <LyricsFrontendSource Include="Frontend\index.html;Frontend\package-lock.json;Frontend\package.json;Frontend\tsconfig.json;Frontend\vite.config.ts;Frontend\src\**\*" />
+    <Content Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="BuildLyricsFrontend"
