@@ -20,6 +20,15 @@ public sealed class RadminLyricsLinkTests
     }
 
     [Fact]
+    public void RadminAdapterSelector_UsesTheAdapterPrefixForDiscoveryBroadcast()
+    {
+        var broadcast = RadminAdapterSelector.GetDiscoveryBroadcastAddress(
+            new RadminAdapter("Radmin VPN", OperationalStatus.Up, IPAddress.Parse("26.233.18.34"), PrefixLength: 8));
+
+        Assert.Equal(IPAddress.Parse("26.255.255.255"), broadcast);
+    }
+
+    [Fact]
     public async Task HostAndReceiver_DiscoverAndConnectWithoutManuallyEnteringAnAddress()
     {
         var hostAddress = RadminAdapterSelector.SelectActiveAddress() ?? IPAddress.Loopback;
@@ -36,5 +45,23 @@ public sealed class RadminLyricsLinkTests
         var peer = await host.WaitForReceiverAsync(TimeSpan.FromSeconds(2));
         Assert.NotNull(peer);
         Assert.Equal("FlowCast Lyrics", peer.Name);
+    }
+
+    [Fact]
+    public async Task Receiver_RetriesDiscoveryWhenTheHostStartsLater()
+    {
+        var hostAddress = RadminAdapterSelector.SelectActiveAddress() ?? IPAddress.Loopback;
+        var discoveryAddress = hostAddress.Equals(IPAddress.Loopback)
+            ? IPAddress.Loopback
+            : IPAddress.Parse("26.255.255.255");
+        await using var receiver = new RadminLyricsReceiver();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+        var connecting = receiver.DiscoverAndConnectAsync(discoveryAddress, cancellation.Token);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(900));
+        await using var host = new RadminLyricsHost(hostAddress, port: 0);
+        await host.StartAsync();
+
+        Assert.True(await connecting);
     }
 }

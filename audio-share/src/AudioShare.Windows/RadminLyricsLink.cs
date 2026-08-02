@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace AudioShare.Windows;
 
-public sealed record RadminAdapter(string Name, OperationalStatus Status, IPAddress Address);
+public sealed record RadminAdapter(string Name, OperationalStatus Status, IPAddress Address, int PrefixLength = 24);
 
 public static class RadminAdapterSelector
 {
@@ -18,10 +18,38 @@ public static class RadminAdapterSelector
             adapter.Address.GetAddressBytes()[0] == 26)
         ?.Address;
 
-    public static IPAddress? SelectActiveAddress() => Select(
+    public static IPAddress? SelectActiveAddress() => SelectActiveAdapter()?.Address;
+
+    public static RadminAdapter? SelectActiveAdapter() =>
+        GetActiveAdapters().FirstOrDefault(adapter =>
+            adapter.Status == OperationalStatus.Up &&
+            adapter.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase) &&
+            adapter.Address.AddressFamily == AddressFamily.InterNetwork &&
+            adapter.Address.GetAddressBytes()[0] == 26);
+
+    public static IPAddress GetDiscoveryBroadcastAddress(RadminAdapter adapter)
+    {
+        var addressBytes = adapter.Address.GetAddressBytes();
+        if (addressBytes.Length != 4 || adapter.PrefixLength is < 0 or > 32)
+        {
+            throw new ArgumentOutOfRangeException(nameof(adapter));
+        }
+
+        var broadcast = new byte[4];
+        for (var index = 0; index < broadcast.Length; index++)
+        {
+            var remainingPrefixBits = Math.Clamp(adapter.PrefixLength - (index * 8), 0, 8);
+            var mask = (byte)(0xFF << (8 - remainingPrefixBits));
+            broadcast[index] = (byte)((addressBytes[index] & mask) | ~mask);
+        }
+
+        return new IPAddress(broadcast);
+    }
+
+    private static IEnumerable<RadminAdapter> GetActiveAdapters() =>
         NetworkInterface.GetAllNetworkInterfaces().SelectMany(networkInterface =>
             networkInterface.GetIPProperties().UnicastAddresses.Select(unicast =>
-                new RadminAdapter(networkInterface.Name, networkInterface.OperationalStatus, unicast.Address))));
+                new RadminAdapter(networkInterface.Name, networkInterface.OperationalStatus, unicast.Address, unicast.PrefixLength)));
 }
 
 public sealed record RadminLyricsPeer(string Name, IPEndPoint Endpoint);
@@ -160,22 +188,37 @@ public sealed class RadminLyricsReceiver : IAsyncDisposable
         using var discoveryClient = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
         discoveryClient.EnableBroadcast = true;
         var request = Encoding.UTF8.GetBytes(DiscoverMessage);
-        await discoveryClient.SendAsync(request, new IPEndPoint(discoveryAddress, RadminLyricsHost.DiscoveryPort), cancellationToken);
-        var response = await discoveryClient.ReceiveAsync(cancellationToken);
-        var host = JsonSerializer.Deserialize<DiscoveryResponse>(Encoding.UTF8.GetString(response.Buffer));
-        return host is not null && await ConnectAsync(new IPEndPoint(IPAddress.Parse(host.Address), host.Port), cancellationToken);
+        var endpoint = new IPEndPoint(discoveryAddress, RadminLyricsHost.DiscoveryPort);
+        while (true)
+        {
+            await discoveryClient.SendAsync(request, endpoint, cancellationToken);
+            using var receiveTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            receiveTimeout.CancelAfter(TimeSpan.FromSeconds(1));
+
+            try
+            {
+                var response = await discoveryClient.ReceiveAsync(receiveTimeout.Token);
+                var host = JsonSerializer.Deserialize<DiscoveryResponse>(Encoding.UTF8.GetString(response.Buffer));
+                return host is not null && await ConnectAsync(new IPEndPoint(IPAddress.Parse(host.Address), host.Port), cancellationToken);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The host may start after the receiver. Keep searching until the caller cancels.
+            }
+        }
     }
 
     public async Task<bool> DiscoverAndConnectOnRadminAsync(CancellationToken cancellationToken = default)
     {
-        var radminAddress = RadminAdapterSelector.SelectActiveAddress();
-        if (radminAddress is null)
+        var radminAdapter = RadminAdapterSelector.SelectActiveAdapter();
+        if (radminAdapter is null)
         {
             return false;
         }
 
-        var octets = radminAddress.GetAddressBytes();
-        return await DiscoverAndConnectAsync(IPAddress.Parse($"{octets[0]}.{octets[1]}.{octets[2]}.255"), cancellationToken);
+        return await DiscoverAndConnectAsync(
+            RadminAdapterSelector.GetDiscoveryBroadcastAddress(radminAdapter),
+            cancellationToken);
     }
 
     public async Task<bool> ConnectAsync(IPEndPoint endpoint, CancellationToken cancellationToken = default)
