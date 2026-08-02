@@ -6,12 +6,11 @@ interface LyricsOverlayProps {
 }
 
 export function LyricsOverlay({ state }: LyricsOverlayProps) {
-  const hasLyric = state.lyricLine !== null
+  const hasLyric = state.mode === 'playing' || state.mode === 'paused'
+  const messageKey = `${state.mode}:${state.lyricLine?.startTimeMilliseconds ?? state.displayText}`
 
   return (
-    <main className={`overlay overlay--${state.connectionState}`} aria-live="polite">
-      <div className="ambient ambient--cyan" />
-      <div className="ambient ambient--blue" />
+    <main className={`overlay overlay--${state.mode}`} aria-live="polite">
       <LiquidGlass
         className="lyrics-glass"
         mode="standard"
@@ -20,7 +19,7 @@ export function LyricsOverlay({ state }: LyricsOverlayProps) {
         saturation={145}
         aberrationIntensity={2}
         elasticity={0.32}
-        cornerRadius={44}
+        cornerRadius={46}
         padding="0"
         style={{
           position: 'absolute',
@@ -31,7 +30,10 @@ export function LyricsOverlay({ state }: LyricsOverlayProps) {
         }}
       >
         <section className="glass-content">
-          <div className={`message ${hasLyric ? 'message--lyric' : 'message--status'}`}>
+          <div
+            key={messageKey}
+            className={`message ${hasLyric ? 'message--lyric' : 'message--status'}`}
+          >
             <p data-testid={hasLyric ? 'lyric-line' : undefined}>{state.displayText}</p>
           </div>
         </section>
