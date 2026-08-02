@@ -223,7 +223,10 @@
                             <Border x:Name="AtmosphereBarEight" Width="6" Height="22" Background="#48CFC3" CornerRadius="3" RenderTransformOrigin="0.5,1" />
                         </StackPanel>
                     </StackPanel>
-                    <Button x:Name="RestoreRoutingButton" Grid.Column="2" Style="{StaticResource DangerButton}" VerticalAlignment="Center" IsEnabled="False" Click="RestoreRoutingButton_Click" Content="停止分享" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="MuteSharingButton" Style="{StaticResource UtilityButton}" IsEnabled="False" Click="MuteSharingButton_Click" Content="静音分享" />
+                        <Button x:Name="RestoreRoutingButton" Style="{StaticResource DangerButton}" Margin="0" IsEnabled="False" Click="RestoreRoutingButton_Click" Content="停止分享" />
+                    </StackPanel>
                 </Grid>
             </Border>
 

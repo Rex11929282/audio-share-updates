@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer scheduleTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private readonly ShareStopSchedule stopSchedule = new();
+    private readonly ShareSession shareSession = new();
     private readonly FavoritePrograms favoritePrograms;
     private readonly FlowCastPreferencesStore preferencesStore = new();
     private FlowCastPreferences preferences;
@@ -263,8 +264,16 @@ public partial class MainWindow : Window
 
     private async void ScheduleTimer_Tick(object? sender, EventArgs e)
     {
+        if (shareSession.State == ShareSessionState.Countdown &&
+            !isRoutingOperation &&
+            shareSession.CountdownRemaining(DateTimeOffset.Now) == TimeSpan.Zero)
+        {
+            await StartSharingAfterCountdownAsync();
+        }
+
         await StopWhenScheduleExpiresAsync();
-        if (!stopSchedule.IsScheduled)
+        if (!stopSchedule.IsScheduled &&
+            shareSession.State is not (ShareSessionState.Countdown or ShareSessionState.Sharing or ShareSessionState.Muted))
         {
             scheduleTimer.Stop();
         }
@@ -283,7 +292,7 @@ public partial class MainWindow : Window
         {
             sharingBusStatus = voicemeeterSharingBusService.GetStatus();
             ReconcileSharingStateWithB1();
-            if (sharingRouteState == SharingRouteState.Sharing && sharingBusStatus.IsMainInputShared)
+            if (shareSession.State == ShareSessionState.Sharing && sharingBusStatus.IsMainInputShared)
             {
                 var b1Level = Math.Clamp(sharingBusStatus.B1Level * 100f, 0f, 100f);
                 motionController.PlayAudioLevelPulse(b1Level);
@@ -569,7 +578,7 @@ public partial class MainWindow : Window
     private void UpdateRoutingSetupState()
     {
         var selected = GetSelectedSessions();
-        motionController.SetRouteActive(sharingRouteState == SharingRouteState.Sharing);
+        motionController.SetRouteActive(shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted);
         InstructionText.Text = AudioRoutingPolicy.GetSetupInstruction(selected);
         ExperimentalRoutingStatusText.Text = experimentalRoutingStatus;
         B1StatusText.Text = GetB1StatusText();
@@ -583,13 +592,19 @@ public partial class MainWindow : Window
         UpdateHealthChips();
         (FlowCastStatusText.Text, FlowCastStatusHintText.Text) = requiresAttention
             ? ("需要处理", experimentalRoutingStatus)
-            : sharingRouteState switch
-        {
-            var state when state == SharingRouteState.Sharing => ("正在分享", "至少一个正在播放的程序会发送给朋友。"),
-            var state when state == SharingRouteState.LocalOnly => ("只自己听到", "当前所有正在播放的程序都只在本机播放。"),
-            _ => ("未确认", "正在检查程序的分享状态；确认前不会启用停止分享。"),
-        };
-        ApplyRoutingButton.IsEnabled = CanApplyRouting();
+            : shareSession.State switch
+            {
+                ShareSessionState.Countdown => ("准备分享", $"将在 {Math.Ceiling(shareSession.CountdownRemaining(DateTimeOffset.Now).TotalSeconds)} 秒后开始分享。"),
+                ShareSessionState.Sharing => ("正在分享", $"已分享 {shareSession.Duration(DateTimeOffset.Now):hh\\:mm\\:ss}"),
+                ShareSessionState.Muted => ("分享已静音", $"分享仍在继续 {shareSession.Duration(DateTimeOffset.Now):hh\\:mm\\:ss}"),
+                ShareSessionState.Disconnected => ("分享已断开", $"{shareSession.StopReason ?? "音频连接已中断。"} 已分享 {shareSession.FinalDuration:hh\\:mm\\:ss}"),
+                _ when sharingRouteState == SharingRouteState.LocalOnly => ("只自己听到", "当前所有正在播放的程序都只在本机播放。"),
+                _ => ("未确认", "正在检查程序的分享状态；确认前不会启用停止分享。"),
+            };
+        ApplyRoutingButton.Content = shareSession.State == ShareSessionState.Countdown ? "取消倒数" : "开始分享";
+        ApplyRoutingButton.IsEnabled = shareSession.State == ShareSessionState.Countdown || CanApplyRouting();
+        MuteSharingButton.IsEnabled = shareSession.State is ShareSessionState.Sharing or ShareSessionState.Muted;
+        MuteSharingButton.Content = shareSession.State == ShareSessionState.Muted ? "恢复分享" : "静音分享";
         RestoreRoutingButton.IsEnabled = CanStopSharing();
         ScheduleStopButton.IsEnabled = true;
         StartStopTimerButton.IsEnabled = CanStopSharing();
@@ -788,6 +803,12 @@ public partial class MainWindow : Window
 
     private void ReconcileSharingStateWithB1()
     {
+        if (shareSession.State == ShareSessionState.Muted &&
+            sharingBusStatus is { IsMainInputShared: false, IsAuxShared: false })
+        {
+            return;
+        }
+
         if (sharingRouteState != SharingRouteState.Sharing ||
             sharingBusStatus is { IsMainInputShared: true, IsAuxShared: false })
         {
@@ -863,11 +884,33 @@ public partial class MainWindow : Window
 
     }
 
-    private async void ApplyRoutingButton_Click(object sender, RoutedEventArgs e)
+    private void ApplyRoutingButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (shareSession.State == ShareSessionState.Countdown)
+        {
+            shareSession.CancelCountdown();
+            experimentalRoutingStatus = "已取消开始分享，音频设置没有改变。";
+            UpdateRoutingSetupState();
+            return;
+        }
+
+        if (!CanApplyRouting() || !shareSession.StartCountdown(TimeSpan.FromSeconds(3), DateTimeOffset.Now))
+        {
+            UpdateRoutingSetupState();
+            return;
+        }
+
+        scheduleTimer.Start();
+        experimentalRoutingStatus = "将在 3 秒后开始分享。";
+        UpdateRoutingSetupState();
+    }
+
+    private async Task StartSharingAfterCountdownAsync()
     {
         var selected = GetSelectedSessions();
         if (!CanApplyRouting())
         {
+            shareSession.CancelCountdown();
             UpdateRoutingSetupState();
             return;
         }
@@ -959,6 +1002,7 @@ public partial class MainWindow : Window
                 return;
             }
 
+            shareSession.TryStart(DateTimeOffset.Now);
             sharingRouteState = SharingRouteState.Sharing;
             motionController.PlaySharingConfirmed();
             experimentalRoutingStatus = "音频路由已应用。更改勾选后再次应用即可替换；停止分享会让声音只在本机播放。";
@@ -976,6 +1020,10 @@ public partial class MainWindow : Window
         finally
         {
             isRoutingOperation = false;
+            if (shareSession.State == ShareSessionState.Countdown && sharingRouteState != SharingRouteState.Sharing)
+            {
+                shareSession.CancelCountdown();
+            }
             if (!isClosing)
             {
                 await RefreshSharingRouteStateAsync();
@@ -1058,6 +1106,26 @@ public partial class MainWindow : Window
             }
             UpdateRoutingSetupState();
         }
+    }
+
+    private void MuteSharingButton_Click(object sender, RoutedEventArgs e)
+    {
+        var shouldMute = shareSession.State == ShareSessionState.Sharing;
+        if (!shouldMute && shareSession.State != ShareSessionState.Muted)
+        {
+            return;
+        }
+
+        if (!SetMainInputSharing(!shouldMute) || !shareSession.SetMuted(shouldMute))
+        {
+            return;
+        }
+
+        experimentalRoutingStatus = shouldMute
+            ? "分享已静音，本机播放仍会继续。"
+            : "已恢复分享。";
+        AddActivity(experimentalRoutingStatus);
+        UpdateRoutingSetupState();
     }
 
     private void SetExperimentalRoutingUnavailable(string reason, Exception? exception = null)
@@ -1157,6 +1225,7 @@ public partial class MainWindow : Window
 
         hasOwnedRoutingTransaction = false;
         sharingRouteState = resultingRouteState;
+        shareSession.Stop(DateTimeOffset.Now, "已停止分享。");
         foreach (var session in GetRecoverySessions())
         {
             await routeCoordinator.UnshareAsync(session, token);
