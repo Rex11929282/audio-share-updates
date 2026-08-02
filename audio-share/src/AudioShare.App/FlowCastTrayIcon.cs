@@ -41,7 +41,6 @@ internal sealed class FlowCastTrayIcon : IDisposable
     {
         var (text, color) = state switch
         {
-            ShareSessionState.Countdown => ("FlowCast - 准备分享", Color.RoyalBlue),
             ShareSessionState.Sharing => ("FlowCast - 正在分享", Color.MediumSeaGreen),
             ShareSessionState.Muted => ("FlowCast - 分享已静音", Color.DarkOrange),
             ShareSessionState.Disconnected => ("FlowCast - 分享已断开", Color.IndianRed),

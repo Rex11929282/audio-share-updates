@@ -16,7 +16,6 @@ public partial class PreferencesWindow : Window
         RestoreLocalPlaybackCheckBox.IsChecked = preferences.RestoreLocalPlayback;
         EndSharingSoundCheckBox.IsChecked = preferences.EndSharingSoundEnabled;
         DisconnectNotificationsCheckBox.IsChecked = preferences.DisconnectNotificationsEnabled;
-        StartCountdownComboBox.SelectedValue = preferences.StartCountdownSeconds.ToString();
         DataContext = this;
     }
 
@@ -40,13 +39,9 @@ public partial class PreferencesWindow : Window
 
     private void DoneButton_Click(object sender, RoutedEventArgs e)
     {
-        var countdown = StartCountdownComboBox.SelectedValue is string value && int.TryParse(value, out var parsed)
-            ? parsed
-            : 3;
         UpdatedPreferences = new FlowCastPreferences(
             ExcludedPrograms,
             ReduceMotionCheckBox.IsChecked == true,
-            countdown,
             RestoreLocalPlaybackCheckBox.IsChecked != false,
             EndSharingSoundCheckBox.IsChecked != false,
             DisconnectNotificationsCheckBox.IsChecked != false);

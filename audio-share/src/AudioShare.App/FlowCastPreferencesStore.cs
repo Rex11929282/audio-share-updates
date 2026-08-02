@@ -27,7 +27,6 @@ public sealed class FlowCastPreferencesStore
                 : new FlowCastPreferences(
                     saved.ExcludedProcesses,
                     saved.ReduceMotion,
-                    saved.StartCountdownSeconds ?? 3,
                     saved.RestoreLocalPlayback ?? true,
                     saved.EndSharingSoundEnabled ?? true,
                     saved.DisconnectNotificationsEnabled ?? true);
@@ -46,7 +45,6 @@ public sealed class FlowCastPreferencesStore
         var saved = new SavedPreferences(
             preferences.ExcludedProcesses.Order(StringComparer.OrdinalIgnoreCase).ToArray(),
             preferences.ReduceMotion,
-            preferences.StartCountdownSeconds,
             preferences.RestoreLocalPlayback,
             preferences.EndSharingSoundEnabled,
             preferences.DisconnectNotificationsEnabled);
@@ -56,7 +54,6 @@ public sealed class FlowCastPreferencesStore
     private sealed record SavedPreferences(
         string[]? ExcludedProcesses,
         bool ReduceMotion,
-        int? StartCountdownSeconds = null,
         bool? RestoreLocalPlayback = null,
         bool? EndSharingSoundEnabled = null,
         bool? DisconnectNotificationsEnabled = null);

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="设置"
         Width="460"
-        Height="680"
+        Height="620"
         MinWidth="400"
         MinHeight="420"
         Background="#F4F8FC"
@@ -76,23 +76,14 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <StackPanel>
-                        <TextBlock FontWeight="SemiBold" Foreground="#203A56" Text="开始分享倒数" />
-                        <ComboBox x:Name="StartCountdownComboBox" Margin="0,7,0,0" SelectedValuePath="Tag">
-                            <ComboBoxItem Tag="0" Content="立即开始" />
-                            <ComboBoxItem Tag="3" Content="3 秒（默认）" />
-                            <ComboBoxItem Tag="5" Content="5 秒" />
-                        </ComboBox>
-                    </StackPanel>
-                    <CheckBox x:Name="RestoreLocalPlaybackCheckBox" Grid.Row="1" Margin="0,18,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="停止分享后恢复本机播放" />
-                    <CheckBox x:Name="EndSharingSoundCheckBox" Grid.Row="2" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="结束分享时播放提示音" />
-                    <CheckBox x:Name="DisconnectNotificationsCheckBox" Grid.Row="3" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="分享意外中断时显示系统通知" />
-                    <CheckBox x:Name="ReduceMotionCheckBox" Grid.Row="4" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="减少动态效果" />
-                    <TextBlock Grid.Row="5" Margin="0,18,0,8" FontWeight="SemiBold" Foreground="#203A56" Text="不再显示的程序" />
-                    <Grid Grid.Row="6">
+                    <CheckBox x:Name="RestoreLocalPlaybackCheckBox" Margin="0,0,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="停止分享后恢复本机播放" />
+                    <CheckBox x:Name="EndSharingSoundCheckBox" Grid.Row="1" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="结束分享时播放提示音" />
+                    <CheckBox x:Name="DisconnectNotificationsCheckBox" Grid.Row="2" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="分享意外中断时显示系统通知" />
+                    <CheckBox x:Name="ReduceMotionCheckBox" Grid.Row="3" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" Foreground="#203A56" Content="减少动态效果" />
+                    <TextBlock Grid.Row="4" Margin="0,18,0,8" FontWeight="SemiBold" Foreground="#203A56" Text="不再显示的程序" />
+                    <Grid Grid.Row="5">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />

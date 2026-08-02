@@ -81,12 +81,12 @@ public sealed class ReleaseUpdateParserTests
     }
 
     [Fact]
-    public void Readme_StatesThatFlowCastChangesSelectedApplicationRoutes()
+    public void Readme_StatesThatFlowCastConfirmsBeforeChangingSelectedApplicationRoutes()
     {
         var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
         var readme = File.ReadAllText(readmePath);
 
-        Assert.Contains("before changing any routes", readme, StringComparison.Ordinal);
+        Assert.Contains("Confirm the prompt. FlowCast then changes only the selected application routes", readme, StringComparison.Ordinal);
     }
 
     [Fact]

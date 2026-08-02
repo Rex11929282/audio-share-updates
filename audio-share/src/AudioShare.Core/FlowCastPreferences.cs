@@ -8,8 +8,6 @@ public sealed record FlowCastPreferences
 
     public bool ReduceMotion { get; init; }
 
-    public int StartCountdownSeconds { get; init; } = 3;
-
     public bool RestoreLocalPlayback { get; init; } = true;
 
     public bool EndSharingSoundEnabled { get; init; } = true;
@@ -23,7 +21,6 @@ public sealed record FlowCastPreferences
     public FlowCastPreferences(
         IEnumerable<string>? excludedProcesses,
         bool reduceMotion,
-        int startCountdownSeconds = 3,
         bool restoreLocalPlayback = true,
         bool endSharingSoundEnabled = true,
         bool disconnectNotificationsEnabled = true)
@@ -34,18 +31,17 @@ public sealed record FlowCastPreferences
             .Where(name => name.Length > 0)
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
         ReduceMotion = reduceMotion;
-        StartCountdownSeconds = startCountdownSeconds is 0 or 3 or 5 ? startCountdownSeconds : 3;
         RestoreLocalPlayback = restoreLocalPlayback;
         EndSharingSoundEnabled = endSharingSoundEnabled;
         DisconnectNotificationsEnabled = disconnectNotificationsEnabled;
     }
 
     public FlowCastPreferences Exclude(string processName) =>
-        new(ExcludedProcesses.Append(Normalize(processName)).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, StartCountdownSeconds, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled);
+        new(ExcludedProcesses.Append(Normalize(processName)).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled);
 
     public FlowCastPreferences Restore(string processName) =>
         new(ExcludedProcesses.Where(name => !string.Equals(name, Normalize(processName), StringComparison.OrdinalIgnoreCase))
-            .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, StartCountdownSeconds, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled);
+            .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled);
 
     public bool IsExcluded(string processName) => ExcludedProcesses.Contains(Normalize(processName));
 

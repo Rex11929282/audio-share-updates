@@ -3,7 +3,6 @@ namespace AudioShare.Core;
 public enum ShareSessionState
 {
     Idle,
-    Countdown,
     Sharing,
     Muted,
     Disconnected,
@@ -12,7 +11,6 @@ public enum ShareSessionState
 public sealed class ShareSession
 {
     private DateTimeOffset? startedAt;
-    private DateTimeOffset? countdownEndsAt;
 
     public ShareSessionState State { get; private set; } = ShareSessionState.Idle;
 
@@ -20,41 +18,16 @@ public sealed class ShareSession
 
     public string? StopReason { get; private set; }
 
-    public bool StartCountdown(TimeSpan delay, DateTimeOffset now)
+    public bool Start(DateTimeOffset now)
     {
-        if (State is ShareSessionState.Countdown or ShareSessionState.Sharing or ShareSessionState.Muted)
+        if (State is ShareSessionState.Sharing or ShareSessionState.Muted)
         {
             return false;
         }
 
         FinalDuration = TimeSpan.Zero;
         StopReason = null;
-        countdownEndsAt = now.Add(delay < TimeSpan.Zero ? TimeSpan.Zero : delay);
-        State = ShareSessionState.Countdown;
-        return true;
-    }
-
-    public bool CancelCountdown()
-    {
-        if (State != ShareSessionState.Countdown)
-        {
-            return false;
-        }
-
-        countdownEndsAt = null;
-        State = ShareSessionState.Idle;
-        return true;
-    }
-
-    public bool TryStart(DateTimeOffset now)
-    {
-        if (State != ShareSessionState.Countdown || countdownEndsAt is null || now < countdownEndsAt)
-        {
-            return false;
-        }
-
         startedAt = now;
-        countdownEndsAt = null;
         State = ShareSessionState.Sharing;
         return true;
     }
@@ -72,11 +45,6 @@ public sealed class ShareSession
 
     public bool Stop(DateTimeOffset now, string? reason = null, bool disconnected = false)
     {
-        if (State == ShareSessionState.Countdown)
-        {
-            return CancelCountdown();
-        }
-
         if (State is not (ShareSessionState.Sharing or ShareSessionState.Muted) || startedAt is null)
         {
             return false;
@@ -91,7 +59,4 @@ public sealed class ShareSession
 
     public TimeSpan Duration(DateTimeOffset now) =>
         startedAt is null ? FinalDuration : now > startedAt ? now - startedAt.Value : TimeSpan.Zero;
-
-    public TimeSpan CountdownRemaining(DateTimeOffset now) =>
-        countdownEndsAt is null || now >= countdownEndsAt ? TimeSpan.Zero : countdownEndsAt.Value - now;
 }

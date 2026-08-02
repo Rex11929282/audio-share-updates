@@ -15,9 +15,9 @@ FlowCast never lets Discord, Voicemeeter, or its own helper be selected for shar
 1. Open Voicemeeter Banana and choose your headphones or speakers as A1.
 2. Start playing audio in Chrome, NetEase Cloud Music, or another application.
 3. Open FlowCast, select the programs you want friends to hear, then click `开始分享`.
-4. FlowCast waits for the configured countdown before changing any routes.
+4. Confirm the prompt. FlowCast then changes only the selected application routes.
 5. Use `静音分享` to mute only the shared program path. Your local listening continues.
-6. Click `停止分享` to restore local-only playback. Closing the main window only minimizes FlowCast to the system tray.
+6. Click `停止分享` to restore local-only playback. Closing the main window lets you choose the system tray or a full exit.
 
 Selected program order can be changed by dragging selected cards. FlowCast preserves that order for routing and restores local playback in reverse order.
 
@@ -29,7 +29,6 @@ If a selected application closes, a required endpoint disappears, or Windows cha
 
 ## Session Controls
 
-- Start countdown: immediate, 3 seconds, or 5 seconds.
 - Session timer: starts only after sharing actually begins and keeps running while sharing is muted.
 - Timed stop: stops sharing and clears selections after the selected duration.
 - End sound: optional confirmation after a normal stop or disconnect.
