@@ -36,6 +36,17 @@ public sealed record IslandSnapshot(
     LyricLine? LyricLine,
     LyricSource Source);
 
+public sealed record RadminLyricsFrame(
+    int ProtocolVersion,
+    string SessionId,
+    long Sequence,
+    string? TrackId,
+    IslandMode Mode,
+    LyricLine? LyricLine,
+    long PositionMilliseconds,
+    DateTimeOffset CapturedAtUtc,
+    bool IsPlaying);
+
 public interface ILyricsOverlaySink
 {
     void Show(IslandSnapshot snapshot);
