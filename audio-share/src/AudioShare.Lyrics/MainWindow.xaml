@@ -22,7 +22,8 @@
             BorderBrush="Transparent"
             BorderThickness="0"
             CornerRadius="22"
-            PreviewMouseLeftButtonDown="WindowSurface_OnPreviewMouseLeftButtonDown">
+            PreviewMouseLeftButtonDown="WindowSurface_OnPreviewMouseLeftButtonDown"
+            PreviewMouseRightButtonUp="WindowSurface_OnPreviewMouseRightButtonUp">
         <Grid ClipToBounds="True">
             <wv2:WebView2CompositionControl x:Name="OverlayWebView"
                                             Margin="0"

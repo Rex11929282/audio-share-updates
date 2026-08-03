@@ -25,6 +25,9 @@ public partial class MainWindow : Window
         Interval = TimeSpan.FromMilliseconds(380)
     };
     private readonly CancellationTokenSource lifetimeCancellation = new();
+    private readonly LiquidGlassSettingsController liquidGlassSettings =
+        new(LiquidGlassSettingsStore.CreateDefault());
+    private LiquidGlassTunerWindow? tunerWindow;
     private int backdropRetryAttempts;
     private bool webViewReady;
 
@@ -33,6 +36,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         presenter.StateChanged += Presenter_OnStateChanged;
         runtime.SnapshotChanged += Runtime_OnSnapshotChanged;
+        liquidGlassSettings.SettingsChanged += LiquidGlassSettings_OnSettingsChanged;
         Loaded += MainWindow_OnLoaded;
         Closed += MainWindow_OnClosed;
         LocationChanged += (_, _) => ScheduleBackdropRefresh();
@@ -177,6 +181,7 @@ public partial class MainWindow : Window
             {
                 webViewReady = true;
                 OverlayWebView.CoreWebView2.PostWebMessageAsJson(presenter.GetSnapshotJson());
+                OverlayWebView.CoreWebView2.PostWebMessageAsJson(liquidGlassSettings.GetSettingsJson());
                 RefreshDesktopBackdrop();
                 OverlayWebView.Visibility = Visibility.Visible;
                 NativeFallback.Visibility = Visibility.Collapsed;
@@ -184,6 +189,14 @@ public partial class MainWindow : Window
         }
         catch (JsonException)
         {
+        }
+    }
+
+    private void LiquidGlassSettings_OnSettingsChanged(object? sender, LiquidGlassSettings settings)
+    {
+        if (webViewReady)
+        {
+            OverlayWebView.CoreWebView2.PostWebMessageAsJson(liquidGlassSettings.GetSettingsJson());
         }
     }
 
@@ -280,6 +293,29 @@ public partial class MainWindow : Window
         }
     }
 
+    private void WindowSurface_OnPreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (tunerWindow is { IsVisible: true })
+        {
+            tunerWindow.Activate();
+            return;
+        }
+
+        tunerWindow = new LiquidGlassTunerWindow(liquidGlassSettings);
+        tunerWindow.Closed += TunerWindow_OnClosed;
+        tunerWindow.Show();
+    }
+
+    private void TunerWindow_OnClosed(object? sender, EventArgs e)
+    {
+        if (tunerWindow is not null)
+        {
+            tunerWindow.Closed -= TunerWindow_OnClosed;
+            tunerWindow = null;
+        }
+    }
+
     private void MainWindow_OnClosed(object? sender, EventArgs e)
     {
         lifetimeCancellation.Cancel();
@@ -287,6 +323,7 @@ public partial class MainWindow : Window
         backdropRefreshTimer.Tick -= BackdropRefreshTimer_OnTick;
         presenter.StateChanged -= Presenter_OnStateChanged;
         runtime.SnapshotChanged -= Runtime_OnSnapshotChanged;
+        liquidGlassSettings.SettingsChanged -= LiquidGlassSettings_OnSettingsChanged;
         if (OverlayWebView.CoreWebView2 is not null)
         {
             OverlayWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_OnWebMessageReceived;

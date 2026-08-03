@@ -84,6 +84,17 @@ public sealed class FlowCastLyricsStartupTests
         Assert.Contains("ScheduleBackdropRetry();", source);
     }
 
+    [Fact]
+    public void MainWindow_RightClickOpensOneLiquidGlassTuner()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml"));
+        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
+
+        Assert.Contains("PreviewMouseRightButtonUp=\"WindowSurface_OnPreviewMouseRightButtonUp\"", xaml);
+        Assert.Contains("LiquidGlassTunerWindow? tunerWindow", source);
+        Assert.Contains("tunerWindow.Activate()", source);
+    }
+
     private static string FindRepositoryFile(params string[] relativeSegments)
     {
         var sourceDirectory = Path.GetDirectoryName(GetSourceFilePath())!;
