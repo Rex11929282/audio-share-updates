@@ -1,11 +1,13 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LyricsOverlay } from './LyricsOverlay'
+import { LiquidGlassTuner } from './LiquidGlassTuner'
 import {
   officialLiquidGlassSettings,
   readLiquidGlassSettingsMessage,
 } from './liquidGlassSettings'
 import { initialState, reduceOverlayState } from './overlayState'
+import { createTunerBridge } from './tunerBridge'
 import './styles.css'
 
 function App() {
@@ -56,8 +58,38 @@ function App() {
   )
 }
 
+function TunerSurface() {
+  const [settings, setSettings] = useState(officialLiquidGlassSettings)
+  const webview = window.chrome?.webview
+
+  useEffect(() => {
+    if (!webview) {
+      return
+    }
+
+    const onMessage = (event: MessageEvent<unknown>) => {
+      const next = readLiquidGlassSettingsMessage(event.data)
+      if (next) {
+        setSettings(next)
+      }
+    }
+
+    webview.addEventListener('message', onMessage)
+    webview.postMessage({ type: 'tuner-ready' })
+    return () => webview.removeEventListener('message', onMessage)
+  }, [webview])
+
+  if (!webview) {
+    return null
+  }
+
+  return <LiquidGlassTuner settings={settings} bridge={createTunerBridge(webview)} />
+}
+
+const isTuner = new URLSearchParams(window.location.search).get('surface') === 'tuner'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {isTuner ? <TunerSurface /> : <App />}
   </StrictMode>,
 )
