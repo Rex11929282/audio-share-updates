@@ -2,22 +2,47 @@ import { render, screen } from '@testing-library/react'
 import type { CSSProperties, PropsWithChildren } from 'react'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { LyricsOverlay } from './LyricsOverlay'
+import { officialLiquidGlassSettings } from './liquidGlassSettings'
 import type { IslandMode, LyricSource } from './overlayState'
 import './styles.css'
 import styles from './styles.css?raw'
 
 vi.mock('liquid-glass-react', () => ({
-  default: ({ children, className, padding, style, mode }: PropsWithChildren<{
+  default: ({
+    children,
+    className,
+    padding,
+    style,
+    mode,
+    displacementScale,
+    blurAmount,
+    saturation,
+    aberrationIntensity,
+    elasticity,
+    cornerRadius,
+  }: PropsWithChildren<{
     className?: string
     padding?: string
     style?: CSSProperties
     mode?: string
+    displacementScale?: number
+    blurAmount?: number
+    saturation?: number
+    aberrationIntensity?: number
+    elasticity?: number
+    cornerRadius?: number
   }>) => (
     <div
       data-testid="liquid-glass"
       className={className}
       data-padding={padding}
       data-mode={mode}
+      data-displacement-scale={displacementScale}
+      data-blur-amount={blurAmount}
+      data-saturation={saturation}
+      data-aberration-intensity={aberrationIntensity}
+      data-elasticity={elasticity}
+      data-corner-radius={cornerRadius}
       style={style}
     >
       {children}
@@ -44,7 +69,7 @@ describe('LyricsOverlay', () => {
 
   it.each(statusModes)('renders %s with exact status copy and no lyric', (mode, displayText, source) => {
     const { container } = render(
-      <LyricsOverlay state={{ mode, displayText, lyricLine: null, source }} />,
+      <LyricsOverlay state={{ mode, displayText, lyricLine: null, source }} liquidSettings={officialLiquidGlassSettings} />,
     )
 
     expect(container.querySelector('main')).toHaveClass(`overlay--${mode}`)
@@ -64,6 +89,7 @@ describe('LyricsOverlay', () => {
           lyricLine: { text: '真實歌詞', startTimeMilliseconds: 1000, endTimeMilliseconds: 2500 },
           source,
         }}
+        liquidSettings={officialLiquidGlassSettings}
       />,
     )
 
@@ -72,8 +98,19 @@ describe('LyricsOverlay', () => {
   })
 
   it('uses one standard liquid-glass capsule with no window chrome or controls', () => {
+    const liquidSettings = {
+      displacementScale: 80,
+      blurAmount: 0.2,
+      saturation: 150,
+      aberrationIntensity: 3,
+      elasticity: 0.3,
+      cornerRadius: 80,
+    }
     const { container } = render(
-      <LyricsOverlay state={{ mode: 'idle', displayText: '等待播放', lyricLine: null, source: 'none' }} />,
+      <LyricsOverlay
+        state={{ mode: 'idle', displayText: '等待播放', lyricLine: null, source: 'none' }}
+        liquidSettings={liquidSettings}
+      />,
     )
 
     const glass = container.querySelectorAll('[data-testid="liquid-glass"]')
@@ -81,6 +118,12 @@ describe('LyricsOverlay', () => {
     expect(glass[0]).toHaveAttribute('data-mode', 'standard')
     expect(glass[0]).toHaveClass('lyrics-glass')
     expect(glass[0]).toHaveAttribute('data-padding', '0')
+    expect(glass[0]).toHaveAttribute('data-displacement-scale', '80')
+    expect(glass[0]).toHaveAttribute('data-blur-amount', '0.2')
+    expect(glass[0]).toHaveAttribute('data-saturation', '150')
+    expect(glass[0]).toHaveAttribute('data-aberration-intensity', '3')
+    expect(glass[0]).toHaveAttribute('data-elasticity', '0.3')
+    expect(glass[0]).toHaveAttribute('data-corner-radius', '80')
     expect(glass[0]).toHaveStyle({ position: 'absolute', top: '50%', left: '50%' })
     expect(container.querySelector('.brand-row')).not.toBeInTheDocument()
     expect(container.querySelector('.connection-chip')).not.toBeInTheDocument()
@@ -93,6 +136,7 @@ describe('LyricsOverlay', () => {
       <LyricsOverlay
         state={{ mode: 'idle', displayText: '????', lyricLine: null, source: 'none' }}
         backdropImageUrl="data:image/jpeg;base64,desktop-frame"
+        liquidSettings={officialLiquidGlassSettings}
       />,
     )
 
@@ -107,7 +151,10 @@ describe('LyricsOverlay', () => {
 
   it('keeps the capsule transparent until a desktop frame is available', () => {
     const { container } = render(
-      <LyricsOverlay state={{ mode: 'idle', displayText: '????', lyricLine: null, source: 'none' }} />,
+      <LyricsOverlay
+        state={{ mode: 'idle', displayText: '????', lyricLine: null, source: 'none' }}
+        liquidSettings={officialLiquidGlassSettings}
+      />,
     )
 
     expect(getComputedStyle(container.querySelector('.overlay')!).backgroundColor).toBe('rgba(0, 0, 0, 0)')

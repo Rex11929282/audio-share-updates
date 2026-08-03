@@ -1,12 +1,23 @@
 import LiquidGlass from 'liquid-glass-react'
+import type { CSSProperties } from 'react'
+import type { LiquidGlassSettings } from './liquidGlassSettings'
 import type { OverlayState } from './overlayState'
 
 interface LyricsOverlayProps {
   state: OverlayState
   backdropImageUrl?: string | null
+  liquidSettings: LiquidGlassSettings
 }
 
-export function LyricsOverlay({ state, backdropImageUrl = null }: LyricsOverlayProps) {
+const glassPositionStyle: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  width: 'calc(100% - 8px)',
+  height: 'calc(100% - 8px)',
+}
+
+export function LyricsOverlay({ state, backdropImageUrl = null, liquidSettings }: LyricsOverlayProps) {
   const hasLyric = state.mode === 'playing' || state.mode === 'paused'
   const messageKey = `${state.mode}:${state.lyricLine?.startTimeMilliseconds ?? state.displayText}`
 
@@ -20,20 +31,14 @@ export function LyricsOverlay({ state, backdropImageUrl = null }: LyricsOverlayP
       <LiquidGlass
         className="lyrics-glass"
         mode="standard"
-        displacementScale={96}
-        blurAmount={0.32}
-        saturation={145}
-        aberrationIntensity={2}
-        elasticity={0.32}
-        cornerRadius={46}
+        displacementScale={liquidSettings.displacementScale}
+        blurAmount={liquidSettings.blurAmount}
+        saturation={liquidSettings.saturation}
+        aberrationIntensity={liquidSettings.aberrationIntensity}
+        elasticity={liquidSettings.elasticity}
+        cornerRadius={liquidSettings.cornerRadius}
         padding="0"
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: 'calc(100% - 8px)',
-          height: 'calc(100% - 8px)',
-        }}
+        style={glassPositionStyle}
       >
         <section className={`glass-content${backdropImageUrl ? ' glass-content--live-backdrop' : ''}`}>
           <div
