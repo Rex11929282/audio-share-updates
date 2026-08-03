@@ -187,6 +187,30 @@ public sealed class LiquidGlassTunerWindowTests
 
         Assert.Equal(0, controlSetupCount);
         Assert.Equal(0, controlFailureCount);
+
+        var successfulPendingControl = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var successfulControlStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var successfulControlInitialization = new global::AudioShare.Lyrics.TunerAsyncInitialization();
+        var successfulControlSetupCount = 0;
+        var successfulControlFailureCount = 0;
+
+        var successfulControlRun = successfulControlInitialization.RunAsync(
+            () => Task.FromResult("environment"),
+            async _ =>
+            {
+                successfulControlStarted.SetResult();
+                await successfulPendingControl.Task;
+            },
+            () => successfulControlSetupCount++,
+            _ => successfulControlFailureCount++);
+
+        await successfulControlStarted.Task;
+        successfulControlInitialization.Close();
+        successfulPendingControl.SetResult();
+        await successfulControlRun;
+
+        Assert.Equal(0, successfulControlSetupCount);
+        Assert.Equal(0, successfulControlFailureCount);
     }
 
     [Fact]
