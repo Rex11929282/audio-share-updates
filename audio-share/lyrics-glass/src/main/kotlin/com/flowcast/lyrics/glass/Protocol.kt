@@ -3,6 +3,7 @@ package com.flowcast.lyrics.glass
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.InputStream
+import java.io.IOException
 import java.io.OutputStream
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -145,7 +146,11 @@ object PipeFrameCodec {
             throw ProtocolException("Unable to read frame header.", exception)
         }
         requireFrameLength(length)
-        return ByteArray(length).also(input::readFully)
+        return try {
+            ByteArray(length).also(input::readFully)
+        } catch (exception: IOException) {
+            throw ProtocolException("Unable to read frame payload.", exception)
+        }
     }
 
     private fun requireFrameLength(length: Int) {

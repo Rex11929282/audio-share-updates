@@ -42,6 +42,19 @@ class ProtocolTest {
     }
 
     @Test
+    fun frames_normalizeTruncatedPayloadToProtocolException() {
+        val output = ByteArrayOutputStream()
+        DataOutputStream(output).use {
+            it.writeInt(4)
+            it.writeByte(1)
+        }
+
+        assertFailsWith<ProtocolException> {
+            PipeFrameCodec.readFrame(ByteArrayInputStream(output.toByteArray()))
+        }
+    }
+
+    @Test
     fun commandAndEventJsonRoundTripsRetainTypeAndPayload() {
         val command = InitializeCommand(
             version = ProtocolVersion,
