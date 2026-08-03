@@ -284,6 +284,7 @@ Expected: frame/version/settings/reducer tests pass.
 - Create: audio-share/lyrics-glass/src/main/kotlin/com/flowcast/lyrics/glass/GlassOverlay.kt
 - Create: audio-share/lyrics-glass/src/main/kotlin/com/flowcast/lyrics/glass/OverlayWindow.kt
 - Create: audio-share/lyrics-glass/src/test/kotlin/com/flowcast/lyrics/glass/GlassOverlayTest.kt
+- Create: audio-share/lyrics-glass/src/test/kotlin/com/flowcast/lyrics/glass/PipeSmokeTest.kt
 - Modify: audio-share/lyrics-glass/src/main/kotlin/com/flowcast/lyrics/glass/Main.kt
 
 **Interfaces:**
@@ -378,7 +379,20 @@ Right click opens a compact Compose popup containing only Adjust Glass and Close
 
 Connect using command-line pipe and token. Send hello immediately, wait for a valid initialize with the same token, then send ready and apply subsequent commands. On shutdown or pipe EOF close the Compose application. Convert an unexpected exception into one fault event before exit.
 
-- [ ] **Step 7: Verify GREEN**
+- [ ] **Step 7: Add and run the real helper loopback-pipe smoke test**
+
+    @Test
+    fun loopbackPipe_sendsHelloThenReadyAfterValidInitialize() = runTest {
+        val server = TestPipeServer()
+        val client = startPipeClient(server.name, server.token)
+        assertEquals("hello", server.readEvent().type)
+        server.write(InitializeCommand(RendererProtocol.version, server.token,
+            OverlayPosition(0.0, 0.0), GlassSettings()))
+        assertEquals("ready", server.readEvent().type)
+        client.cancelAndJoin()
+    }
+
+- [ ] **Step 8: Verify GREEN**
 
 Run:
 
@@ -386,9 +400,9 @@ Run:
     .\gradlew.bat test --no-daemon
     .\gradlew.bat run --no-daemon --args="--pipe missing-test-pipe --token test"
 
-Expected: tests pass; missing pipe generates a clear failure and exits rather than opening a normal titled window or hanging.
+Expected: full Kotlin tests include the successful hello/initialize/ready loopback; the missing-pipe smoke generates a clear failure and exits rather than opening a normal titled window or hanging.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
     git add -- audio-share/lyrics-glass/src
     git commit -m "feat: render FlowCast Lyrics with AndroidLiquidGlass"
@@ -661,7 +675,6 @@ Expected: hidden host, connection-only state, and full suite all pass.
 - Modify: audio-share/ThirdPartyNotices.txt
 - Modify: audio-share/README.md
 - Create: audio-share/tests/AudioShare.Core.Tests/LyricsGlassPackagingTests.cs
-- Create: audio-share/lyrics-glass/src/test/kotlin/com/flowcast/lyrics/glass/PipeSmokeTest.kt
 
 **Interfaces:**
 - Consumes Compose createDistributable app image and self-contained Lyrics publish output.
@@ -687,26 +700,13 @@ Expected: hidden host, connection-only state, and full suite all pass.
         Assert.DoesNotContain("liquid-glass-react", notices);
     }
 
-    @Test
-    fun loopbackPipe_receivesReadyAfterValidInitialize() = runTest {
-        val server = TestPipeServer()
-        val client = startPipeClient(server.name, server.token)
-        assertEquals("hello", server.readEvent().type)
-        server.write(InitializeCommand(RendererProtocol.version, server.token,
-            OverlayPosition(0.0, 0.0), GlassSettings()))
-        assertEquals("ready", server.readEvent().type)
-        client.cancelAndJoin()
-    }
-
 - [ ] **Step 2: Verify RED**
 
 Run:
 
     dotnet test audio-share\tests\AudioShare.Core.Tests\AudioShare.Core.Tests.csproj --no-restore --filter "FullyQualifiedName~LyricsGlassPackagingTests"
-    Set-Location audio-share\lyrics-glass
-    .\gradlew.bat test --tests "*PipeSmokeTest" --no-daemon
 
-Expected: tests fail until the build scripts and smoke infrastructure exist.
+Expected: package test fails until the build scripts and publish target exist.
 
 - [ ] **Step 3: Build/copy complete Compose app image**
 
@@ -744,7 +744,7 @@ In a Windows sandbox verify:
 
 - [ ] **Step 6: Commit**
 
-    git add -- audio-share/scripts/build-lyrics-glass.ps1 audio-share/scripts/publish-lyrics.ps1 audio-share/src/AudioShare.Lyrics/AudioShare.Lyrics.csproj audio-share/ThirdPartyNotices.txt audio-share/README.md audio-share/tests/AudioShare.Core.Tests/LyricsGlassPackagingTests.cs audio-share/lyrics-glass/src/test/kotlin/com/flowcast/lyrics/glass/PipeSmokeTest.kt
+    git add -- audio-share/scripts/build-lyrics-glass.ps1 audio-share/scripts/publish-lyrics.ps1 audio-share/src/AudioShare.Lyrics/AudioShare.Lyrics.csproj audio-share/ThirdPartyNotices.txt audio-share/README.md audio-share/tests/AudioShare.Core.Tests/LyricsGlassPackagingTests.cs
     git commit -m "build: package Android liquid glass renderer with Lyrics"
 
 ## Plan Self-Review
