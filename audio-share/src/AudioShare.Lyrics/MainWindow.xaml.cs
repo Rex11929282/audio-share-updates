@@ -296,6 +296,11 @@ public partial class MainWindow : Window
     private void WindowSurface_OnPreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
+        CapsuleContextMenu.IsOpen = true;
+    }
+
+    private void AdjustLiquidGlass_OnClick(object sender, RoutedEventArgs e)
+    {
         if (tunerWindow is { IsVisible: true })
         {
             tunerWindow.Activate();
@@ -305,6 +310,11 @@ public partial class MainWindow : Window
         tunerWindow = new LiquidGlassTunerWindow(liquidGlassSettings);
         tunerWindow.Closed += TunerWindow_OnClosed;
         tunerWindow.Show();
+    }
+
+    private void CloseFlowCastLyrics_OnClick(object sender, RoutedEventArgs e)
+    {
+        Close();
     }
 
     private void TunerWindow_OnClosed(object? sender, EventArgs e)

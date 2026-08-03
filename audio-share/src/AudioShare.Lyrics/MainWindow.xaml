@@ -24,6 +24,13 @@
             CornerRadius="22"
             PreviewMouseLeftButtonDown="WindowSurface_OnPreviewMouseLeftButtonDown"
             PreviewMouseRightButtonUp="WindowSurface_OnPreviewMouseRightButtonUp">
+        <Border.ContextMenu>
+            <ContextMenu x:Name="CapsuleContextMenu">
+                <MenuItem Header="Adjust Liquid Glass…" Click="AdjustLiquidGlass_OnClick" />
+                <Separator />
+                <MenuItem Header="Close FlowCast Lyrics" Click="CloseFlowCastLyrics_OnClick" />
+            </ContextMenu>
+        </Border.ContextMenu>
         <Grid ClipToBounds="True">
             <wv2:WebView2CompositionControl x:Name="OverlayWebView"
                                             Margin="0"

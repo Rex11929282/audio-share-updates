@@ -85,12 +85,20 @@ public sealed class FlowCastLyricsStartupTests
     }
 
     [Fact]
-    public void MainWindow_RightClickOpensOneLiquidGlassTuner()
+    public void MainWindow_RightClickOpensTheLiquidGlassOptionMenu()
     {
         var xaml = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml"));
         var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
 
         Assert.Contains("PreviewMouseRightButtonUp=\"WindowSurface_OnPreviewMouseRightButtonUp\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleContextMenu\"", xaml);
+        Assert.Contains("Header=\"Adjust Liquid Glass…\"", xaml);
+        Assert.Contains("Header=\"Close FlowCast Lyrics\"", xaml);
+        Assert.Contains("Click=\"AdjustLiquidGlass_OnClick\"", xaml);
+        Assert.Contains("Click=\"CloseFlowCastLyrics_OnClick\"", xaml);
+        Assert.Contains("CapsuleContextMenu.IsOpen = true;", source);
+        Assert.Contains("private void AdjustLiquidGlass_OnClick", source);
+        Assert.Contains("private void CloseFlowCastLyrics_OnClick", source);
         Assert.Contains("LiquidGlassTunerWindow? tunerWindow", source);
         Assert.Contains("tunerWindow.Activate()", source);
     }
