@@ -18,12 +18,22 @@ internal sealed class LyricsDiagnosticLog
 
     internal void WriteTunerInitializationFailure(string stage, Exception exception)
     {
+        WriteFailure("tuner-webview", stage, exception);
+    }
+
+    internal void WriteRendererFailure(string stage, Exception exception)
+    {
+        WriteFailure("renderer", stage, exception);
+    }
+
+    private void WriteFailure(string source, string stage, Exception exception)
+    {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.AppendAllText(
                 path,
-                $"{DateTimeOffset.UtcNow:O} tuner-webview stage={stage} {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}");
+                $"{DateTimeOffset.UtcNow:O} {source} stage={stage} {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}");
         }
         catch (IOException)
         {

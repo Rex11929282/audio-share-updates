@@ -38,6 +38,21 @@ public sealed class LyricsDiagnosticLogTests : IDisposable
         Assert.Null(exception);
     }
 
+    [Fact]
+    public void WriteRendererFailure_AppendsTheRendererStageAndException()
+    {
+        var path = Path.Combine(directory, "diagnostics.log");
+        var log = new global::AudioShare.Lyrics.LyricsDiagnosticLog(path);
+
+        log.WriteRendererFailure("handshake", new InvalidOperationException("renderer failed"));
+
+        var text = File.ReadAllText(path);
+        Assert.Contains("renderer", text);
+        Assert.Contains("stage=handshake", text);
+        Assert.Contains("System.InvalidOperationException", text);
+        Assert.Contains("renderer failed", text);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(directory))
