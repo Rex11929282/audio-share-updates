@@ -218,7 +218,7 @@ Expected: test compilation fails because protocol/state types do not exist.
     data class InitializeCommand(
         override val version: Int,
         val token: String,
-        val position: OverlayPosition,
+        val position: OverlayPosition?,
         val glass: GlassSettings
     ) : HostCommand
 
@@ -245,6 +245,19 @@ Expected: test compilation fails because protocol/state types do not exist.
         val glass: GlassSettings
     ) : RendererEvent
 
+    @Serializable @SerialName("position-changed")
+    data class PositionChangedEvent(
+        override val version: Int,
+        val x: Double,
+        val y: Double
+    ) : RendererEvent
+
+    @Serializable @SerialName("close-request")
+    data class CloseRequestEvent(override val version: Int) : RendererEvent
+
+    @Serializable @SerialName("fault")
+    data class FaultEvent(override val version: Int, val message: String) : RendererEvent
+
 Use DataInputStream.readInt and DataOutputStream.writeInt with MaximumFrameBytes = 65_536. Reject negative or oversized lengths before allocating.
 
 - [ ] **Step 4: Implement pure state**
@@ -252,7 +265,7 @@ Use DataInputStream.readInt and DataOutputStream.writeInt with MaximumFrameBytes
     data class RendererState(
         val connectionState: RendererConnectionState = RendererConnectionState.FindingFlowcast,
         val lyric: LyricLine? = null,
-        val position: OverlayPosition = OverlayPosition(0.0, 0.0),
+        val position: OverlayPosition? = null,
         val glass: GlassSettings = GlassSettings()
     ) {
         fun reduce(command: HostCommand): RendererState = when (command) {
@@ -373,7 +386,7 @@ Use only the library Capsule, drawBackdrop, vibrancy, blur, lens, and Highlight.
 
 Use Window(undecorated = true, transparent = true, alwaysOnTop = true, resizable = false) and WindowDraggableArea over the capsule. Emit one position-changed after a completed drag.
 
-Right click opens a compact Compose popup containing only Adjust Glass and Close FlowCast Lyrics. Adjust Glass opens an anchored borderless popup, never a framed application window. It exposes exactly five Backdrop controls: corner radius, blur radius, refraction height, refraction amount, and chromatic aberration. Controls preview locally. Reset applies defaults; Cancel returns to the last committed state; Done emits settings-committed. Do not add color, generic app, or fake-glass controls.
+Right click opens a compact Compose popup containing only Adjust Glass and Close FlowCast Lyrics. Adjust Glass opens an anchored borderless popup, never a framed application window. It exposes exactly five Backdrop controls: corner radius, blur radius, refraction height, refraction amount, and chromatic aberration. Controls preview locally. Reset applies defaults; Cancel returns to the last committed state; Done emits settings-committed. Close emits close-request and waits for host Shutdown, so it is not classified as a renderer crash. Do not add color, generic app, or fake-glass controls.
 
 - [ ] **Step 6: Wire helper lifecycle**
 
@@ -490,9 +503,13 @@ Expected: compilation fails because types are absent.
         public bool IsValid => double.IsFinite(X) && double.IsFinite(Y);
     }
 
-    internal sealed record LyricsGlassHostState(OverlayPosition Position, LyricsGlassSettings Glass)
+    internal sealed record LyricsGlassHostState(OverlayPosition? Position, LyricsGlassSettings Glass)
+    {
+        public static LyricsGlassHostState Defaults { get; } = new(null, LyricsGlassSettings.Defaults);
+        public bool IsValid => (Position is null || Position.IsValid) && Glass.IsValid;
+    }
 
-Persist one camel-case JSON document at LocalAppData\FlowCast Lyrics\glass-settings.json. Missing, malformed, partial, non-finite, or out-of-range values load defaults. Save with a temporary file and atomic replacement.
+Persist one camel-case JSON document at LocalAppData\FlowCast Lyrics\glass-settings.json. A null Position means center on first run; non-null positions must be finite. Missing, malformed, partial, non-finite, or out-of-range values load defaults. Save with a temporary file and atomic replacement.
 
 - [ ] **Step 4: Implement exact .NET codec**
 
@@ -520,7 +537,7 @@ StartAsync creates a GUID pipe name and 32-byte Base64 token, opens a duplex byt
 
     glass\FlowCast Lyrics Glass.exe --pipe <name> --token <token>
 
-Use UseShellExecute = false, CreateNoWindow = true, and helper directory as WorkingDirectory. Await hello for five seconds, validate its version and token, send initialize, then await ready for five seconds before sending the latest connection state. Serialize outbound frames with one SemaphoreSlim.
+Use UseShellExecute = false, CreateNoWindow = true, and helper directory as WorkingDirectory. Await hello for five seconds, validate its version and token, send initialize, then await ready for five seconds before sending the latest connection state. Serialize outbound frames with one SemaphoreSlim. Surface position-changed, settings-committed, close-request, and fault as typed supervisor events; MainWindow owns persisted state and handles close-request as a normal application close.
 
 On unexpected exit create a new pipe/token and relaunch once. On the second exit mark RendererAvailability.Unavailable, write a renderer-failure diagnostic, and never relaunch. StopAsync marks shutdown, sends shutdown, closes pipe, waits three seconds, then kills only a remaining child process tree.
 
@@ -642,7 +659,7 @@ Dispose unsubscribes and disposes the relay. MainWindow uses it instead of Lyric
         <Grid />
     </Window>
 
-On Loaded call Hide before awaiting. Start LyricsConnectionRuntime and LyricsGlassRendererSupervisor, map state values to wire values, and forward them to the supervisor. On Closed await supervisor StopAsync before disposing the Radmin adapter.
+On Loaded call Hide before awaiting. Start LyricsConnectionRuntime and LyricsGlassRendererSupervisor, map state values to wire values, and forward them to the supervisor. Persist typed position-changed and settings-committed events through LyricsGlassSettingsStore. Handle close-request by calling Close, so the supervisor shuts down normally. On Closed await supervisor StopAsync before disposing the Radmin adapter.
 
 - [ ] **Step 5: Remove replaced rdev/WebView visual code**
 
