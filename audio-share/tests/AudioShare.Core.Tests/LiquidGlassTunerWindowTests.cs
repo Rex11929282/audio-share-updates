@@ -138,6 +138,32 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
+    public void TunerWindow_CloseDuringAsyncInitializationDoesNotTouchDisposedWebViewOrShowFailure()
+    {
+        var source = File.ReadAllText(
+            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml.cs"));
+        var loaded = source.IndexOf("private async void OnLoaded", StringComparison.Ordinal);
+        var initialization = source.IndexOf("var environment = await LyricsWebViewEnvironment.GetAsync();", loaded, StringComparison.Ordinal);
+        var ensure = source.IndexOf("await TunerWebView.EnsureCoreWebView2Async(environment);", initialization, StringComparison.Ordinal);
+        var setup = source.IndexOf("stage = \"setup\";", ensure, StringComparison.Ordinal);
+        var navigation = source.IndexOf("private void OnNavigationCompleted", StringComparison.Ordinal);
+        var timeout = source.IndexOf("private void OnTunerReadyTimedOut", StringComparison.Ordinal);
+        var failure = source.IndexOf("private void ShowTunerLoadFailure", StringComparison.Ordinal);
+        var guard = source.IndexOf("private void StopTunerReadinessGuard", failure, StringComparison.Ordinal);
+        var closed = source.IndexOf("private void OnClosed", StringComparison.Ordinal);
+
+        Assert.True(initialization >= 0);
+        Assert.True(ensure > initialization);
+        Assert.True(setup > ensure);
+        Assert.Contains("if (isClosing)\n            {\n                return;\n            }", source[initialization..ensure]);
+        Assert.Contains("if (isClosing)\n            {\n                return;\n            }", source[ensure..setup]);
+        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", source[navigation..timeout]);
+        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", source[timeout..failure]);
+        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", source[failure..guard]);
+        Assert.True(source.IndexOf("isClosing = true;", closed, StringComparison.Ordinal) > closed);
+    }
+
+    [Fact]
     public void TunerWindow_SaveProtectsExpectedPersistenceFailuresBeforeCommitAndClose()
     {
         var source = File.ReadAllText(

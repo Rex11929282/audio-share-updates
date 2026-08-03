@@ -41,7 +41,16 @@ public partial class LiquidGlassTunerWindow : Window
         try
         {
             var environment = await LyricsWebViewEnvironment.GetAsync();
+            if (isClosing)
+            {
+                return;
+            }
+
             await TunerWebView.EnsureCoreWebView2Async(environment);
+            if (isClosing)
+            {
+                return;
+            }
 
             stage = "setup";
             var settings = TunerWebView.CoreWebView2.Settings;
@@ -71,12 +80,20 @@ public partial class LiquidGlassTunerWindow : Window
         }
         catch (Exception exception)
         {
-            ShowTunerLoadFailure(stage, exception);
+            if (!isClosing)
+            {
+                ShowTunerLoadFailure(stage, exception);
+            }
         }
     }
 
     private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        if (isClosing)
+        {
+            return;
+        }
+
         if (!e.IsSuccess)
         {
             ShowTunerLoadFailure(
@@ -87,6 +104,11 @@ public partial class LiquidGlassTunerWindow : Window
 
     private void OnTunerReadyTimedOut(object? sender, EventArgs e)
     {
+        if (isClosing)
+        {
+            return;
+        }
+
         if (!webViewReady)
         {
             ShowTunerLoadFailure(
@@ -97,6 +119,11 @@ public partial class LiquidGlassTunerWindow : Window
 
     private void ShowTunerLoadFailure(string stage, Exception exception)
     {
+        if (isClosing)
+        {
+            return;
+        }
+
         StopTunerReadinessGuard();
         diagnosticLog.WriteTunerInitializationFailure(stage, exception);
         Trace.TraceError("FlowCast Lyrics tuner WebView failed during {0}: {1}", stage, exception);
@@ -116,6 +143,11 @@ public partial class LiquidGlassTunerWindow : Window
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        if (isClosing)
+        {
+            return;
+        }
+
         try
         {
             using var message = JsonDocument.Parse(e.WebMessageAsJson);
@@ -235,6 +267,7 @@ public partial class LiquidGlassTunerWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        isClosing = true;
         controller.SettingsChanged -= Controller_OnSettingsChanged;
         StopTunerReadinessGuard();
         if (TunerWebView.CoreWebView2 is not null)

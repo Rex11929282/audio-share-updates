@@ -147,4 +147,3 @@ git status --short
 ~~~
 
 Expected: frontend and full solution tests pass, git diff --check is clean, and generated artifacts remain unstaged.
-
