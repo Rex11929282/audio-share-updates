@@ -1,7 +1,7 @@
 # FlowCast Lyrics Liquid Glass Tuner Design
 
 **Date:** 2026-08-03
-**Status:** Approved design awaiting written-spec review
+**Status:** Approved on 2026-08-03
 
 ## Goal
 
