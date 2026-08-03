@@ -168,6 +168,7 @@ public partial class LiquidGlassTunerWindow : Window
                         break;
                     }
 
+                    isClosing = true;
                     closeCommitted = true;
                     Close();
                     break;

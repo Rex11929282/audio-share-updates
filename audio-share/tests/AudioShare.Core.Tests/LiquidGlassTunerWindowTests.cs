@@ -121,6 +121,23 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
+    public void TunerWindow_SaveClosePreventsQueuedSettingsFromTouchingADisposedWebView()
+    {
+        var source = File.ReadAllText(
+            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml.cs"));
+        var saveCase = source.IndexOf("case \"liquid-save\":", StringComparison.Ordinal);
+        var saveSection = source[saveCase..source.IndexOf("catch (JsonException)", saveCase, StringComparison.Ordinal)];
+        var postSettings = source.IndexOf("private void PostSettings", StringComparison.Ordinal);
+        var postSettingsSection = source[postSettings..source.IndexOf("private void OnClosing", postSettings, StringComparison.Ordinal)];
+
+        Assert.Contains("isClosing = true;", saveSection);
+        Assert.True(saveSection.IndexOf("isClosing = true;", StringComparison.Ordinal) < saveSection.IndexOf("closeCommitted = true;", StringComparison.Ordinal));
+        Assert.True(saveSection.IndexOf("isClosing = true;", StringComparison.Ordinal) < saveSection.IndexOf("Close();", StringComparison.Ordinal));
+        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", postSettingsSection);
+        Assert.True(postSettingsSection.IndexOf("if (isClosing)", StringComparison.Ordinal) < postSettingsSection.IndexOf("TunerWebView.CoreWebView2", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TunerWindow_SaveProtectsExpectedPersistenceFailuresBeforeCommitAndClose()
     {
         var source = File.ReadAllText(
