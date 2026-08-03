@@ -47,12 +47,12 @@ class GlassOverlayTest {
     @Test
     fun dragTracker_movesFromActualWindowPositionAndEmitsOnceOnRelease() {
         val tracker = OverlayDragTracker()
-        tracker.begin(
+        tracker.beginAtScreenPosition(
             windowAtPress = OverlayPosition(100.0, 200.0),
             pointerAtPress = OverlayPosition(10.0, 20.0),
         )
 
-        assertEquals(OverlayPosition(105.0, 208.0), tracker.move(OverlayPosition(15.0, 28.0)))
+        assertEquals(OverlayPosition(105.0, 208.0), tracker.moveAtScreenPosition(OverlayPosition(15.0, 28.0)))
         assertEquals(
             PositionChangedEvent(ProtocolVersion, 105.0, 208.0),
             tracker.releaseEvent(),
@@ -63,7 +63,7 @@ class GlassOverlayTest {
     @Test
     fun dragTracker_doesNotEmitWhenPrimaryPressNeverMoves() {
         val tracker = OverlayDragTracker()
-        tracker.begin(OverlayPosition(100.0, 200.0), OverlayPosition(10.0, 20.0))
+        tracker.beginAtScreenPosition(OverlayPosition(100.0, 200.0), OverlayPosition(10.0, 20.0))
 
         assertNull(tracker.releaseEvent())
     }
@@ -71,13 +71,31 @@ class GlassOverlayTest {
     @Test
     fun dragTracker_allowsReturningToTheActualPressPosition() {
         val tracker = OverlayDragTracker()
-        tracker.begin(OverlayPosition(100.0, 200.0), OverlayPosition(10.0, 20.0))
-        tracker.move(OverlayPosition(15.0, 28.0))
+        tracker.beginAtScreenPosition(OverlayPosition(100.0, 200.0), OverlayPosition(10.0, 20.0))
+        tracker.moveAtScreenPosition(OverlayPosition(15.0, 28.0))
 
-        assertEquals(OverlayPosition(100.0, 200.0), tracker.move(OverlayPosition(10.0, 20.0)))
+        assertEquals(OverlayPosition(100.0, 200.0), tracker.moveAtScreenPosition(OverlayPosition(10.0, 20.0)))
         assertEquals(
             PositionChangedEvent(ProtocolVersion, 100.0, 200.0),
             tracker.releaseEvent(),
         )
+    }
+
+    @Test
+    fun dragTracker_advancesForEveryNewGlobalPointerPositionAndEmitsOnceOnRelease() {
+        val tracker = OverlayDragTracker()
+        tracker.beginAtScreenPosition(
+            windowAtPress = OverlayPosition(400.0, 300.0),
+            pointerAtPress = OverlayPosition(420.0, 320.0),
+        )
+
+        assertEquals(OverlayPosition(410.0, 305.0), tracker.moveAtScreenPosition(OverlayPosition(430.0, 325.0)))
+        assertEquals(OverlayPosition(440.0, 330.0), tracker.moveAtScreenPosition(OverlayPosition(460.0, 350.0)))
+        assertEquals(OverlayPosition(470.0, 365.0), tracker.moveAtScreenPosition(OverlayPosition(490.0, 385.0)))
+        assertEquals(
+            PositionChangedEvent(ProtocolVersion, 470.0, 365.0),
+            tracker.releaseEvent(),
+        )
+        assertNull(tracker.releaseEvent())
     }
 }

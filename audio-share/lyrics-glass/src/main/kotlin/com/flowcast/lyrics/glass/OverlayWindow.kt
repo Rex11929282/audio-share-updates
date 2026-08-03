@@ -13,6 +13,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -64,14 +65,14 @@ internal class OverlayDragTracker {
     private var lastPosition: OverlayPosition? = null
     private var moved = false
 
-    fun begin(windowAtPress: OverlayPosition, pointerAtPress: OverlayPosition) {
+    fun beginAtScreenPosition(windowAtPress: OverlayPosition, pointerAtPress: OverlayPosition) {
         this.windowAtPress = windowAtPress
         this.pointerAtPress = pointerAtPress
         lastPosition = null
         moved = false
     }
 
-    fun move(pointer: OverlayPosition): OverlayPosition? {
+    fun moveAtScreenPosition(pointer: OverlayPosition): OverlayPosition? {
         val initialWindow = windowAtPress ?: return null
         val initialPointer = pointerAtPress ?: return null
         val next = OverlayPosition(
@@ -112,24 +113,21 @@ private fun WindowDraggableArea(
     Box(
         androidx.compose.ui.Modifier
             .onPointerEvent(PointerEventType.Press) { event ->
-                val pointer = event.changes.firstOrNull()?.position
-                if (event.buttons.isPrimaryPressed && pointer != null) {
-                    val location = awtWindow.locationOnScreen
-                    with(density) {
-                        tracker.begin(
-                            windowAtPress = OverlayPosition(location.x.toDp().value.toDouble(), location.y.toDp().value.toDouble()),
-                            pointerAtPress = OverlayPosition(pointer.x.toDp().value.toDouble(), pointer.y.toDp().value.toDouble()),
+                if (event.buttons.isPrimaryPressed) {
+                    val pointer = globalScreenPosition(density)
+                    val location = runCatching { awtWindow.locationOnScreen }.getOrNull()
+                    if (pointer != null && location != null) {
+                        tracker.beginAtScreenPosition(
+                            windowAtPress = location.toOverlayPosition(density),
+                            pointerAtPress = pointer,
                         )
                     }
                 }
             }
             .onPointerEvent(PointerEventType.Move) { event ->
-                val point = event.changes.firstOrNull()?.position
-                if (point != null && event.buttons.isPrimaryPressed) {
-                    with(density) {
-                        tracker.move(
-                            OverlayPosition(point.x.toDp().value.toDouble(), point.y.toDp().value.toDouble()),
-                        )?.let { position ->
+                if (event.buttons.isPrimaryPressed) {
+                    globalScreenPosition(density)?.let { pointer ->
+                        tracker.moveAtScreenPosition(pointer)?.let { position ->
                             windowState.position = WindowPosition.Absolute(position.x.toFloat().dp, position.y.toFloat().dp)
                         }
                     }
@@ -141,4 +139,11 @@ private fun WindowDraggableArea(
     ) {
         content()
     }
+}
+
+private fun globalScreenPosition(density: Density): OverlayPosition? =
+    runCatching { java.awt.MouseInfo.getPointerInfo()?.location }.getOrNull()?.toOverlayPosition(density)
+
+private fun java.awt.Point.toOverlayPosition(density: Density): OverlayPosition = with(density) {
+    OverlayPosition(x.toDp().value.toDouble(), y.toDp().value.toDouble())
 }

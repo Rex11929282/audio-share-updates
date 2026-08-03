@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Checkbox
 import androidx.compose.material.Slider
@@ -21,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -78,7 +81,30 @@ fun GlassOverlay(
     }
 
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(shape)
+                .layerBackdrop(backdrop),
+        ) {
+            Box(Modifier.fillMaxSize().background(Color(0xFFF3F6FA).copy(alpha = .16f)))
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .offset((-16).dp, (-18).dp)
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = .18f)),
+            )
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(16.dp, 18.dp)
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFDDE5EF).copy(alpha = .14f)),
+            )
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -95,6 +121,7 @@ fun GlassOverlay(
                         )
                     },
                     highlight = { Highlight.Default },
+                    onDrawSurface = { drawRect(Color.White.copy(alpha = .08f)) },
                 )
                 .onPointerEvent(PointerEventType.Press) { event ->
                     if (event.buttons.isSecondaryPressed) menuVisible = true
