@@ -30,6 +30,7 @@ public sealed class LiquidGlassTunerWindowTests
 
         Assert.Contains("LyricsWebViewEnvironment.GetAsync()", source);
         Assert.Contains("EnsureCoreWebView2Async(environment)", source);
+        Assert.Contains("diagnosticLog.WriteTunerInitializationFailure(stage, exception);", source);
         Assert.Contains("Trace.TraceError", source);
         Assert.DoesNotContain("catch (Exception)\n        {\n            TunerStatus.Text", source);
     }

@@ -9,6 +9,8 @@ namespace AudioShare.Lyrics;
 
 public partial class LiquidGlassTunerWindow : Window
 {
+    private static readonly LyricsDiagnosticLog diagnosticLog = LyricsDiagnosticLog.CreateDefault();
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -63,6 +65,7 @@ public partial class LiquidGlassTunerWindow : Window
         }
         catch (Exception exception)
         {
+            diagnosticLog.WriteTunerInitializationFailure(stage, exception);
             Trace.TraceError("FlowCast Lyrics tuner WebView failed during {0}: {1}", stage, exception);
             TunerStatus.Text = "Unable to load the Liquid Glass tuner.";
         }
