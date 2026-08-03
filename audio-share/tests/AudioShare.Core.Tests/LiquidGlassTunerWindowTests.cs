@@ -64,14 +64,14 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
-    public void TunerWindow_IsA720By640NormalWindow()
+    public void TunerWindow_DefaultViewportShowsTheFullPanel()
     {
         var xaml = File.ReadAllText(
             FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml"));
         var root = XDocument.Parse(xaml).Root!;
 
         Assert.Equal("720", root.Attribute("Width")?.Value);
-        Assert.Equal("640", root.Attribute("Height")?.Value);
+        Assert.Equal("720", root.Attribute("Height")?.Value);
         Assert.Null(root.Attribute("Owner"));
         Assert.Null(root.Attribute("WindowStyle"));
     }
