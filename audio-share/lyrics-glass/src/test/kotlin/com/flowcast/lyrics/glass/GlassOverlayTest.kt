@@ -2,6 +2,7 @@ package com.flowcast.lyrics.glass
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class GlassOverlayTest {
     @Test
@@ -12,50 +13,71 @@ class GlassOverlayTest {
             ),
         )
 
-        assertEquals("宸查€ｇ窔锛岀瓑寰呮瓕瑭瀈.", property(presentation, "text"))
+        assertEquals(OverlayDimensions(240, 64), presentation.dimensions)
+        assertEquals("已連線，等待歌詞", presentation.text)
     }
 
     @Test
     fun findingState_usesCompactCapsuleDimensions() {
         val presentation = overlayPresentation(RendererState.initial())
 
-        assertEquals(190, property(property(presentation, "dimensions")!!, "width"))
-        assertEquals(48, property(property(presentation, "dimensions")!!, "height"))
+        assertEquals(OverlayDimensions(190, 48), presentation.dimensions)
+        assertEquals("正在尋找 FlowCast", presentation.text)
     }
 
     @Test
     fun committingSettings_emitsValidatedNativeValues() {
         val edited = GlassSettings(blurRadiusDp = 7.5f)
 
-        val event = staticMethod("GlassOverlayKt", "settingsCommittedEvent", GlassSettings::class.java)
-            .invoke(null, edited) as SettingsCommittedEvent
-
-        assertEquals(ProtocolVersion, event.version)
-        assertEquals(edited, event.glass)
+        assertEquals(
+            SettingsCommittedEvent(ProtocolVersion, edited),
+            settingsCommittedEvent(edited),
+        )
     }
 
     @Test
     fun futureLyric_dimensionsAndDisplayUseTextUnchanged() {
-        val lyric = LyricLine("No invented words — 그대로")
+        val lyric = LyricLine("Caller-supplied lyric")
         val presentation = overlayPresentation(RendererState.initial().copy(lyric = lyric))
 
-        assertEquals(420, property(property(presentation, "dimensions")!!, "width"))
-        assertEquals(84, property(property(presentation, "dimensions")!!, "height"))
-        assertEquals(lyric.text, property(presentation, "text"))
+        assertEquals(OverlayDimensions(420, 84), presentation.dimensions)
+        assertEquals(lyric.text, presentation.text)
     }
 
-    private fun overlayPresentation(state: RendererState): Any =
-        staticMethod("GlassOverlayKt", "overlayPresentation", RendererState::class.java).invoke(null, state)
+    @Test
+    fun dragTracker_movesFromActualWindowPositionAndEmitsOnceOnRelease() {
+        val tracker = OverlayDragTracker()
+        tracker.begin(
+            windowAtPress = OverlayPosition(100.0, 200.0),
+            pointerAtPress = OverlayPosition(10.0, 20.0),
+        )
 
-    private fun property(instance: Any, name: String): Any? =
-        instance.javaClass.getMethod("get${name.replaceFirstChar(Char::uppercase)}").invoke(instance)
+        assertEquals(OverlayPosition(105.0, 208.0), tracker.move(OverlayPosition(15.0, 28.0)))
+        assertEquals(
+            PositionChangedEvent(ProtocolVersion, 105.0, 208.0),
+            tracker.releaseEvent(),
+        )
+        assertNull(tracker.releaseEvent())
+    }
 
-    private fun staticMethod(fileClass: String, name: String, vararg parameterTypes: Class<*>): java.lang.reflect.Method =
-        expectedClass(fileClass).getMethod(name, *parameterTypes)
+    @Test
+    fun dragTracker_doesNotEmitWhenPrimaryPressNeverMoves() {
+        val tracker = OverlayDragTracker()
+        tracker.begin(OverlayPosition(100.0, 200.0), OverlayPosition(10.0, 20.0))
 
-    private fun expectedClass(fileClass: String): Class<*> = try {
-        Class.forName("com.flowcast.lyrics.glass.$fileClass")
-    } catch (exception: ClassNotFoundException) {
-        throw AssertionError("Expected Task 3 implementation class $fileClass", exception)
+        assertNull(tracker.releaseEvent())
+    }
+
+    @Test
+    fun dragTracker_allowsReturningToTheActualPressPosition() {
+        val tracker = OverlayDragTracker()
+        tracker.begin(OverlayPosition(100.0, 200.0), OverlayPosition(10.0, 20.0))
+        tracker.move(OverlayPosition(15.0, 28.0))
+
+        assertEquals(OverlayPosition(100.0, 200.0), tracker.move(OverlayPosition(10.0, 20.0)))
+        assertEquals(
+            PositionChangedEvent(ProtocolVersion, 100.0, 200.0),
+            tracker.releaseEvent(),
+        )
     }
 }

@@ -6,6 +6,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.RandomAccessFile
 
 data class PipeArguments(val name: String, val token: String)
 
@@ -32,9 +33,9 @@ class PipeClient(
         output.flush()
     }
 
-    fun handshake(): InitializeCommand = try {
+    fun handshake(): InitializeCommand? = try {
         send(HelloEvent(ProtocolVersion, token))
-        val command = readCommand() ?: throw ProtocolException("Pipe closed before initialize.")
+        val command = readCommand() ?: return null
         val initialize = command as? InitializeCommand
             ?: throw ProtocolException("Expected initialize command.")
         if (initialize.token != token) {
@@ -65,10 +66,26 @@ class PipeClient(
     }
 }
 
-data class PipeStreams(val input: InputStream, val output: OutputStream) : AutoCloseable {
+class PipeStreams private constructor(
+    private val handle: RandomAccessFile,
+) : AutoCloseable {
+    val input: InputStream = FileInputStream(handle.fd)
+    val output: OutputStream = FileOutputStream(handle.fd)
+
     override fun close() {
-        runCatching { input.close() }
-        runCatching { output.close() }
+        handle.close()
+    }
+
+    companion object {
+        fun open(path: String): PipeStreams {
+            val handle = RandomAccessFile(path, "rw")
+            return try {
+                PipeStreams(handle)
+            } catch (exception: Exception) {
+                runCatching { handle.close() }
+                throw exception
+            }
+        }
     }
 }
 
@@ -77,9 +94,14 @@ fun connectPipe(name: String): PipeStreams? {
     val path = "\\\\.\\pipe\\$name"
     while (System.nanoTime() < deadline) {
         try {
-            return PipeStreams(FileInputStream(path), FileOutputStream(path))
+            return PipeStreams.open(path)
         } catch (_: IOException) {
-            Thread.sleep(100)
+            try {
+                Thread.sleep(100)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return null
+            }
         }
     }
     return null

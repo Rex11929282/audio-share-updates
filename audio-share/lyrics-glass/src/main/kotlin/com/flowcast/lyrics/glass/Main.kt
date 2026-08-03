@@ -32,6 +32,10 @@ fun main(arguments: Array<String>) {
             System.err.println(exception.message ?: "Unable to initialize FlowCast Lyrics")
             exitProcess(1)
         }
+        if (initialize == null) {
+            pipe.markIntentionalStop()
+            return
+        }
 
         application {
             var rendererState by mutableStateOf(RendererState.initial().reduce(initialize))

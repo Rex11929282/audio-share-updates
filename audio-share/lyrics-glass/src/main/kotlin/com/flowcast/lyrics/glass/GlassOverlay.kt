@@ -45,12 +45,12 @@ fun overlayPresentation(state: RendererState): OverlayPresentation = when (val l
     null -> when (state.connectionState) {
         RendererConnectionState.FindingFlowcast -> OverlayPresentation(
             OverlayDimensions(190, 48),
-            "姝ｅ湪灏嬫壘 FlowCast",
+            "正在尋找 FlowCast",
         )
 
         RendererConnectionState.ConnectedAwaitingLyrics -> OverlayPresentation(
             OverlayDimensions(240, 64),
-            "宸查€ｇ窔锛岀瓑寰呮瓕瑭瀈.",
+            "已連線，等待歌詞",
         )
     }
 
@@ -77,7 +77,8 @@ fun GlassOverlay(
         RoundedCornerShape((presentation.dimensions.height / 2f * previewSettings.cornerRadiusFraction).dp)
     }
 
-    Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
         Box(
             Modifier
                 .fillMaxSize()
