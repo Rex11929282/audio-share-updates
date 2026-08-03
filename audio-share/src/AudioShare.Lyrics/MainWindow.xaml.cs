@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using AudioShare.Lyrics.Contracts;
 using AudioShare.Windows;
 using Microsoft.Web.WebView2.Core;
@@ -17,6 +18,11 @@ public partial class MainWindow : Window
     private static readonly Duration IslandAnimationDuration = new(TimeSpan.FromMilliseconds(320));
     private readonly LyricsOverlayPresenter presenter = new();
     private readonly LyricsRuntime runtime = new();
+    private readonly DesktopBackdropCapture desktopBackdrop = new();
+    private readonly DispatcherTimer backdropRefreshTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(380)
+    };
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private bool webViewReady;
 
@@ -27,6 +33,9 @@ public partial class MainWindow : Window
         runtime.SnapshotChanged += Runtime_OnSnapshotChanged;
         Loaded += MainWindow_OnLoaded;
         Closed += MainWindow_OnClosed;
+        LocationChanged += (_, _) => ScheduleBackdropRefresh();
+        SizeChanged += (_, _) => ScheduleBackdropRefresh();
+        backdropRefreshTimer.Tick += BackdropRefreshTimer_OnTick;
         SourceInitialized += (_, _) => WindowBackdrop.TryEnableLightBackdrop(this);
     }
 
@@ -166,6 +175,7 @@ public partial class MainWindow : Window
             {
                 webViewReady = true;
                 OverlayWebView.CoreWebView2.PostWebMessageAsJson(presenter.GetSnapshotJson());
+                PublishDesktopBackdrop();
                 OverlayWebView.Visibility = Visibility.Visible;
                 NativeFallback.Visibility = Visibility.Collapsed;
             }
@@ -184,6 +194,47 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ScheduleBackdropRefresh()
+    {
+        if (!webViewReady)
+        {
+            return;
+        }
+
+        backdropRefreshTimer.Stop();
+        backdropRefreshTimer.Start();
+    }
+
+    private void BackdropRefreshTimer_OnTick(object? sender, EventArgs e)
+    {
+        backdropRefreshTimer.Stop();
+        PublishDesktopBackdrop();
+    }
+
+    private void PublishDesktopBackdrop()
+    {
+        if (!webViewReady || OverlayWebView.CoreWebView2 is null || !WindowBackdrop.TryExcludeFromCapture(this))
+        {
+            return;
+        }
+
+        try
+        {
+            var dataUrl = desktopBackdrop.Capture(this);
+            if (dataUrl is null)
+            {
+                return;
+            }
+
+            var message = JsonSerializer.Serialize(new { type = "backdrop", dataUrl });
+            OverlayWebView.CoreWebView2.PostWebMessageAsJson(message);
+        }
+        finally
+        {
+            WindowBackdrop.TryAllowCapture(this);
+        }
+    }
+
     private void ShowNativeFallback()
     {
         webViewReady = false;
@@ -197,12 +248,15 @@ public partial class MainWindow : Window
         if (e.LeftButton == MouseButtonState.Pressed)
         {
             DragMove();
+            ScheduleBackdropRefresh();
         }
     }
 
     private void MainWindow_OnClosed(object? sender, EventArgs e)
     {
         lifetimeCancellation.Cancel();
+        backdropRefreshTimer.Stop();
+        backdropRefreshTimer.Tick -= BackdropRefreshTimer_OnTick;
         presenter.StateChanged -= Presenter_OnStateChanged;
         runtime.SnapshotChanged -= Runtime_OnSnapshotChanged;
         if (OverlayWebView.CoreWebView2 is not null)

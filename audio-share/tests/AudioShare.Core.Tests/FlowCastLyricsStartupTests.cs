@@ -53,6 +53,21 @@ public sealed class FlowCastLyricsStartupTests
         Assert.True(hideFallback > readyHandler);
     }
 
+    [Fact]
+    public void MainWindow_FeedsTheDesktopBehindTheIslandIntoTheWebGlass()
+    {
+        var xamlPath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml");
+        var sourcePath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs");
+        var xaml = File.ReadAllText(xamlPath);
+        var source = File.ReadAllText(sourcePath);
+
+        Assert.Contains("Background=\"Transparent\"", xaml);
+        Assert.Contains("WindowBackdrop.TryExcludeFromCapture(this)", source);
+        Assert.Contains("desktopBackdrop.Capture", source);
+        Assert.Contains("PostWebMessageAsJson", source);
+        Assert.Contains("type = \"backdrop\"", source);
+    }
+
     private static string FindRepositoryFile(params string[] relativeSegments)
     {
         var sourceDirectory = Path.GetDirectoryName(GetSourceFilePath())!;

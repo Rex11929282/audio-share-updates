@@ -3,14 +3,20 @@ import type { OverlayState } from './overlayState'
 
 interface LyricsOverlayProps {
   state: OverlayState
+  backdropImageUrl?: string | null
 }
 
-export function LyricsOverlay({ state }: LyricsOverlayProps) {
+export function LyricsOverlay({ state, backdropImageUrl = null }: LyricsOverlayProps) {
   const hasLyric = state.mode === 'playing' || state.mode === 'paused'
   const messageKey = `${state.mode}:${state.lyricLine?.startTimeMilliseconds ?? state.displayText}`
 
   return (
     <main className={`overlay overlay--${state.mode}`} aria-live="polite">
+      <div
+        className={`scene-backdrop${backdropImageUrl ? ' scene-backdrop--live' : ''}`}
+        style={backdropImageUrl ? { backgroundImage: `url("${backdropImageUrl}")` } : undefined}
+        aria-hidden="true"
+      />
       <LiquidGlass
         className="lyrics-glass"
         mode="standard"
@@ -29,7 +35,7 @@ export function LyricsOverlay({ state }: LyricsOverlayProps) {
           height: 'calc(100% - 8px)',
         }}
       >
-        <section className="glass-content">
+        <section className={`glass-content${backdropImageUrl ? ' glass-content--live-backdrop' : ''}`}>
           <div
             key={messageKey}
             className={`message ${hasLyric ? 'message--lyric' : 'message--status'}`}

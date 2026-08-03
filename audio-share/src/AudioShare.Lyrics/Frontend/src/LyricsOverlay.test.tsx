@@ -3,6 +3,7 @@ import type { CSSProperties, PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { LyricsOverlay } from './LyricsOverlay'
 import type { IslandMode, LyricSource } from './overlayState'
+import './styles.css'
 
 vi.mock('liquid-glass-react', () => ({
   default: ({ children, className, padding, style, mode }: PropsWithChildren<{
@@ -75,5 +76,22 @@ describe('LyricsOverlay', () => {
     expect(container.querySelector('.connection-chip')).not.toBeInTheDocument()
     expect(container.querySelector('.close-button')).not.toBeInTheDocument()
     expect(container.querySelector('.drag-handle')).not.toBeInTheDocument()
+  })
+
+  it('places the captured desktop behind the liquid glass instead of painting a fake gradient', () => {
+    const { container } = render(
+      <LyricsOverlay
+        state={{ mode: 'idle', displayText: '????', lyricLine: null, source: 'none' }}
+        backdropImageUrl="data:image/jpeg;base64,desktop-frame"
+      />,
+    )
+
+    const backdrop = container.querySelector('.scene-backdrop')
+    expect(backdrop).toHaveStyle({
+      backgroundImage: 'url("data:image/jpeg;base64,desktop-frame")',
+    })
+    const content = container.querySelector('.glass-content')
+    expect(content).toHaveClass('glass-content--live-backdrop')
+    expect(getComputedStyle(content!).backgroundImage).toBe('none')
   })
 })
