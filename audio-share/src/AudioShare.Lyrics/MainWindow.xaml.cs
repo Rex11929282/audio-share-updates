@@ -56,7 +56,8 @@ public partial class MainWindow : Window
     {
         try
         {
-            await OverlayWebView.EnsureCoreWebView2Async();
+            var environment = await LyricsWebViewEnvironment.GetAsync();
+            await OverlayWebView.EnsureCoreWebView2Async(environment);
             OverlayWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
             OverlayWebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
             OverlayWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;

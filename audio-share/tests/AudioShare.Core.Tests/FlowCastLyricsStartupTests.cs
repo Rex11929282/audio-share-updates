@@ -54,6 +54,14 @@ public sealed class FlowCastLyricsStartupTests
     }
 
     [Fact]
+    public void MainWindow_UsesTheSharedWebViewEnvironment()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
+
+        Assert.Contains("LyricsWebViewEnvironment.GetAsync()", source);
+    }
+
+    [Fact]
     public void MainWindow_FeedsTheDesktopBehindTheIslandIntoTheWebGlass()
     {
         var xamlPath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml");

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -30,9 +31,13 @@ public partial class LiquidGlassTunerWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        var stage = "initialization";
         try
         {
-            await TunerWebView.EnsureCoreWebView2Async();
+            var environment = await LyricsWebViewEnvironment.GetAsync();
+            await TunerWebView.EnsureCoreWebView2Async(environment);
+
+            stage = "setup";
             var settings = TunerWebView.CoreWebView2.Settings;
             settings.AreBrowserAcceleratorKeysEnabled = false;
             settings.AreDefaultContextMenusEnabled = false;
@@ -41,6 +46,7 @@ public partial class LiquidGlassTunerWindow : Window
             settings.IsZoomControlEnabled = false;
             TunerWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
+            stage = "mapping";
             var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
             if (!File.Exists(Path.Combine(webRoot, "index.html")))
             {
@@ -51,10 +57,13 @@ public partial class LiquidGlassTunerWindow : Window
                 "flowcast.local",
                 webRoot,
                 CoreWebView2HostResourceAccessKind.DenyCors);
+
+            stage = "navigation";
             TunerWebView.Source = new Uri("https://flowcast.local/index.html?surface=tuner");
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Trace.TraceError("FlowCast Lyrics tuner WebView failed during {0}: {1}", stage, exception);
             TunerStatus.Text = "Unable to load the Liquid Glass tuner.";
         }
     }

@@ -23,6 +23,18 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
+    public void TunerWindow_UsesTheSharedWebViewEnvironmentAndTracesInitializationFailures()
+    {
+        var source = File.ReadAllText(
+            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml.cs"));
+
+        Assert.Contains("LyricsWebViewEnvironment.GetAsync()", source);
+        Assert.Contains("EnsureCoreWebView2Async(environment)", source);
+        Assert.Contains("Trace.TraceError", source);
+        Assert.DoesNotContain("catch (Exception)\n        {\n            TunerStatus.Text", source);
+    }
+
+    [Fact]
     public void TunerWindow_IsA720By640NormalWindow()
     {
         var xaml = File.ReadAllText(
