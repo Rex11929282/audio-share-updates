@@ -31,6 +31,13 @@ public sealed class LiquidGlassTunerWindowTests
         Assert.Contains("LyricsWebViewEnvironment.GetAsync()", source);
         Assert.Contains("EnsureCoreWebView2Async(environment)", source);
         Assert.Contains("diagnosticLog.WriteTunerInitializationFailure(stage, exception);", source);
+        var diagnosticWrite = source.IndexOf("diagnosticLog.WriteTunerInitializationFailure(stage, exception);", StringComparison.Ordinal);
+        var trace = source.IndexOf("Trace.TraceError", StringComparison.Ordinal);
+        var status = source.IndexOf("TunerStatus.Text = \"Unable to load the Liquid Glass tuner.\";", StringComparison.Ordinal);
+
+        Assert.True(diagnosticWrite >= 0);
+        Assert.True(trace > diagnosticWrite);
+        Assert.True(status > diagnosticWrite);
         Assert.Contains("Trace.TraceError", source);
         Assert.DoesNotContain("catch (Exception)\n        {\n            TunerStatus.Text", source);
     }
