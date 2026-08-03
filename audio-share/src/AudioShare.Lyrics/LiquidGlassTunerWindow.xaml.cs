@@ -65,12 +65,13 @@ public partial class LiquidGlassTunerWindow : Window
         {
             using var message = JsonDocument.Parse(e.WebMessageAsJson);
             var root = message.RootElement;
-            if (!root.TryGetProperty("type", out var type))
+            var commandType = GetCommandType(root);
+            if (commandType is null)
             {
                 return;
             }
 
-            switch (type.GetString())
+            switch (commandType)
             {
                 case "tuner-ready":
                     webViewReady = true;
@@ -95,7 +96,21 @@ public partial class LiquidGlassTunerWindow : Window
                     Close();
                     break;
                 case "liquid-save":
-                    controller.Save();
+                    try
+                    {
+                        controller.Save();
+                    }
+                    catch (IOException)
+                    {
+                        ShowSaveFailure();
+                        break;
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        ShowSaveFailure();
+                        break;
+                    }
+
                     closeCommitted = true;
                     Close();
                     break;
@@ -104,6 +119,28 @@ public partial class LiquidGlassTunerWindow : Window
         catch (JsonException)
         {
         }
+    }
+
+    internal static string? GetCommandType(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("type", out var type) ||
+            type.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return type.GetString();
+    }
+
+    private void ShowSaveFailure()
+    {
+        MessageBox.Show(
+            this,
+            "Unable to save Liquid Glass settings. Check access to local app data and try again.",
+            "FlowCast Lyrics",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     private void Controller_OnSettingsChanged(object? sender, LiquidGlassSettings settings)

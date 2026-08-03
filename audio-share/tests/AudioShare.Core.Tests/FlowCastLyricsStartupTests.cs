@@ -95,6 +95,28 @@ public sealed class FlowCastLyricsStartupTests
         Assert.Contains("tunerWindow.Activate()", source);
     }
 
+    [Fact]
+    public void MainWindow_CloseClosesTheTunerBeforeOverlayTeardown()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
+        var closeStart = source.IndexOf("private void MainWindow_OnClosed", StringComparison.Ordinal);
+        var closeEnd = source.IndexOf("private const uint MonitorDefaultToNearest", closeStart, StringComparison.Ordinal);
+        var closeHandler = source[closeStart..closeEnd];
+        var copyTuner = closeHandler.IndexOf("var tuner = tunerWindow;", StringComparison.Ordinal);
+        var clearTuner = closeHandler.IndexOf("tunerWindow = null;", StringComparison.Ordinal);
+        var detachTuner = closeHandler.IndexOf("tuner.Closed -= TunerWindow_OnClosed;", StringComparison.Ordinal);
+        var closeTuner = closeHandler.IndexOf("tuner.Close();", StringComparison.Ordinal);
+        var disposeOverlay = closeHandler.IndexOf("OverlayWebView.Dispose();", StringComparison.Ordinal);
+
+        Assert.True(copyTuner >= 0);
+        Assert.True(clearTuner > copyTuner);
+        Assert.True(detachTuner > clearTuner);
+        Assert.True(closeTuner > detachTuner);
+        Assert.True(disposeOverlay > closeTuner);
+        Assert.Contains("ReferenceEquals(tunerWindow, closedTuner)", source);
+        Assert.DoesNotContain("Owner =", source);
+    }
+
     private static string FindRepositoryFile(params string[] relativeSegments)
     {
         var sourceDirectory = Path.GetDirectoryName(GetSourceFilePath())!;

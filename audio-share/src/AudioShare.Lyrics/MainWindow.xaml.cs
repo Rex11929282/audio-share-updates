@@ -309,15 +309,26 @@ public partial class MainWindow : Window
 
     private void TunerWindow_OnClosed(object? sender, EventArgs e)
     {
-        if (tunerWindow is not null)
+        if (sender is LiquidGlassTunerWindow closedTuner)
         {
-            tunerWindow.Closed -= TunerWindow_OnClosed;
-            tunerWindow = null;
+            closedTuner.Closed -= TunerWindow_OnClosed;
+            if (ReferenceEquals(tunerWindow, closedTuner))
+            {
+                tunerWindow = null;
+            }
         }
     }
 
     private void MainWindow_OnClosed(object? sender, EventArgs e)
     {
+        var tuner = tunerWindow;
+        tunerWindow = null;
+        if (tuner is not null)
+        {
+            tuner.Closed -= TunerWindow_OnClosed;
+            tuner.Close();
+        }
+
         lifetimeCancellation.Cancel();
         backdropRefreshTimer.Stop();
         backdropRefreshTimer.Tick -= BackdropRefreshTimer_OnTick;
