@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import type { CSSProperties, PropsWithChildren } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { LyricsOverlay } from './LyricsOverlay'
 import type { IslandMode, LyricSource } from './overlayState'
 import './styles.css'
+import styles from './styles.css?raw'
 
 vi.mock('liquid-glass-react', () => ({
   default: ({ children, className, padding, style, mode }: PropsWithChildren<{
@@ -25,6 +26,15 @@ vi.mock('liquid-glass-react', () => ({
 }))
 
 describe('LyricsOverlay', () => {
+  const stylesheet = document.createElement('style')
+
+  beforeAll(() => {
+    stylesheet.textContent = styles
+    document.head.append(stylesheet)
+  })
+
+  afterAll(() => stylesheet.remove())
+
   const statusModes: ReadonlyArray<[IslandMode, string, LyricSource]> = [
     ['idle', '等待播放', 'none'],
     ['resolving', '正在取得歌詞', 'localNetEase'],
@@ -93,5 +103,15 @@ describe('LyricsOverlay', () => {
     const content = container.querySelector('.glass-content')
     expect(content).toHaveClass('glass-content--live-backdrop')
     expect(getComputedStyle(content!).backgroundImage).toBe('none')
+  })
+
+  it('keeps the capsule transparent until a desktop frame is available', () => {
+    const { container } = render(
+      <LyricsOverlay state={{ mode: 'idle', displayText: '????', lyricLine: null, source: 'none' }} />,
+    )
+
+    expect(getComputedStyle(container.querySelector('.overlay')!).backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    expect(getComputedStyle(container.querySelector('.scene-backdrop')!).backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    expect(styles).not.toContain('background: rgb(18 28 40')
   })
 })

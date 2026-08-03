@@ -68,6 +68,22 @@ public sealed class FlowCastLyricsStartupTests
         Assert.Contains("type = \"backdrop\"", source);
     }
 
+    [Fact]
+    public void MainWindow_BoundsBackdropCaptureRetriesAfterReadyOrLayoutTriggers()
+    {
+        var sourcePath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs");
+        var source = File.ReadAllText(sourcePath);
+
+        Assert.Contains("private const int MaximumBackdropRetries = 2;", source);
+        Assert.Contains("RefreshDesktopBackdrop();", source);
+        Assert.Contains("LocationChanged += (_, _) => ScheduleBackdropRefresh();", source);
+        Assert.Contains("SizeChanged += (_, _) => ScheduleBackdropRefresh();", source);
+        Assert.Contains("backdropRetryAttempts = 0;", source);
+        Assert.Contains("if (backdropRetryAttempts >= MaximumBackdropRetries)", source);
+        Assert.Contains("backdropRetryAttempts++;", source);
+        Assert.Contains("ScheduleBackdropRetry();", source);
+    }
+
     private static string FindRepositoryFile(params string[] relativeSegments)
     {
         var sourceDirectory = Path.GetDirectoryName(GetSourceFilePath())!;

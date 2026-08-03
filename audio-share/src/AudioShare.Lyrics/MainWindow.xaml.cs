@@ -16,6 +16,7 @@ namespace AudioShare.Lyrics;
 public partial class MainWindow : Window
 {
     private static readonly Duration IslandAnimationDuration = new(TimeSpan.FromMilliseconds(320));
+    private const int MaximumBackdropRetries = 2;
     private readonly LyricsOverlayPresenter presenter = new();
     private readonly LyricsRuntime runtime = new();
     private readonly DesktopBackdropCapture desktopBackdrop = new();
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
         Interval = TimeSpan.FromMilliseconds(380)
     };
     private readonly CancellationTokenSource lifetimeCancellation = new();
+    private int backdropRetryAttempts;
     private bool webViewReady;
 
     public MainWindow()
@@ -175,7 +177,7 @@ public partial class MainWindow : Window
             {
                 webViewReady = true;
                 OverlayWebView.CoreWebView2.PostWebMessageAsJson(presenter.GetSnapshotJson());
-                PublishDesktopBackdrop();
+                RefreshDesktopBackdrop();
                 OverlayWebView.Visibility = Visibility.Visible;
                 NativeFallback.Visibility = Visibility.Collapsed;
             }
@@ -201,6 +203,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        backdropRetryAttempts = 0;
         backdropRefreshTimer.Stop();
         backdropRefreshTimer.Start();
     }
@@ -211,10 +214,34 @@ public partial class MainWindow : Window
         PublishDesktopBackdrop();
     }
 
+    private void RefreshDesktopBackdrop()
+    {
+        backdropRetryAttempts = 0;
+        PublishDesktopBackdrop();
+    }
+
+    private void ScheduleBackdropRetry()
+    {
+        if (backdropRetryAttempts >= MaximumBackdropRetries)
+        {
+            return;
+        }
+
+        backdropRetryAttempts++;
+        backdropRefreshTimer.Stop();
+        backdropRefreshTimer.Start();
+    }
+
     private void PublishDesktopBackdrop()
     {
-        if (!webViewReady || OverlayWebView.CoreWebView2 is null || !WindowBackdrop.TryExcludeFromCapture(this))
+        if (!webViewReady || OverlayWebView.CoreWebView2 is null)
         {
+            return;
+        }
+
+        if (!WindowBackdrop.TryExcludeFromCapture(this))
+        {
+            ScheduleBackdropRetry();
             return;
         }
 
@@ -223,6 +250,7 @@ public partial class MainWindow : Window
             var dataUrl = desktopBackdrop.Capture(this);
             if (dataUrl is null)
             {
+                ScheduleBackdropRetry();
                 return;
             }
 

@@ -30,13 +30,13 @@ body {
   height: 100%;
   overflow: hidden;
   border-radius: 999px;
-  background: rgb(18 28 40 / 26%);
+  background: transparent;
 }
 
 .scene-backdrop {
   position: absolute;
   inset: -64px;
-  background: rgb(18 28 40 / 34%);
+  background: transparent;
   background-position: center;
   background-size: cover;
 }
