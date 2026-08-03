@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 
 namespace AudioShare.Lyrics;
@@ -18,6 +19,7 @@ public partial class LiquidGlassTunerWindow : Window
     };
 
     private readonly LiquidGlassSettingsController controller;
+    private readonly DispatcherTimer tunerReadyTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private bool closeCommitted;
     private bool webViewReady;
 
@@ -28,6 +30,7 @@ public partial class LiquidGlassTunerWindow : Window
         Loaded += OnLoaded;
         Closing += OnClosing;
         Closed += OnClosed;
+        tunerReadyTimer.Tick += OnTunerReadyTimedOut;
         controller.SettingsChanged += Controller_OnSettingsChanged;
     }
 
@@ -47,6 +50,7 @@ public partial class LiquidGlassTunerWindow : Window
             settings.IsStatusBarEnabled = false;
             settings.IsZoomControlEnabled = false;
             TunerWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            TunerWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
 
             stage = "mapping";
             var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
@@ -62,12 +66,50 @@ public partial class LiquidGlassTunerWindow : Window
 
             stage = "navigation";
             TunerWebView.Source = new Uri("https://flowcast.local/index.html?surface=tuner");
+            tunerReadyTimer.Start();
         }
         catch (Exception exception)
         {
-            diagnosticLog.WriteTunerInitializationFailure(stage, exception);
-            Trace.TraceError("FlowCast Lyrics tuner WebView failed during {0}: {1}", stage, exception);
-            TunerStatus.Text = "Unable to load the Liquid Glass tuner.";
+            ShowTunerLoadFailure(stage, exception);
+        }
+    }
+
+    private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    {
+        if (!e.IsSuccess)
+        {
+            ShowTunerLoadFailure(
+                "navigation",
+                new InvalidOperationException($"WebView navigation failed: {e.WebErrorStatus}."));
+        }
+    }
+
+    private void OnTunerReadyTimedOut(object? sender, EventArgs e)
+    {
+        if (!webViewReady)
+        {
+            ShowTunerLoadFailure(
+                "readiness",
+                new TimeoutException("WebView navigation completed without a tuner-ready message."));
+        }
+    }
+
+    private void ShowTunerLoadFailure(string stage, Exception exception)
+    {
+        StopTunerReadinessGuard();
+        diagnosticLog.WriteTunerInitializationFailure(stage, exception);
+        Trace.TraceError("FlowCast Lyrics tuner WebView failed during {0}: {1}", stage, exception);
+        TunerWebView.Visibility = Visibility.Hidden;
+        TunerStatus.Text = "Unable to load the Liquid Glass tuner.";
+    }
+
+    private void StopTunerReadinessGuard()
+    {
+        tunerReadyTimer.Stop();
+        tunerReadyTimer.Tick -= OnTunerReadyTimedOut;
+        if (TunerWebView.CoreWebView2 is not null)
+        {
+            TunerWebView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
         }
     }
 
@@ -87,6 +129,7 @@ public partial class LiquidGlassTunerWindow : Window
             {
                 case "tuner-ready":
                     webViewReady = true;
+                    StopTunerReadinessGuard();
                     TunerWebView.Visibility = Visibility.Visible;
                     TunerStatus.Visibility = Visibility.Collapsed;
                     PostSettings();
@@ -179,6 +222,7 @@ public partial class LiquidGlassTunerWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         controller.SettingsChanged -= Controller_OnSettingsChanged;
+        StopTunerReadinessGuard();
         if (TunerWebView.CoreWebView2 is not null)
         {
             TunerWebView.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;

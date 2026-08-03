@@ -63,6 +63,17 @@ public sealed class LiquidGlassSettingsTests : IDisposable
         Assert.Equal(LiquidGlassSettings.OfficialDefaults, new LiquidGlassSettingsStore(path).Load());
     }
 
+    [Fact]
+    public void Store_LoadsOfficialDefaultsWhenReadingSettingsIsUnauthorized()
+    {
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "liquid-glass-settings.json");
+        File.WriteAllText(path, "{}");
+        var store = new LiquidGlassSettingsStore(path, _ => throw new UnauthorizedAccessException());
+
+        Assert.Equal(LiquidGlassSettings.OfficialDefaults, store.Load());
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(directory))

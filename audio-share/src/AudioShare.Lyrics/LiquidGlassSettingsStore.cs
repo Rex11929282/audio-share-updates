@@ -13,10 +13,16 @@ internal sealed class LiquidGlassSettingsStore
     };
 
     private readonly string path;
+    private readonly Func<string, string> readAllText;
 
-    public LiquidGlassSettingsStore(string path)
+    public LiquidGlassSettingsStore(string path) : this(path, File.ReadAllText)
+    {
+    }
+
+    internal LiquidGlassSettingsStore(string path, Func<string, string> readAllText)
     {
         this.path = path;
+        this.readAllText = readAllText;
     }
 
     public static LiquidGlassSettingsStore CreateDefault()
@@ -36,7 +42,7 @@ internal sealed class LiquidGlassSettingsStore
                 return LiquidGlassSettings.OfficialDefaults;
             }
 
-            var settings = JsonSerializer.Deserialize<LiquidGlassSettings>(File.ReadAllText(path), JsonOptions);
+            var settings = JsonSerializer.Deserialize<LiquidGlassSettings>(readAllText(path), JsonOptions);
             return settings?.IsValid == true ? settings : LiquidGlassSettings.OfficialDefaults;
         }
         catch (JsonException)
@@ -44,6 +50,10 @@ internal sealed class LiquidGlassSettingsStore
             return LiquidGlassSettings.OfficialDefaults;
         }
         catch (IOException)
+        {
+            return LiquidGlassSettings.OfficialDefaults;
+        }
+        catch (UnauthorizedAccessException)
         {
             return LiquidGlassSettings.OfficialDefaults;
         }

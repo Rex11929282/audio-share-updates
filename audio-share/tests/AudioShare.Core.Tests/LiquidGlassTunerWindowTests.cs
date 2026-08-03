@@ -43,6 +43,27 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
+    public void TunerWindow_FailsNavigationAndTimesOutWhenTheReactTunerNeverSignalsReady()
+    {
+        var source = File.ReadAllText(
+            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml.cs"));
+
+        Assert.Contains("CoreWebView2.NavigationCompleted += OnNavigationCompleted;", source);
+        Assert.Contains("private void OnNavigationCompleted", source);
+        Assert.Contains("if (!e.IsSuccess)", source);
+        Assert.Contains("ShowTunerLoadFailure(", source);
+        Assert.Contains("\"navigation\",", source);
+        Assert.Contains("TimeSpan.FromSeconds(10)", source);
+        Assert.Contains("tunerReadyTimer.Start();", source);
+        Assert.Contains("private void OnTunerReadyTimedOut", source);
+        Assert.Contains("\"readiness\",", source);
+        Assert.Contains("private void ShowTunerLoadFailure", source);
+        Assert.Contains("TunerWebView.Visibility = Visibility.Hidden;", source);
+        Assert.Contains("tunerReadyTimer.Stop();", source);
+        Assert.Contains("TunerWebView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;", source);
+    }
+
+    [Fact]
     public void TunerWindow_IsA720By640NormalWindow()
     {
         var xaml = File.ReadAllText(
