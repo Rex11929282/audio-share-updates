@@ -138,29 +138,55 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
-    public void TunerWindow_CloseDuringAsyncInitializationDoesNotTouchDisposedWebViewOrShowFailure()
+    public async Task TunerInitialization_CloseWhileEnvironmentOrControlIsPending_SkipsWebViewSetupAndFailure()
     {
-        var source = File.ReadAllText(
-            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml.cs"));
-        var loaded = source.IndexOf("private async void OnLoaded", StringComparison.Ordinal);
-        var initialization = source.IndexOf("var environment = await LyricsWebViewEnvironment.GetAsync();", loaded, StringComparison.Ordinal);
-        var ensure = source.IndexOf("await TunerWebView.EnsureCoreWebView2Async(environment);", initialization, StringComparison.Ordinal);
-        var setup = source.IndexOf("stage = \"setup\";", ensure, StringComparison.Ordinal);
-        var navigation = source.IndexOf("private void OnNavigationCompleted", StringComparison.Ordinal);
-        var timeout = source.IndexOf("private void OnTunerReadyTimedOut", StringComparison.Ordinal);
-        var failure = source.IndexOf("private void ShowTunerLoadFailure", StringComparison.Ordinal);
-        var guard = source.IndexOf("private void StopTunerReadinessGuard", failure, StringComparison.Ordinal);
-        var closed = source.IndexOf("private void OnClosed", StringComparison.Ordinal);
+        var pendingEnvironment = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var environmentInitialization = new global::AudioShare.Lyrics.TunerAsyncInitialization();
+        var environmentControlCount = 0;
+        var environmentSetupCount = 0;
+        var environmentFailureCount = 0;
 
-        Assert.True(initialization >= 0);
-        Assert.True(ensure > initialization);
-        Assert.True(setup > ensure);
-        Assert.Contains("if (isClosing)\n            {\n                return;\n            }", source[initialization..ensure]);
-        Assert.Contains("if (isClosing)\n            {\n                return;\n            }", source[ensure..setup]);
-        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", source[navigation..timeout]);
-        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", source[timeout..failure]);
-        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", source[failure..guard]);
-        Assert.True(source.IndexOf("isClosing = true;", closed, StringComparison.Ordinal) > closed);
+        var environmentRun = environmentInitialization.RunAsync(
+            () => pendingEnvironment.Task,
+            _ =>
+            {
+                environmentControlCount++;
+                return Task.CompletedTask;
+            },
+            () => environmentSetupCount++,
+            _ => environmentFailureCount++);
+
+        environmentInitialization.Close();
+        pendingEnvironment.SetResult("environment");
+        await environmentRun;
+
+        Assert.Equal(0, environmentControlCount);
+        Assert.Equal(0, environmentSetupCount);
+        Assert.Equal(0, environmentFailureCount);
+
+        var pendingControl = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var controlStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var controlInitialization = new global::AudioShare.Lyrics.TunerAsyncInitialization();
+        var controlSetupCount = 0;
+        var controlFailureCount = 0;
+
+        var controlRun = controlInitialization.RunAsync(
+            () => Task.FromResult("environment"),
+            async _ =>
+            {
+                controlStarted.SetResult();
+                await pendingControl.Task;
+            },
+            () => controlSetupCount++,
+            _ => controlFailureCount++);
+
+        await controlStarted.Task;
+        controlInitialization.Close();
+        pendingControl.SetException(new InvalidOperationException("The disposed WebView rejected initialization."));
+        await controlRun;
+
+        Assert.Equal(0, controlSetupCount);
+        Assert.Equal(0, controlFailureCount);
     }
 
     [Fact]

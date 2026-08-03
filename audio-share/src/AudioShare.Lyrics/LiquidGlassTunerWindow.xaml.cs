@@ -19,6 +19,7 @@ public partial class LiquidGlassTunerWindow : Window
     };
 
     private readonly LiquidGlassSettingsController controller;
+    private readonly TunerAsyncInitialization initialization = new();
     private readonly DispatcherTimer tunerReadyTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private bool closeCommitted;
     private bool isClosing;
@@ -38,53 +39,38 @@ public partial class LiquidGlassTunerWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         var stage = "initialization";
-        try
-        {
-            var environment = await LyricsWebViewEnvironment.GetAsync();
-            if (isClosing)
+        await initialization.RunAsync(
+            () => LyricsWebViewEnvironment.GetAsync(),
+            environment => TunerWebView.EnsureCoreWebView2Async(environment),
+            () =>
             {
-                return;
-            }
+                stage = "setup";
+                var settings = TunerWebView.CoreWebView2.Settings;
+                settings.AreBrowserAcceleratorKeysEnabled = false;
+                settings.AreDefaultContextMenusEnabled = false;
+                settings.AreDevToolsEnabled = false;
+                settings.IsStatusBarEnabled = false;
+                settings.IsZoomControlEnabled = false;
+                TunerWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+                TunerWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
 
-            await TunerWebView.EnsureCoreWebView2Async(environment);
-            if (isClosing)
-            {
-                return;
-            }
+                stage = "mapping";
+                var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+                if (!File.Exists(Path.Combine(webRoot, "index.html")))
+                {
+                    throw new FileNotFoundException("FlowCast Lyrics web assets were not found.", webRoot);
+                }
 
-            stage = "setup";
-            var settings = TunerWebView.CoreWebView2.Settings;
-            settings.AreBrowserAcceleratorKeysEnabled = false;
-            settings.AreDefaultContextMenusEnabled = false;
-            settings.AreDevToolsEnabled = false;
-            settings.IsStatusBarEnabled = false;
-            settings.IsZoomControlEnabled = false;
-            TunerWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
-            TunerWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+                TunerWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "flowcast.local",
+                    webRoot,
+                    CoreWebView2HostResourceAccessKind.DenyCors);
 
-            stage = "mapping";
-            var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-            if (!File.Exists(Path.Combine(webRoot, "index.html")))
-            {
-                throw new FileNotFoundException("FlowCast Lyrics web assets were not found.", webRoot);
-            }
-
-            TunerWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "flowcast.local",
-                webRoot,
-                CoreWebView2HostResourceAccessKind.DenyCors);
-
-            stage = "navigation";
-            TunerWebView.Source = new Uri("https://flowcast.local/index.html?surface=tuner");
-            tunerReadyTimer.Start();
-        }
-        catch (Exception exception)
-        {
-            if (!isClosing)
-            {
-                ShowTunerLoadFailure(stage, exception);
-            }
-        }
+                stage = "navigation";
+                TunerWebView.Source = new Uri("https://flowcast.local/index.html?surface=tuner");
+                tunerReadyTimer.Start();
+            },
+            exception => ShowTunerLoadFailure(stage, exception));
     }
 
     private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -180,6 +166,7 @@ public partial class LiquidGlassTunerWindow : Window
                     break;
                 case "liquid-cancel":
                     isClosing = true;
+                    initialization.Close();
                     controller.Cancel();
                     closeCommitted = true;
                     Close();
@@ -202,6 +189,7 @@ public partial class LiquidGlassTunerWindow : Window
 
                     isClosing = true;
                     closeCommitted = true;
+                    initialization.Close();
                     Close();
                     break;
             }
@@ -261,6 +249,7 @@ public partial class LiquidGlassTunerWindow : Window
         if (!closeCommitted)
         {
             isClosing = true;
+            initialization.Close();
             controller.Cancel();
         }
     }
@@ -268,6 +257,7 @@ public partial class LiquidGlassTunerWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         isClosing = true;
+        initialization.Close();
         controller.SettingsChanged -= Controller_OnSettingsChanged;
         StopTunerReadinessGuard();
         if (TunerWebView.CoreWebView2 is not null)
@@ -276,5 +266,46 @@ public partial class LiquidGlassTunerWindow : Window
         }
 
         TunerWebView.Dispose();
+    }
+}
+
+internal sealed class TunerAsyncInitialization
+{
+    private bool isClosed;
+
+    internal void Close()
+    {
+        isClosed = true;
+    }
+
+    internal async Task RunAsync<TEnvironment>(
+        Func<Task<TEnvironment>> createEnvironmentAsync,
+        Func<TEnvironment, Task> initializeControlAsync,
+        Action onInitialized,
+        Action<Exception> onFailure)
+    {
+        try
+        {
+            var environment = await createEnvironmentAsync();
+            if (isClosed)
+            {
+                return;
+            }
+
+            await initializeControlAsync(environment);
+            if (isClosed)
+            {
+                return;
+            }
+
+            onInitialized();
+        }
+        catch (Exception) when (isClosed)
+        {
+        }
+        catch (Exception exception)
+        {
+            onFailure(exception);
+        }
     }
 }
