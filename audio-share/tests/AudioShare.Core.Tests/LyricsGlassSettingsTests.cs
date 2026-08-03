@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 
 namespace AudioShare.Core.Tests;
@@ -69,6 +70,19 @@ public sealed class LyricsGlassSettingsTests : IDisposable
     }
 
     [Fact]
+    public void CreateDefault_UsesTheFlowCastLyricsSettingsPath()
+    {
+        var store = global::AudioShare.Lyrics.LyricsGlassSettingsStore.CreateDefault();
+
+        Assert.Equal(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "FlowCast Lyrics",
+                "glass-settings.json"),
+            GetConfiguredPath(store));
+    }
+
+    [Fact]
     public void Save_RoundTripsCompleteCamelCaseStateAndLeavesNoTemporaryFile()
     {
         var path = Path.Combine(directory, "glass-settings.json");
@@ -91,6 +105,36 @@ public sealed class LyricsGlassSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Save_CreatesTheSettingsDocumentAndRoundTripsANullPosition()
+    {
+        var path = Path.Combine(directory, "FlowCast Lyrics", "glass-settings.json");
+        var expected = new global::AudioShare.Lyrics.LyricsGlassHostState(
+            null,
+            new global::AudioShare.Lyrics.LyricsGlassSettings(0.25, 4, 0.5, 0.75, false));
+        var store = new global::AudioShare.Lyrics.LyricsGlassSettingsStore(path);
+
+        store.Save(expected);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("position").ValueKind);
+        Assert.Equal(expected, store.Load());
+    }
+
+    [Fact]
+    public void Load_ReturnsDefaultsWhenTheSettingsDocumentCannotBeRead()
+    {
+        var path = Path.Combine(directory, "glass-settings.json");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(path, "{\"position\":null,\"glass\":{\"cornerRadiusFraction\":1,\"blurRadiusDp\":2,\"refractionHeightFraction\":0.42,\"refractionAmountFraction\":0.62,\"chromaticAberration\":true}}");
+
+        using var lockedFile = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var loaded = new global::AudioShare.Lyrics.LyricsGlassSettingsStore(path).Load();
+
+        Assert.Equal(global::AudioShare.Lyrics.LyricsGlassHostState.Defaults, loaded);
+    }
+
+    [Fact]
     public void Save_RejectsInvalidStates()
     {
         var invalid = new global::AudioShare.Lyrics.LyricsGlassHostState(
@@ -107,5 +151,13 @@ public sealed class LyricsGlassSettingsTests : IDisposable
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    private static string GetConfiguredPath(global::AudioShare.Lyrics.LyricsGlassSettingsStore store)
+    {
+        var field = typeof(global::AudioShare.Lyrics.LyricsGlassSettingsStore)
+            .GetField("path", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        return Assert.IsType<string>(field?.GetValue(store));
     }
 }

@@ -27,6 +27,17 @@ public sealed class LyricsGlassPipeProtocolTests
         Assert.Null(await global::AudioShare.Lyrics.LyricsGlassPipeProtocol.ReadAsync(stream, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task ReadAsync_AssemblesAFrameAcrossArbitraryShortReads()
+    {
+        const string json = "{\"version\":1,\"type\":\"settings-committed\"}";
+        await using var stream = new FragmentedReadStream(Frame(json), 1, 2, 1, 3, 1);
+
+        var result = await global::AudioShare.Lyrics.LyricsGlassPipeProtocol.ReadAsync(stream, CancellationToken.None);
+
+        Assert.Equal(json, result);
+    }
+
     [Theory]
     [MemberData(nameof(InvalidFrames))]
     public async Task ReadAsync_RejectsInvalidFrames(byte[] frame)
@@ -75,5 +86,48 @@ public sealed class LyricsGlassPipeProtocolTests
         frame[3] = (byte)declaredLength;
         body.CopyTo(frame, 4);
         return frame;
+    }
+
+    private sealed class FragmentedReadStream(byte[] contents, params int[] chunkSizes) : Stream
+    {
+        private int offset;
+        private int chunkIndex;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => contents.Length;
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => throw new NotSupportedException();
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (offset == contents.Length)
+            {
+                return ValueTask.FromResult(0);
+            }
+
+            var count = Math.Min(
+                Math.Min(buffer.Length, chunkSizes[chunkIndex++ % chunkSizes.Length]),
+                contents.Length - offset);
+            contents.AsMemory(offset, count).CopyTo(buffer);
+            offset += count;
+            return ValueTask.FromResult(count);
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
