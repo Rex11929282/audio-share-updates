@@ -21,6 +21,7 @@ public partial class LiquidGlassTunerWindow : Window
     private readonly LiquidGlassSettingsController controller;
     private readonly DispatcherTimer tunerReadyTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private bool closeCommitted;
+    private bool isClosing;
     private bool webViewReady;
 
     internal LiquidGlassTunerWindow(LiquidGlassSettingsController controller)
@@ -146,6 +147,7 @@ public partial class LiquidGlassTunerWindow : Window
                     PostSettings();
                     break;
                 case "liquid-cancel":
+                    isClosing = true;
                     controller.Cancel();
                     closeCommitted = true;
                     Close();
@@ -200,11 +202,21 @@ public partial class LiquidGlassTunerWindow : Window
 
     private void Controller_OnSettingsChanged(object? sender, LiquidGlassSettings settings)
     {
+        if (isClosing)
+        {
+            return;
+        }
+
         _ = Dispatcher.BeginInvoke(PostSettings);
     }
 
     private void PostSettings()
     {
+        if (isClosing)
+        {
+            return;
+        }
+
         if (webViewReady && TunerWebView.CoreWebView2 is not null)
         {
             TunerWebView.CoreWebView2.PostWebMessageAsJson(controller.GetSettingsJson());
@@ -215,6 +227,7 @@ public partial class LiquidGlassTunerWindow : Window
     {
         if (!closeCommitted)
         {
+            isClosing = true;
             controller.Cancel();
         }
     }

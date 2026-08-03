@@ -98,6 +98,29 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
+    public void TunerWindow_CancelPreventsQueuedSettingsFromTouchingADisposedWebView()
+    {
+        var source = File.ReadAllText(
+            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml.cs"));
+        var cancelCase = source.IndexOf("case \"liquid-cancel\":", StringComparison.Ordinal);
+        var cancelSection = source[cancelCase..source.IndexOf("case \"liquid-save\":", cancelCase, StringComparison.Ordinal)];
+        var onClosing = source.IndexOf("private void OnClosing", StringComparison.Ordinal);
+        var onClosingSection = source[onClosing..source.IndexOf("private void OnClosed", onClosing, StringComparison.Ordinal)];
+        var settingsChanged = source.IndexOf("private void Controller_OnSettingsChanged", StringComparison.Ordinal);
+        var settingsChangedSection = source[settingsChanged..source.IndexOf("private void PostSettings", settingsChanged, StringComparison.Ordinal)];
+        var postSettings = source.IndexOf("private void PostSettings", StringComparison.Ordinal);
+        var postSettingsSection = source[postSettings..source.IndexOf("private void OnClosing", postSettings, StringComparison.Ordinal)];
+
+        Assert.Contains("private bool isClosing;", source);
+        Assert.True(cancelSection.IndexOf("isClosing = true;", StringComparison.Ordinal) < cancelSection.IndexOf("controller.Cancel();", StringComparison.Ordinal));
+        Assert.True(onClosingSection.IndexOf("isClosing = true;", StringComparison.Ordinal) < onClosingSection.IndexOf("controller.Cancel();", StringComparison.Ordinal));
+        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", settingsChangedSection);
+        Assert.Contains("if (isClosing)\n        {\n            return;\n        }", postSettingsSection);
+        Assert.True(settingsChangedSection.IndexOf("if (isClosing)", StringComparison.Ordinal) < settingsChangedSection.IndexOf("Dispatcher.BeginInvoke(PostSettings)", StringComparison.Ordinal));
+        Assert.True(postSettingsSection.IndexOf("if (isClosing)", StringComparison.Ordinal) < postSettingsSection.IndexOf("TunerWebView.CoreWebView2", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TunerWindow_SaveProtectsExpectedPersistenceFailuresBeforeCommitAndClose()
     {
         var source = File.ReadAllText(
