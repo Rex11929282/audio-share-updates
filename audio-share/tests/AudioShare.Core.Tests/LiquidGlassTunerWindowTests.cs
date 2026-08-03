@@ -56,6 +56,16 @@ public sealed class LiquidGlassTunerWindowTests
     }
 
     [Fact]
+    public void TunerWindow_UsesTheSameCompositionControlAsTheOverlay()
+    {
+        var xaml = File.ReadAllText(
+            FindRepositoryFile("src", "AudioShare.Lyrics", "LiquidGlassTunerWindow.xaml"));
+
+        Assert.Contains("<wv2:WebView2CompositionControl x:Name=\"TunerWebView\"", xaml);
+        Assert.DoesNotContain("<wv2:WebView2 x:Name=\"TunerWebView\"", xaml);
+    }
+
+    [Fact]
     public void TunerWindow_UnsubscribesAndDisposesOnClose()
     {
         var source = File.ReadAllText(

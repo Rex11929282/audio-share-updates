@@ -15,7 +15,7 @@
                    VerticalAlignment="Center"
                    Foreground="#4B5870"
                    Text="Loading Liquid Glass tuner…" />
-        <wv2:WebView2 x:Name="TunerWebView"
-                      Visibility="Hidden" />
+        <wv2:WebView2CompositionControl x:Name="TunerWebView"
+                                        Visibility="Hidden" />
     </Grid>
 </Window>
