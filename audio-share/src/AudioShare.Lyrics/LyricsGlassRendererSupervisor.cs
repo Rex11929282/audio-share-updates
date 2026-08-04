@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
@@ -68,15 +69,18 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
     private readonly SemaphoreSlim writeGate = new(1, 1);
     private readonly ILyricsGlassRendererProcessLauncher processLauncher;
     private readonly LyricsDiagnosticLog diagnosticLog;
-    private readonly LyricsGlassHostState initialState;
     private readonly string helperPath;
     private readonly TimeSpan handshakeTimeout;
     private readonly TimeSpan stopTimeout;
     private RendererRun? currentRun;
     private RendererAvailability availability = RendererAvailability.Stopped;
+    private LyricsGlassHostState latestHostState;
     private LyricsGlassConnectionState latestConnectionState = LyricsGlassConnectionState.FindingFlowcast;
+    private long latestConnectionStateRevision;
     private bool stopping;
+    private bool disposeStarted;
     private bool disposed;
+    private Task? disposeTask;
 
     internal LyricsGlassRendererSupervisor()
         : this(
@@ -115,7 +119,7 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
         this.processLauncher = processLauncher;
         this.diagnosticLog = diagnosticLog;
-        this.initialState = initialState;
+        latestHostState = initialState;
         this.handshakeTimeout = handshakeTimeout;
         this.stopTimeout = stopTimeout;
         helperPath = Path.Combine(AppContext.BaseDirectory, "glass", HelperName);
@@ -195,6 +199,7 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
         lock (stateGate)
         {
             latestConnectionState = connectionState;
+            latestConnectionStateRevision++;
             run = currentRun is { Ready: true } candidate && !stopping ? candidate : null;
         }
 
@@ -205,7 +210,7 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
         try
         {
-            await SendConnectionStateAsync(run, connectionState, cancellationToken);
+            await SendLatestConnectionStateAsync(run, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -219,14 +224,72 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
     internal async Task StopAsync(CancellationToken cancellationToken)
     {
+        Task? activeDispose = null;
         RendererRun? cancellingRun;
         lock (stateGate)
         {
-            if (disposed || availability == RendererAvailability.Stopped)
+            if (disposed)
             {
                 return;
             }
 
+            if (disposeStarted)
+            {
+                activeDispose = disposeTask;
+                cancellingRun = null;
+            }
+            else
+            {
+                if (availability == RendererAvailability.Stopped)
+                {
+                    return;
+                }
+
+                stopping = true;
+                cancellingRun = currentRun;
+                if (cancellingRun is not null)
+                {
+                    cancellingRun.IntentionalShutdown = true;
+                }
+            }
+        }
+
+        if (activeDispose is not null)
+        {
+            await activeDispose;
+            return;
+        }
+
+        if (cancellingRun is { Ready: false })
+        {
+            CancelRun(cancellingRun);
+        }
+
+        await lifecycleGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            await StopCurrentRunUnderLifecycleAsync(cancellationToken);
+        }
+        finally
+        {
+            lifecycleGate.Release();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        TaskCompletionSource? completion = null;
+        RendererRun? cancellingRun;
+        lock (stateGate)
+        {
+            if (disposeTask is not null)
+            {
+                return new ValueTask(disposeTask);
+            }
+
+            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            disposeTask = completion.Task;
+            disposeStarted = true;
             stopping = true;
             cancellingRun = currentRun;
             if (cancellingRun is not null)
@@ -237,81 +300,11 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
         if (cancellingRun is { Ready: false })
         {
-            cancellingRun.Cancellation.Cancel();
+            CancelRun(cancellingRun);
         }
 
-        await lifecycleGate.WaitAsync(cancellationToken);
-        try
-        {
-            RendererRun? run;
-            lock (stateGate)
-            {
-                run = currentRun;
-                if (run is null)
-                {
-                    availability = RendererAvailability.Stopped;
-                    return;
-                }
-
-                run.IntentionalShutdown = true;
-            }
-
-            try
-            {
-                if (run.Ready && run.Pipe.IsConnected)
-                {
-                    await SendCommandAsync(run, new { version = LyricsGlassPipeProtocol.CurrentVersion, type = "shutdown" }, cancellationToken);
-                }
-            }
-            catch (Exception exception) when (
-                cancellationToken.IsCancellationRequested ||
-                run.Cancellation.IsCancellationRequested ||
-                !run.Pipe.IsConnected ||
-                exception is IOException or ObjectDisposedException or InvalidOperationException)
-            {
-            }
-            finally
-            {
-                run.Cancellation.Cancel();
-                run.Pipe.Dispose();
-            }
-
-            await StopProcessAsync(run, cancellationToken);
-            DetachRun(run);
-            lock (stateGate)
-            {
-                if (ReferenceEquals(currentRun, run))
-                {
-                    currentRun = null;
-                }
-
-                availability = RendererAvailability.Stopped;
-            }
-        }
-        finally
-        {
-            lifecycleGate.Release();
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        lock (stateGate)
-        {
-            if (disposed)
-            {
-                return;
-            }
-        }
-
-        await StopAsync(CancellationToken.None);
-        lock (stateGate)
-        {
-            disposed = true;
-        }
-
-        lifecycleGate.Dispose();
-        writeGate.Dispose();
+        _ = CompleteDisposeAsync(completion);
+        return new ValueTask(completion.Task);
     }
 
     private async Task StartRunAsync(int restartAttempt, CancellationToken cancellationToken)
@@ -347,6 +340,12 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
             var hello = await ReadRequiredRendererEventAsync(run, helloCancellation.Token);
             ValidateHello(hello, run.Token);
 
+            LyricsGlassHostState hostState;
+            lock (stateGate)
+            {
+                hostState = latestHostState;
+            }
+
             using var readyCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, run.Cancellation.Token);
             readyCancellation.CancelAfter(handshakeTimeout);
             await SendCommandAsync(
@@ -356,15 +355,14 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
                     version = LyricsGlassPipeProtocol.CurrentVersion,
                     type = "initialize",
                     token = run.Token,
-                    position = initialState.Position,
-                    glass = initialState.Glass
+                    position = hostState.Position,
+                    glass = hostState.Glass
                 },
                 readyCancellation.Token);
 
             var ready = await ReadRequiredRendererEventAsync(run, readyCancellation.Token);
             ValidateReady(ready);
 
-            LyricsGlassConnectionState connectionState;
             lock (stateGate)
             {
                 if (stopping || disposed || !ReferenceEquals(currentRun, run))
@@ -374,21 +372,29 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
                 run.Ready = true;
                 availability = RendererAvailability.Available;
-                connectionState = latestConnectionState;
             }
 
-            await SendConnectionStateAsync(run, connectionState, readyCancellation.Token);
+            await SendLatestConnectionStateAsync(run, readyCancellation.Token);
             _ = ReceiveEventsAsync(run);
         }
         catch
         {
-            await DisposeUnexpectedRunAsync(run);
-            lock (stateGate)
+            await CleanupRunAsync(run, waitForGracefulExit: false);
+            var terminationOwned = run.Ready && Volatile.Read(ref run.TerminationSignaled) != 0;
+            if (!terminationOwned)
             {
-                if (ReferenceEquals(currentRun, run))
+                lock (stateGate)
                 {
-                    currentRun = null;
+                    if (ReferenceEquals(currentRun, run))
+                    {
+                        currentRun = null;
+                    }
                 }
+            }
+
+            if (terminationOwned)
+            {
+                return;
             }
 
             throw;
@@ -487,6 +493,11 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
                     throw new InvalidDataException("Renderer glass settings are invalid.");
                 }
 
+                lock (stateGate)
+                {
+                    latestHostState = latestHostState with { Glass = settings };
+                }
+
                 SettingsCommitted?.Invoke(this, new LyricsGlassSettingsCommittedEventArgs(settings));
                 return Task.CompletedTask;
             }
@@ -500,6 +511,11 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
                 if (!position.IsValid)
                 {
                     throw new InvalidDataException("Renderer overlay position is invalid.");
+                }
+
+                lock (stateGate)
+                {
+                    latestHostState = latestHostState with { Position = position };
                 }
 
                 PositionChanged?.Invoke(this, new LyricsGlassPositionChangedEventArgs(position));
@@ -545,8 +561,8 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
             shouldRestart = allowRestart && run.Ready && run.RestartAttempt == 0;
         }
 
-        run.Cancellation.Cancel();
-        await DisposeUnexpectedRunAsync(run);
+        CancelRun(run);
+        await CleanupRunAsync(run, waitForGracefulExit: false);
         if (!shouldRestart)
         {
             MarkUnavailable(stage, exception);
@@ -597,54 +613,164 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
         }
     }
 
-    private Task DisposeUnexpectedRunAsync(RendererRun run)
+    private async Task CompleteDisposeAsync(TaskCompletionSource completion)
     {
-        run.Pipe.Dispose();
-        if (run.Process is { HasExited: false } process)
+        try
         {
-            process.KillTree();
-        }
+            await lifecycleGate.WaitAsync(CancellationToken.None);
+            try
+            {
+                await StopCurrentRunUnderLifecycleAsync(CancellationToken.None);
+                lock (stateGate)
+                {
+                    disposed = true;
+                    availability = RendererAvailability.Stopped;
+                }
+            }
+            finally
+            {
+                lifecycleGate.Release();
+            }
 
-        DetachRun(run);
-        return Task.CompletedTask;
+            completion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            lock (stateGate)
+            {
+                disposed = true;
+            }
+
+            completion.TrySetException(exception);
+        }
     }
 
-    private async Task StopProcessAsync(RendererRun run, CancellationToken cancellationToken)
+    private async Task StopCurrentRunUnderLifecycleAsync(CancellationToken shutdownCancellationToken)
     {
-        if (run.Process is null)
+        RendererRun? run;
+        lock (stateGate)
         {
+            run = currentRun;
+            if (run is null)
+            {
+                availability = RendererAvailability.Stopped;
+                return;
+            }
+
+            run.IntentionalShutdown = true;
+        }
+
+        try
+        {
+            if (run.Ready && run.Pipe.IsConnected)
+            {
+                await SendCommandAsync(
+                    run,
+                    new { version = LyricsGlassPipeProtocol.CurrentVersion, type = "shutdown" },
+                    shutdownCancellationToken);
+            }
+        }
+        catch (Exception exception) when (
+            shutdownCancellationToken.IsCancellationRequested ||
+            run.Cancellation.IsCancellationRequested ||
+            !run.Pipe.IsConnected ||
+            exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
+        finally
+        {
+            await CleanupRunAsync(run, waitForGracefulExit: true);
+            lock (stateGate)
+            {
+                if (ReferenceEquals(currentRun, run))
+                {
+                    currentRun = null;
+                }
+
+                availability = RendererAvailability.Stopped;
+            }
+        }
+    }
+
+    private Task CleanupRunAsync(RendererRun run, bool waitForGracefulExit)
+    {
+        lock (run.CleanupGate)
+        {
+            return run.CleanupTask ??= CleanupRunCoreAsync(run, waitForGracefulExit);
+        }
+    }
+
+    private async Task CleanupRunCoreAsync(RendererRun run, bool waitForGracefulExit)
+    {
+        CancelRun(run);
+        run.Pipe.Dispose();
+        var process = run.Process;
+        if (process is null)
+        {
+            run.Cancellation.Dispose();
             return;
         }
 
-        using var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCancellation.CancelAfter(stopTimeout);
-        try
+        if (run.ProcessExitHandler is not null)
         {
-            await run.Process.WaitForExitAsync(timeoutCancellation.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
+            process.Exited -= run.ProcessExitHandler;
         }
 
-        if (!run.Process.HasExited)
+        try
         {
-            run.Process.KillTree();
+            if (waitForGracefulExit)
+            {
+                using var timeoutCancellation = new CancellationTokenSource(stopTimeout);
+                try
+                {
+                    await process.WaitForExitAsync(timeoutCancellation.Token);
+                }
+                catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested)
+                {
+                }
+            }
+
+            if (!process.HasExited)
+            {
+                await TerminateAndReapAsync(process);
+            }
+            else
+            {
+                await process.WaitForExitAsync(CancellationToken.None);
+            }
+        }
+        finally
+        {
+            process.Dispose();
+            run.Cancellation.Dispose();
         }
     }
 
-    private void DetachRun(RendererRun run)
+    private static async Task TerminateAndReapAsync(ILyricsGlassRendererProcess process)
     {
-        if (run.Process is not null)
+        try
         {
-            if (run.ProcessExitHandler is not null)
-            {
-                run.Process.Exited -= run.ProcessExitHandler;
-            }
-
-            run.Process.Dispose();
+            process.KillTree();
+        }
+        catch (InvalidOperationException) when (process.HasExited)
+        {
+        }
+        catch (Win32Exception) when (process.HasExited)
+        {
         }
 
-        run.Cancellation.Dispose();
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    private static void CancelRun(RendererRun run)
+    {
+        try
+        {
+            run.Cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private void MarkCleanClose(RendererRun run)
@@ -660,7 +786,7 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
             run.IntentionalShutdown = true;
         }
 
-        run.Cancellation.Cancel();
+        CancelRun(run);
     }
 
     private void MarkUnavailable(string stage, Exception exception)
@@ -683,19 +809,55 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
         return json ?? throw new EndOfStreamException("The FlowCast Lyrics renderer closed the pipe during its handshake.");
     }
 
-    private async Task SendConnectionStateAsync(
-        RendererRun run,
-        LyricsGlassConnectionState connectionState,
-        CancellationToken cancellationToken) =>
-        await SendCommandAsync(
-            run,
-            new
+    private async Task SendLatestConnectionStateAsync(RendererRun run, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            LyricsGlassConnectionState connectionState;
+            long revision;
+            await writeGate.WaitAsync(cancellationToken);
+            try
             {
-                version = LyricsGlassPipeProtocol.CurrentVersion,
-                type = "connection-state",
-                state = ToProtocolValue(connectionState)
-            },
-            cancellationToken);
+                lock (stateGate)
+                {
+                    if (disposed || stopping || !ReferenceEquals(currentRun, run) || !run.Ready)
+                    {
+                        return;
+                    }
+
+                    connectionState = latestConnectionState;
+                    revision = latestConnectionStateRevision;
+                }
+
+                await LyricsGlassPipeProtocol.WriteAsync(
+                    run.Pipe,
+                    JsonSerializer.Serialize(
+                        new
+                        {
+                            version = LyricsGlassPipeProtocol.CurrentVersion,
+                            type = "connection-state",
+                            state = ToProtocolValue(connectionState)
+                        },
+                        JsonOptions),
+                    cancellationToken);
+            }
+            finally
+            {
+                writeGate.Release();
+            }
+
+            lock (stateGate)
+            {
+                if (revision == latestConnectionStateRevision ||
+                    disposed ||
+                    stopping ||
+                    !ReferenceEquals(currentRun, run))
+                {
+                    return;
+                }
+            }
+        }
+    }
 
     private async Task SendCommandAsync(RendererRun run, object command, CancellationToken cancellationToken)
     {
@@ -809,12 +971,14 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
     {
         lock (stateGate)
         {
-            ObjectDisposedException.ThrowIf(disposed, this);
+            ObjectDisposedException.ThrowIf(disposeStarted || disposed, this);
         }
     }
 
     private sealed class RendererRun(string pipeName, string token, int restartAttempt)
     {
+        internal object CleanupGate { get; } = new();
+
         internal CancellationTokenSource Cancellation { get; } = new();
 
         internal NamedPipeServerStream Pipe { get; } = new(
@@ -839,6 +1003,8 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
         internal bool IntentionalShutdown { get; set; }
 
         internal int TerminationSignaled;
+
+        internal Task? CleanupTask { get; set; }
     }
 
     private sealed class ProcessRendererProcessLauncher : ILyricsGlassRendererProcessLauncher
@@ -862,38 +1028,10 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
         public bool HasExited => process.HasExited;
 
-        public async Task WaitForExitAsync(CancellationToken cancellationToken)
-        {
-            if (process.HasExited)
-            {
-                return;
-            }
+        public Task WaitForExitAsync(CancellationToken cancellationToken) =>
+            process.WaitForExitAsync(cancellationToken);
 
-            var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            EventHandler handler = (_, _) => exited.TrySetResult();
-            process.Exited += handler;
-            try
-            {
-                if (process.HasExited)
-                {
-                    return;
-                }
-
-                await exited.Task.WaitAsync(cancellationToken);
-            }
-            finally
-            {
-                process.Exited -= handler;
-            }
-        }
-
-        public void KillTree()
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
+        public void KillTree() => process.Kill(entireProcessTree: true);
 
         public void Dispose() => process.Dispose();
     }
