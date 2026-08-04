@@ -26,6 +26,11 @@ internal sealed class LyricsDiagnosticLog
         WriteFailure("renderer", stage, exception);
     }
 
+    internal void WriteHostShutdownFailure(string stage, Exception exception)
+    {
+        WriteFailure("host-shutdown", stage, exception);
+    }
+
     private void WriteFailure(string source, string stage, Exception exception)
     {
         try

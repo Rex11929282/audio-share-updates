@@ -31,7 +31,15 @@ internal sealed class LyricsConnectionRuntime : IAsyncDisposable
         }
 
         ConnectionStateChanged?.Invoke(this, LyricsConnectionState.FindingFlowcast);
-        await relay.StartReceivingAsync(cancellationToken);
+        try
+        {
+            await relay.StartReceivingAsync(cancellationToken);
+        }
+        catch
+        {
+            Interlocked.Exchange(ref started, 0);
+            throw;
+        }
     }
 
     private void Relay_OnConnected(object? sender, EventArgs eventArgs)

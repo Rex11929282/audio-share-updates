@@ -71,17 +71,15 @@ public sealed class FlowCastLyricsStartupTests
     }
 
     [Fact]
-    public void MainWindow_PersistsTypedGlassEventsWithoutCrashingOnStorageFailure()
+    public void MainWindow_DelegatesTypedGlassEventsToTheTestedPersistenceBoundary()
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
 
         Assert.Contains("LyricsGlassSettingsCommittedEventArgs", source);
         Assert.Contains("LyricsGlassPositionChangedEventArgs", source);
-        Assert.Contains("hostState = hostState with { Glass = eventArgs.Settings }", source);
-        Assert.Contains("hostState = hostState with { Position = eventArgs.Position }", source);
-        Assert.Contains("settingsStore.Save", source);
-        Assert.Contains("catch (IOException)", source);
-        Assert.Contains("catch (UnauthorizedAccessException)", source);
+        Assert.Contains("LyricsGlassHostStatePersistence", source);
+        Assert.Contains("hostStatePersistence.ApplySettings(eventArgs.Settings)", source);
+        Assert.Contains("hostStatePersistence.ApplyPosition(eventArgs.Position)", source);
     }
 
     [Fact]
@@ -95,20 +93,19 @@ public sealed class FlowCastLyricsStartupTests
         Assert.True(shutdown >= 0);
 
         var dispatcherClose = source.IndexOf("Dispatcher.BeginInvoke", closeRequest, StringComparison.Ordinal);
-        var stopRenderer = source.IndexOf("renderer.StopAsync", shutdown, StringComparison.Ordinal);
-        var disposeRenderer = source.IndexOf("renderer.DisposeAsync", shutdown, StringComparison.Ordinal);
-        var disposeRadmin = source.IndexOf("connectionRuntime.DisposeAsync", shutdown, StringComparison.Ordinal);
+        var coordinatedShutdown = source.IndexOf("await shutdownCoordinator.ShutdownAsync()", shutdown, StringComparison.Ordinal);
         var allowFinalClose = source.IndexOf("finalCloseAllowed = true", shutdown, StringComparison.Ordinal);
         var finalClose = source.IndexOf("Dispatcher.InvokeAsync", shutdown, StringComparison.Ordinal);
 
         Assert.True(dispatcherClose > closeRequest);
-        Assert.True(stopRenderer > shutdown);
-        Assert.True(disposeRenderer > stopRenderer);
-        Assert.True(disposeRadmin > disposeRenderer);
-        Assert.True(allowFinalClose > disposeRadmin);
+        Assert.True(coordinatedShutdown > shutdown);
+        Assert.True(allowFinalClose > coordinatedShutdown);
         Assert.True(finalClose > allowFinalClose);
         Assert.Contains("eventArgs.Cancel = true", source);
         Assert.Contains("closeCleanupStarted", source);
+        Assert.Contains("LyricsHostShutdownCoordinator", source);
+        Assert.DoesNotContain("closeCleanupTask", source);
+        Assert.DoesNotContain("catch (Exception)", source);
     }
 
     [Fact]

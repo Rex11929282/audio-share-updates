@@ -20,10 +20,45 @@ internal interface ILyricsRelay : IAsyncDisposable
     Task StopPublishingAsync(CancellationToken cancellationToken);
 }
 
+internal interface ILyricsRelayReceiver : IAsyncDisposable
+{
+    event EventHandler<RadminLyricsFrame>? FrameReceived;
+
+    event EventHandler? ConnectionClosed;
+
+    Task<bool> DiscoverAndConnectOnRadminAsync(CancellationToken cancellationToken);
+}
+
+internal sealed class RadminLyricsReceiverAdapter : ILyricsRelayReceiver
+{
+    private readonly RadminLyricsReceiver receiver;
+
+    internal RadminLyricsReceiverAdapter(string instanceId) => receiver = new RadminLyricsReceiver(instanceId);
+
+    public event EventHandler<RadminLyricsFrame>? FrameReceived
+    {
+        add => receiver.FrameReceived += value;
+        remove => receiver.FrameReceived -= value;
+    }
+
+    public event EventHandler? ConnectionClosed
+    {
+        add => receiver.ConnectionClosed += value;
+        remove => receiver.ConnectionClosed -= value;
+    }
+
+    public Task<bool> DiscoverAndConnectOnRadminAsync(CancellationToken cancellationToken) =>
+        receiver.DiscoverAndConnectOnRadminAsync(cancellationToken);
+
+    public ValueTask DisposeAsync() => receiver.DisposeAsync();
+}
+
 internal sealed class RadminLyricsRelay : ILyricsRelay
 {
     private readonly string instanceId;
-    private readonly RadminLyricsReceiver receiver;
+    private readonly ILyricsRelayReceiver receiver;
+    private readonly Func<bool> hasActiveAdapter;
+    private readonly Func<CancellationToken, Task> delayBeforeRetry;
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private readonly SemaphoreSlim hostGate = new(1, 1);
     private CancellationTokenSource? receiveCancellation;
@@ -32,10 +67,28 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
     private bool disposed;
 
     public RadminLyricsRelay(string instanceId)
+        : this(
+            instanceId,
+            CreateReceiver(instanceId),
+            static () => RadminAdapterSelector.SelectActiveAdapter() is not null,
+            static cancellationToken => DelayBeforeRetryAsync(TimeSpan.FromSeconds(1), cancellationToken))
+    {
+    }
+
+    internal RadminLyricsRelay(
+        string instanceId,
+        ILyricsRelayReceiver receiver,
+        Func<bool> hasActiveAdapter,
+        Func<CancellationToken, Task> delayBeforeRetry)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        ArgumentNullException.ThrowIfNull(receiver);
+        ArgumentNullException.ThrowIfNull(hasActiveAdapter);
+        ArgumentNullException.ThrowIfNull(delayBeforeRetry);
         this.instanceId = instanceId;
-        receiver = new RadminLyricsReceiver(instanceId);
+        this.receiver = receiver;
+        this.hasActiveAdapter = hasActiveAdapter;
+        this.delayBeforeRetry = delayBeforeRetry;
         receiver.FrameReceived += Receiver_OnFrameReceived;
     }
 
@@ -133,16 +186,31 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            if (RadminAdapterSelector.SelectActiveAdapter() is null)
+            if (!hasActiveAdapter())
             {
-                await DelayBeforeRetryAsync(cancellationToken);
+                await delayBeforeRetry(cancellationToken);
                 continue;
             }
 
             var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var connectionGate = new object();
+            var closeObserved = false;
+            var publishingConnected = false;
+            var connectedPublished = false;
             void OnConnectionClosed(object? sender, EventArgs eventArgs)
             {
-                ConnectionClosed?.Invoke(this, EventArgs.Empty);
+                bool publishClosed;
+                lock (connectionGate)
+                {
+                    closeObserved = true;
+                    publishClosed = connectedPublished && !publishingConnected;
+                }
+
+                if (publishClosed)
+                {
+                    ConnectionClosed?.Invoke(this, EventArgs.Empty);
+                }
+
                 disconnected.TrySetResult();
             }
 
@@ -151,8 +219,31 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
             {
                 if (await receiver.DiscoverAndConnectOnRadminAsync(cancellationToken))
                 {
-                    Connected?.Invoke(this, EventArgs.Empty);
-                    await disconnected.Task.WaitAsync(cancellationToken);
+                    bool publishConnected;
+                    lock (connectionGate)
+                    {
+                        publishConnected = !closeObserved;
+                        publishingConnected = publishConnected;
+                    }
+
+                    if (publishConnected)
+                    {
+                        Connected?.Invoke(this, EventArgs.Empty);
+                        bool publishDeferredClose;
+                        lock (connectionGate)
+                        {
+                            publishingConnected = false;
+                            connectedPublished = true;
+                            publishDeferredClose = closeObserved;
+                        }
+
+                        if (publishDeferredClose)
+                        {
+                            ConnectionClosed?.Invoke(this, EventArgs.Empty);
+                        }
+
+                        await disconnected.Task.WaitAsync(cancellationToken);
+                    }
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -167,15 +258,15 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
                 receiver.ConnectionClosed -= OnConnectionClosed;
             }
 
-            await DelayBeforeRetryAsync(cancellationToken);
+            await delayBeforeRetry(cancellationToken);
         }
     }
 
-    private static async Task DelayBeforeRetryAsync(CancellationToken cancellationToken)
+    private static async Task DelayBeforeRetryAsync(TimeSpan delay, CancellationToken cancellationToken)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(delay, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -184,6 +275,12 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
 
     private void Receiver_OnFrameReceived(object? sender, RadminLyricsFrame frame) =>
         FrameReceived?.Invoke(this, frame);
+
+    private static ILyricsRelayReceiver CreateReceiver(string instanceId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        return new RadminLyricsReceiverAdapter(instanceId);
+    }
 
     public async ValueTask DisposeAsync()
     {

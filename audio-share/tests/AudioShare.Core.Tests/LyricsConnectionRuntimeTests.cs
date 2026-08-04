@@ -1,4 +1,5 @@
 using AudioShare.Lyrics.Contracts;
+using System.IO;
 
 namespace AudioShare.Lyrics;
 
@@ -38,6 +39,32 @@ public sealed class LyricsConnectionRuntimeTests
 
         Assert.Equal(1, relay.StartCount);
         Assert.Equal([LyricsConnectionState.FindingFlowcast], states);
+    }
+
+    [Fact]
+    public async Task FailedStart_CanBeRetried()
+    {
+        var relay = new FakeLyricsRelay();
+        relay.StartFailures.Enqueue(new IOException("receiver failed"));
+        await using var runtime = new LyricsConnectionRuntime(relay);
+
+        await Assert.ThrowsAsync<IOException>(() => runtime.StartAsync(CancellationToken.None));
+        await runtime.StartAsync(CancellationToken.None);
+
+        Assert.Equal(2, relay.StartCount);
+    }
+
+    [Fact]
+    public async Task CancelledStart_CanBeRetried()
+    {
+        var relay = new FakeLyricsRelay();
+        relay.StartFailures.Enqueue(new OperationCanceledException());
+        await using var runtime = new LyricsConnectionRuntime(relay);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.StartAsync(CancellationToken.None));
+        await runtime.StartAsync(CancellationToken.None);
+
+        Assert.Equal(2, relay.StartCount);
     }
 
     [Fact]
@@ -113,9 +140,16 @@ public sealed class LyricsConnectionRuntimeTests
 
         public int ClosedRemoveCount { get; private set; }
 
+        public Queue<Exception> StartFailures { get; } = new();
+
         public Task StartReceivingAsync(CancellationToken cancellationToken)
         {
             StartCount++;
+            if (StartFailures.TryDequeue(out var failure))
+            {
+                return Task.FromException(failure);
+            }
+
             return Task.CompletedTask;
         }
 

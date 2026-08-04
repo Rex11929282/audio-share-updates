@@ -1,28 +1,31 @@
 using System.ComponentModel;
-using System.IO;
 using System.Windows;
 
 namespace AudioShare.Lyrics;
 
 public partial class MainWindow : Window
 {
-    private readonly object hostStateGate = new();
     private readonly CancellationTokenSource lifetimeCancellation = new();
-    private readonly LyricsGlassSettingsStore settingsStore;
     private readonly LyricsGlassRendererSupervisor renderer;
     private readonly LyricsConnectionRuntime connectionRuntime;
-    private LyricsGlassHostState hostState;
-    private Task? closeCleanupTask;
+    private readonly LyricsGlassHostStatePersistence hostStatePersistence;
+    private readonly LyricsHostShutdownCoordinator shutdownCoordinator;
     private bool closeCleanupStarted;
     private bool finalCloseAllowed;
 
     public MainWindow()
     {
         InitializeComponent();
-        settingsStore = LyricsGlassSettingsStore.CreateDefault();
-        hostState = settingsStore.Load();
+        var settingsStore = LyricsGlassSettingsStore.CreateDefault();
+        var hostState = settingsStore.Load();
+        hostStatePersistence = new LyricsGlassHostStatePersistence(settingsStore, hostState);
         renderer = new LyricsGlassRendererSupervisor(hostState);
         connectionRuntime = new LyricsConnectionRuntime(new RadminLyricsRelay(Guid.NewGuid().ToString("N")));
+        shutdownCoordinator = new LyricsHostShutdownCoordinator(
+            renderer.StopAsync,
+            () => renderer.DisposeAsync().AsTask(),
+            () => connectionRuntime.DisposeAsync().AsTask(),
+            LyricsDiagnosticLog.CreateDefault());
 
         renderer.SettingsCommitted += Renderer_OnSettingsCommitted;
         renderer.PositionChanged += Renderer_OnPositionChanged;
@@ -74,45 +77,13 @@ public partial class MainWindow : Window
 
     private void Renderer_OnSettingsCommitted(
         object? sender,
-        LyricsGlassSettingsCommittedEventArgs eventArgs)
-    {
-        LyricsGlassHostState state;
-        lock (hostStateGate)
-        {
-            hostState = hostState with { Glass = eventArgs.Settings };
-            state = hostState;
-        }
-
-        TrySaveHostState(state);
-    }
+        LyricsGlassSettingsCommittedEventArgs eventArgs) =>
+        hostStatePersistence.ApplySettings(eventArgs.Settings);
 
     private void Renderer_OnPositionChanged(
         object? sender,
-        LyricsGlassPositionChangedEventArgs eventArgs)
-    {
-        LyricsGlassHostState state;
-        lock (hostStateGate)
-        {
-            hostState = hostState with { Position = eventArgs.Position };
-            state = hostState;
-        }
-
-        TrySaveHostState(state);
-    }
-
-    private void TrySaveHostState(LyricsGlassHostState state)
-    {
-        try
-        {
-            settingsStore.Save(state);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+        LyricsGlassPositionChangedEventArgs eventArgs) =>
+        hostStatePersistence.ApplyPosition(eventArgs.Position);
 
     private void Renderer_OnCloseRequested(object? sender, EventArgs eventArgs) =>
         Dispatcher.BeginInvoke(new Action(Close));
@@ -131,35 +102,13 @@ public partial class MainWindow : Window
         }
 
         closeCleanupStarted = true;
-        closeCleanupTask = ShutdownAndCloseAsync();
+        _ = ShutdownAndCloseAsync();
     }
 
     private async Task ShutdownAndCloseAsync()
     {
         lifetimeCancellation.Cancel();
-        try
-        {
-            await renderer.StopAsync(CancellationToken.None);
-        }
-        catch (Exception)
-        {
-        }
-
-        try
-        {
-            await renderer.DisposeAsync();
-        }
-        catch (Exception)
-        {
-        }
-
-        try
-        {
-            await connectionRuntime.DisposeAsync();
-        }
-        catch (Exception)
-        {
-        }
+        await shutdownCoordinator.ShutdownAsync();
 
         renderer.SettingsCommitted -= Renderer_OnSettingsCommitted;
         renderer.PositionChanged -= Renderer_OnPositionChanged;
