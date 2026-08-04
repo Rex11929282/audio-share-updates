@@ -12,10 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Web.WebView2" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\AudioShare.Lyrics.Contracts\AudioShare.Lyrics.Contracts.csproj" />
     <ProjectReference Include="..\AudioShare.Windows\AudioShare.Windows.csproj" />
   </ItemGroup>
@@ -25,33 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <LyricsFrontendSource Include="Frontend\index.html;Frontend\package-lock.json;Frontend\package.json;Frontend\tsconfig.json;Frontend\vite.config.ts;Frontend\src\**\*" />
     <Content Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <Target Name="BuildLyricsFrontend"
-          BeforeTargets="PrepareForBuild"
-          Inputs="@(LyricsFrontendSource)"
-          Outputs="Frontend\dist\index.html"
-          Condition="'$(DesignTimeBuild)' != 'true'">
-    <Exec WorkingDirectory="Frontend" Command="npm.cmd ci" />
-    <Exec WorkingDirectory="Frontend" Command="npm.cmd run build" />
-  </Target>
-
-  <Target Name="CopyLyricsFrontendToOutput" AfterTargets="Build" DependsOnTargets="BuildLyricsFrontend">
-    <ItemGroup>
-      <LyricsFrontendAsset Include="Frontend\dist\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(LyricsFrontendAsset)"
-          DestinationFiles="@(LyricsFrontendAsset->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" />
-  </Target>
-
-  <Target Name="CopyLyricsFrontendToPublish" AfterTargets="Publish" DependsOnTargets="BuildLyricsFrontend">
-    <ItemGroup>
-      <LyricsFrontendPublishAsset Include="Frontend\dist\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(LyricsFrontendPublishAsset)"
-          DestinationFiles="@(LyricsFrontendPublishAsset->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" />
-  </Target>
 
 </Project>

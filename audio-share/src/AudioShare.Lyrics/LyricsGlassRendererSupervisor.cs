@@ -92,6 +92,16 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
     {
     }
 
+    internal LyricsGlassRendererSupervisor(LyricsGlassHostState initialState)
+        : this(
+            new ProcessRendererProcessLauncher(),
+            LyricsDiagnosticLog.CreateDefault(),
+            initialState,
+            ProductionHandshakeTimeout,
+            ProductionStopTimeout)
+    {
+    }
+
     internal LyricsGlassRendererSupervisor(
         ILyricsGlassRendererProcessLauncher processLauncher,
         LyricsDiagnosticLog diagnosticLog,

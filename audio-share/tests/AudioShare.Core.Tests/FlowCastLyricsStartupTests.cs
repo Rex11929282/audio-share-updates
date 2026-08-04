@@ -14,133 +14,186 @@ public sealed class FlowCastLyricsStartupTests
     }
 
     [Fact]
-    public void MainWindow_IsACompactTopmostCompositionOverlay()
+    public void MainWindow_IsAnInvisibleNonUserFacingHost()
     {
-        var path = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml");
-        var xaml = File.ReadAllText(path);
+        var xaml = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml"));
         var root = System.Xml.Linq.XDocument.Parse(xaml).Root!;
 
         Assert.Equal("None", root.Attribute("WindowStyle")?.Value);
-        Assert.Equal("NoResize", root.Attribute("ResizeMode")?.Value);
-        Assert.Equal("True", root.Attribute("Topmost")?.Value);
         Assert.Equal("True", root.Attribute("AllowsTransparency")?.Value);
-        Assert.Equal("180", root.Attribute("Width")?.Value);
-        Assert.Equal("44", root.Attribute("Height")?.Value);
-        Assert.Equal("180", root.Attribute("MinWidth")?.Value);
-        Assert.Equal("44", root.Attribute("MinHeight")?.Value);
-        Assert.Equal("680", root.Attribute("MaxWidth")?.Value);
-        Assert.Equal("92", root.Attribute("MaxHeight")?.Value);
-        Assert.Contains("WebView2CompositionControl", xaml);
-        Assert.Contains("PreviewMouseLeftButtonDown", xaml);
-        Assert.DoesNotContain("CloseButton", xaml);
-        Assert.DoesNotContain("DragHandle", xaml);
-        Assert.DoesNotContain("真實歌詞", xaml);
-        Assert.DoesNotContain("正在尋找 FlowCast", xaml);
-        Assert.DoesNotContain("Radmin VPN", xaml);
+        Assert.Equal("1", root.Attribute("Width")?.Value);
+        Assert.Equal("1", root.Attribute("Height")?.Value);
+        Assert.Equal("0", root.Attribute("Opacity")?.Value);
+        Assert.Equal("False", root.Attribute("ShowInTaskbar")?.Value);
+        Assert.Equal("False", root.Attribute("ShowActivated")?.Value);
+        Assert.Equal("False", root.Attribute("Topmost")?.Value);
+        Assert.Equal("NoResize", root.Attribute("ResizeMode")?.Value);
+        Assert.DoesNotContain("WebView", xaml);
+        Assert.DoesNotContain("NativeFallback", xaml);
+        Assert.DoesNotContain("ContextMenu", xaml);
+        Assert.DoesNotContain("TextBlock", xaml);
+        Assert.DoesNotContain("WindowSurface", xaml);
     }
 
     [Fact]
-    public void MainWindow_KeepsTheNativeStatusVisibleUntilTheWebSurfaceIsReady()
+    public void MainWindow_StartsHiddenGlassRendererAndConnectionOnlyRuntime()
     {
-        var path = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs");
-        var source = File.ReadAllText(path);
-        var readyHandler = source.IndexOf("type.GetString() == \"ready\"", StringComparison.Ordinal);
-        var showWebSurface = source.IndexOf("OverlayWebView.Visibility = Visibility.Visible;", StringComparison.Ordinal);
-        var hideFallback = source.IndexOf("NativeFallback.Visibility = Visibility.Collapsed;", StringComparison.Ordinal);
+        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
+        var loadedHandler = source.IndexOf("MainWindow_OnLoaded", StringComparison.Ordinal);
+        var hide = source.IndexOf("Hide();", loadedHandler, StringComparison.Ordinal);
+        var firstAwait = source.IndexOf("await ", loadedHandler, StringComparison.Ordinal);
 
-        Assert.True(readyHandler >= 0);
-        Assert.True(showWebSurface > readyHandler);
-        Assert.True(hideFallback > readyHandler);
+        Assert.True(loadedHandler >= 0);
+        Assert.True(hide > loadedHandler);
+        Assert.True(firstAwait > hide);
+        Assert.Contains("LyricsGlassSettingsStore.CreateDefault()", source);
+        Assert.Contains("settingsStore.Load()", source);
+        Assert.Contains("new LyricsGlassRendererSupervisor(hostState)", source);
+        Assert.Contains("new LyricsConnectionRuntime(new RadminLyricsRelay(", source);
+        Assert.Contains("renderer.StartAsync", source);
+        Assert.Contains("connectionRuntime.StartAsync", source);
+        Assert.DoesNotContain("new LyricsRuntime", source);
+        Assert.DoesNotContain("Netease", source);
     }
 
     [Fact]
-    public void MainWindow_UsesTheSharedWebViewEnvironment()
+    public void MainWindow_ForwardsOnlyTruthfulConnectionStates()
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
 
-        Assert.Contains("LyricsWebViewEnvironment.GetAsync()", source);
+        Assert.Contains("LyricsConnectionState.FindingFlowcast", source);
+        Assert.Contains("LyricsGlassConnectionState.FindingFlowcast", source);
+        Assert.Contains("LyricsConnectionState.ConnectedAwaitingLyrics", source);
+        Assert.Contains("LyricsGlassConnectionState.ConnectedAwaitingLyrics", source);
+        Assert.Contains("SetConnectionStateAsync", source);
+        Assert.DoesNotContain("LyricLine", source);
+        Assert.DoesNotContain("SnapshotChanged", source);
     }
 
     [Fact]
-    public void MainWindow_FeedsTheDesktopBehindTheIslandIntoTheWebGlass()
-    {
-        var xamlPath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml");
-        var sourcePath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs");
-        var xaml = File.ReadAllText(xamlPath);
-        var source = File.ReadAllText(sourcePath);
-
-        Assert.Contains("Background=\"Transparent\"", xaml);
-        Assert.Contains("WindowBackdrop.TryExcludeFromCapture(this)", source);
-        Assert.Contains("desktopBackdrop.Capture", source);
-        Assert.Contains("PostWebMessageAsJson", source);
-        Assert.Contains("type = \"backdrop\"", source);
-    }
-
-    [Fact]
-    public void MainWindow_BoundsBackdropCaptureRetriesAfterReadyOrLayoutTriggers()
-    {
-        var sourcePath = FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs");
-        var source = File.ReadAllText(sourcePath);
-
-        Assert.Contains("private const int MaximumBackdropRetries = 2;", source);
-        Assert.Contains("RefreshDesktopBackdrop();", source);
-        Assert.Contains("LocationChanged += (_, _) => ScheduleBackdropRefresh();", source);
-        Assert.Contains("SizeChanged += (_, _) => ScheduleBackdropRefresh();", source);
-        Assert.Contains("backdropRetryAttempts = 0;", source);
-        Assert.Contains("if (backdropRetryAttempts >= MaximumBackdropRetries)", source);
-        Assert.Contains("backdropRetryAttempts++;", source);
-        Assert.Contains("ScheduleBackdropRetry();", source);
-    }
-
-    [Fact]
-    public void MainWindow_RightClickOpensTheLiquidGlassOptionMenu()
-    {
-        var xaml = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml"));
-        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
-
-        Assert.Contains("PreviewMouseRightButtonUp=\"WindowSurface_OnPreviewMouseRightButtonUp\"", xaml);
-        Assert.Contains("x:Name=\"CapsuleContextMenu\"", xaml);
-        Assert.Contains("Header=\"Adjust Liquid Glass…\"", xaml);
-        Assert.Contains("Header=\"Close FlowCast Lyrics\"", xaml);
-        Assert.Contains("Click=\"AdjustLiquidGlass_OnClick\"", xaml);
-        Assert.Contains("Click=\"CloseFlowCastLyrics_OnClick\"", xaml);
-        Assert.Contains("CapsuleContextMenu.IsOpen = true;", source);
-        Assert.Contains("private void AdjustLiquidGlass_OnClick", source);
-        Assert.Contains("private void CloseFlowCastLyrics_OnClick", source);
-        Assert.Contains("LiquidGlassTunerWindow? tunerWindow", source);
-        Assert.Contains("tunerWindow.Activate()", source);
-    }
-
-    [Fact]
-    public void MainWindow_CloseClosesTheTunerBeforeOverlayTeardown()
+    public void MainWindow_PersistsTypedGlassEventsWithoutCrashingOnStorageFailure()
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
-        var closeStart = source.IndexOf("private void MainWindow_OnClosed", StringComparison.Ordinal);
-        var closeEnd = source.IndexOf("private const uint MonitorDefaultToNearest", closeStart, StringComparison.Ordinal);
-        var closeHandler = source[closeStart..closeEnd];
-        var copyTuner = closeHandler.IndexOf("var tuner = tunerWindow;", StringComparison.Ordinal);
-        var clearTuner = closeHandler.IndexOf("tunerWindow = null;", StringComparison.Ordinal);
-        var detachTuner = closeHandler.IndexOf("tuner.Closed -= TunerWindow_OnClosed;", StringComparison.Ordinal);
-        var closeTuner = closeHandler.IndexOf("tuner.Close();", StringComparison.Ordinal);
-        var disposeOverlay = closeHandler.IndexOf("OverlayWebView.Dispose();", StringComparison.Ordinal);
 
-        Assert.True(copyTuner >= 0);
-        Assert.True(clearTuner > copyTuner);
-        Assert.True(detachTuner > clearTuner);
-        Assert.True(closeTuner > detachTuner);
-        Assert.True(disposeOverlay > closeTuner);
-        Assert.Contains("ReferenceEquals(tunerWindow, closedTuner)", source);
-        Assert.DoesNotContain("Owner =", source);
+        Assert.Contains("LyricsGlassSettingsCommittedEventArgs", source);
+        Assert.Contains("LyricsGlassPositionChangedEventArgs", source);
+        Assert.Contains("hostState = hostState with { Glass = eventArgs.Settings }", source);
+        Assert.Contains("hostState = hostState with { Position = eventArgs.Position }", source);
+        Assert.Contains("settingsStore.Save", source);
+        Assert.Contains("catch (IOException)", source);
+        Assert.Contains("catch (UnauthorizedAccessException)", source);
+    }
+
+    [Fact]
+    public void MainWindow_DispatchesRendererCloseAndStopsHelperBeforeRadminAndFinalClose()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "MainWindow.xaml.cs"));
+        var closeRequest = source.IndexOf("Renderer_OnCloseRequested", StringComparison.Ordinal);
+        var shutdown = source.IndexOf("ShutdownAndCloseAsync", StringComparison.Ordinal);
+
+        Assert.True(closeRequest >= 0);
+        Assert.True(shutdown >= 0);
+
+        var dispatcherClose = source.IndexOf("Dispatcher.BeginInvoke", closeRequest, StringComparison.Ordinal);
+        var stopRenderer = source.IndexOf("renderer.StopAsync", shutdown, StringComparison.Ordinal);
+        var disposeRenderer = source.IndexOf("renderer.DisposeAsync", shutdown, StringComparison.Ordinal);
+        var disposeRadmin = source.IndexOf("connectionRuntime.DisposeAsync", shutdown, StringComparison.Ordinal);
+        var allowFinalClose = source.IndexOf("finalCloseAllowed = true", shutdown, StringComparison.Ordinal);
+        var finalClose = source.IndexOf("Dispatcher.InvokeAsync", shutdown, StringComparison.Ordinal);
+
+        Assert.True(dispatcherClose > closeRequest);
+        Assert.True(stopRenderer > shutdown);
+        Assert.True(disposeRenderer > stopRenderer);
+        Assert.True(disposeRadmin > disposeRenderer);
+        Assert.True(allowFinalClose > disposeRadmin);
+        Assert.True(finalClose > allowFinalClose);
+        Assert.Contains("eventArgs.Cancel = true", source);
+        Assert.Contains("closeCleanupStarted", source);
+    }
+
+    [Fact]
+    public void RadminRelay_RaisesConnectedOnlyAfterARealReceiverConnection()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "RadminLyricsRelay.cs"));
+        var connectedReceiver = source.IndexOf(
+            "if (await receiver.DiscoverAndConnectOnRadminAsync(cancellationToken))",
+            StringComparison.Ordinal);
+        var connectedEvent = source.IndexOf("Connected?.Invoke(this, EventArgs.Empty);", StringComparison.Ordinal);
+        var waitForDisconnect = source.IndexOf("await disconnected.Task.WaitAsync(cancellationToken);", StringComparison.Ordinal);
+
+        Assert.True(connectedReceiver >= 0);
+        Assert.True(connectedEvent > connectedReceiver);
+        Assert.True(waitForDisconnect > connectedEvent);
+    }
+
+    [Fact]
+    public void LyricsProject_HasNoWebViewOrFrontendBuildInputs()
+    {
+        var project = File.ReadAllText(FindRepositoryFile("src", "AudioShare.Lyrics", "AudioShare.Lyrics.csproj"));
+        var removedPackage = "Microsoft.Web.Web" + "View2";
+        var removedBuildTarget = "BuildLyrics" + "Frontend";
+
+        Assert.DoesNotContain(removedPackage, project);
+        Assert.DoesNotContain("LyricsFrontendSource", project);
+        Assert.DoesNotContain(removedBuildTarget, project);
+        Assert.DoesNotContain("CopyLyricsFrontendToOutput", project);
+        Assert.DoesNotContain("CopyLyricsFrontendToPublish", project);
+        Assert.Contains("ThirdPartyNotices.txt", project);
+        Assert.Contains("InternalsVisibleTo", project);
+    }
+
+    [Fact]
+    public void ReplacedVisualSourceAndTests_AreRemoved()
+    {
+        var root = FindRepositoryRoot();
+        var backdropCapture = "Desktop" + "BackdropCapture";
+        var tunerWindow = "LiquidGlass" + "TunerWindow";
+        string[] removedPaths =
+        [
+            $"src/AudioShare.Lyrics/{backdropCapture}.cs",
+            "src/AudioShare.Lyrics/WindowBackdrop.cs",
+            "src/AudioShare.Lyrics/LyricsWebViewEnvironment.cs",
+            $"src/AudioShare.Lyrics/{tunerWindow}.xaml",
+            $"src/AudioShare.Lyrics/{tunerWindow}.xaml.cs",
+            "src/AudioShare.Lyrics/LiquidGlassSettings.cs",
+            "src/AudioShare.Lyrics/LiquidGlassSettingsController.cs",
+            "src/AudioShare.Lyrics/LiquidGlassSettingsStore.cs",
+            "src/AudioShare.Lyrics/LyricsOverlayPresenter.cs",
+            "src/AudioShare.Lyrics/IslandDimensions.cs",
+            "src/AudioShare.Lyrics/Frontend",
+            $"tests/AudioShare.Core.Tests/{tunerWindow}Tests.cs",
+            "tests/AudioShare.Core.Tests/LiquidGlassSettingsTests.cs",
+            "tests/AudioShare.Core.Tests/LiquidGlassSettingsControllerTests.cs",
+            "tests/AudioShare.Core.Tests/LyricsOverlayPresenterTests.cs",
+            "tests/AudioShare.Core.Tests/IslandDimensionsTests.cs"
+        ];
+
+        foreach (var relativePath in removedPaths)
+        {
+            Assert.False(
+                File.Exists(Path.Combine(root, relativePath)) || Directory.Exists(Path.Combine(root, relativePath)),
+                $"Replaced visual path still exists: {relativePath}");
+        }
     }
 
     private static string FindRepositoryFile(params string[] relativeSegments)
     {
-        var sourceDirectory = Path.GetDirectoryName(GetSourceFilePath())!;
-        var repositoryRoot = Path.GetFullPath(Path.Combine(sourceDirectory, "..", ".."));
-        var sourceCandidate = Path.Combine([repositoryRoot, .. relativeSegments]);
-        if (File.Exists(sourceCandidate))
+        var candidate = Path.Combine([FindRepositoryRoot(), .. relativeSegments]);
+        if (File.Exists(candidate))
         {
-            return sourceCandidate;
+            return candidate;
+        }
+
+        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, relativeSegments));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var sourceDirectory = Path.GetDirectoryName(GetSourceFilePath())!;
+        var sourceRoot = Path.GetFullPath(Path.Combine(sourceDirectory, "..", ".."));
+        if (Directory.Exists(Path.Combine(sourceRoot, "src", "AudioShare.Lyrics")))
+        {
+            return sourceRoot;
         }
 
         var startingDirectories = new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() };
@@ -148,15 +201,14 @@ public sealed class FlowCastLyricsStartupTests
         {
             for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
             {
-                var candidate = Path.Combine([directory.FullName, .. relativeSegments]);
-                if (File.Exists(candidate))
+                if (Directory.Exists(Path.Combine(directory.FullName, "src", "AudioShare.Lyrics")))
                 {
-                    return candidate;
+                    return directory.FullName;
                 }
             }
         }
 
-        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, relativeSegments));
+        throw new DirectoryNotFoundException("Could not locate the audio-share repository root.");
     }
 
     private static string GetSourceFilePath([CallerFilePath] string path = "") => path;

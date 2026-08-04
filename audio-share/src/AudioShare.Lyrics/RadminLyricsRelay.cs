@@ -9,6 +9,8 @@ internal interface ILyricsRelay : IAsyncDisposable
 {
     event EventHandler<RadminLyricsFrame>? FrameReceived;
 
+    event EventHandler? Connected;
+
     event EventHandler? ConnectionClosed;
 
     Task StartReceivingAsync(CancellationToken cancellationToken);
@@ -38,6 +40,8 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
     }
 
     public event EventHandler<RadminLyricsFrame>? FrameReceived;
+
+    public event EventHandler? Connected;
 
     public event EventHandler? ConnectionClosed;
 
@@ -147,6 +151,7 @@ internal sealed class RadminLyricsRelay : ILyricsRelay
             {
                 if (await receiver.DiscoverAndConnectOnRadminAsync(cancellationToken))
                 {
+                    Connected?.Invoke(this, EventArgs.Empty);
                     await disconnected.Task.WaitAsync(cancellationToken);
                 }
             }

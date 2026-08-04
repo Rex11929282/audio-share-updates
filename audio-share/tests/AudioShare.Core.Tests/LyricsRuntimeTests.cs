@@ -232,6 +232,12 @@ public sealed class LyricsRuntimeTests
     {
         public event EventHandler<RadminLyricsFrame>? FrameReceived;
 
+        public event EventHandler? Connected
+        {
+            add { }
+            remove { }
+        }
+
         public event EventHandler? ConnectionClosed;
 
         public ConcurrentQueue<RadminLyricsFrame> Published { get; } = new();
