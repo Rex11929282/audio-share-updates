@@ -1,7 +1,8 @@
-using AudioShare.Lyrics.Contracts;
 using System.IO;
+using AudioShare.Lyrics;
+using AudioShare.Lyrics.Contracts;
 
-namespace AudioShare.Lyrics;
+namespace AudioShare.Core.Tests;
 
 public sealed class LyricsConnectionRuntimeTests
 {

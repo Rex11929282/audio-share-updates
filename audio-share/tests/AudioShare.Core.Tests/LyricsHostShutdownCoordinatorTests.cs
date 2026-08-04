@@ -1,6 +1,7 @@
 using System.IO;
+using AudioShare.Lyrics;
 
-namespace AudioShare.Lyrics;
+namespace AudioShare.Core.Tests;
 
 public sealed class LyricsHostShutdownCoordinatorTests : IDisposable
 {

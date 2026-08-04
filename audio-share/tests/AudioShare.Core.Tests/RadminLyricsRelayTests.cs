@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
+using AudioShare.Lyrics;
 using AudioShare.Lyrics.Contracts;
 
-namespace AudioShare.Lyrics;
+namespace AudioShare.Core.Tests;
 
 public sealed class RadminLyricsRelayTests
 {
