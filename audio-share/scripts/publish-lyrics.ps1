@@ -68,6 +68,35 @@ function Get-ExactChildPath {
     return $candidate
 }
 
+function Test-FileContainsForbiddenText {
+    param([string]$Path, [string[]]$Markers)
+
+    $maximumMarkerLength = ($Markers | Measure-Object -Property Length -Maximum).Maximum
+    $buffer = [char[]]::new(65536)
+    $carry = ''
+    $reader = [System.IO.StreamReader]::new($Path, $true)
+    try {
+        while (($charactersRead = $reader.ReadBlock($buffer, 0, $buffer.Length)) -gt 0) {
+            $text = $carry + [string]::new($buffer, 0, $charactersRead)
+            foreach ($marker in $Markers) {
+                if ($text.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                    return $true
+                }
+            }
+
+            $carryLength = [System.Math]::Min($maximumMarkerLength - 1, $text.Length)
+            if ($carryLength -gt 0) {
+                $carry = $text.Substring($text.Length - $carryLength)
+            }
+        }
+    }
+    finally {
+        $reader.Dispose()
+    }
+
+    return $false
+}
+
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 Assert-NoReparseAncestors $OutputDirectory 'OutputDirectory'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -157,15 +186,12 @@ foreach ($entry in $packageEntries) {
 $textAssetExtensions = @('.css', '.htm', '.html', '.js', '.json', '.map', '.md', '.mjs', '.cjs', '.txt', '.xml', '.yaml', '.yml')
 $forbiddenTextMarkers = @('WebView2', 'liquid-glass-react', 'rdev', 'React', 'ReactDOM', 'react-dom')
 foreach ($file in Get-ChildItem -LiteralPath $publishDirectory -Recurse -File -Force) {
-    if ($file.Length -gt 5MB -or $file.Extension -notin $textAssetExtensions) {
+    if ($file.Extension -notin $textAssetExtensions) {
         continue
     }
 
-    $content = [System.IO.File]::ReadAllText($file.FullName)
-    foreach ($forbiddenTextMarker in $forbiddenTextMarkers) {
-        if ($content.IndexOf($forbiddenTextMarker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            throw "Forbidden content in standalone Lyrics package: $($file.FullName)"
-        }
+    if (Test-FileContainsForbiddenText $file.FullName $forbiddenTextMarkers) {
+        throw "Forbidden content in standalone Lyrics package: $($file.FullName)"
     }
 }
 

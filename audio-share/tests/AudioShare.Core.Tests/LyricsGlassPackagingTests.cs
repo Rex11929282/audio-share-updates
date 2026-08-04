@@ -8,6 +8,9 @@ namespace AudioShare.Core.Tests;
 
 public sealed class LyricsGlassPackagingTests
 {
+    private static readonly string PackagingTestTempRoot = Path.GetFullPath(
+        Path.Combine(Path.GetTempPath(), "FlowCast.Lyrics.PackageTests"));
+
     [Fact]
     public void LyricsProject_BuildsCompleteGlassImageOnlyForOptInPublish()
     {
@@ -211,6 +214,53 @@ public sealed class LyricsGlassPackagingTests
     }
 
     [Fact]
+    public async Task PublishScript_RejectsForbiddenTextAcrossChunksInALargeNeutralAssetName()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var prepared = CreateFakePublishedProduct(Path.Combine(root, "prepared"));
+            var largeAsset = new string('x', (81 * 65536) - 2) + "React";
+            File.WriteAllText(Path.Combine(prepared, "glass", "app", "asset-large-a1b2c3.js"), largeAsset);
+
+            var result = await RunPowerShellScriptAsync(
+                FindRepositoryFile("scripts", "publish-lyrics.ps1"),
+                "-OutputDirectory", Path.Combine(root, "output"),
+                "-PreparedPublishDirectory", prepared);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Forbidden content", result.AllOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(root);
+        }
+    }
+
+    [Fact]
+    public async Task PublishScript_RejectsAForbiddenFilenameInThePreparedPackage()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var prepared = CreateFakePublishedProduct(Path.Combine(root, "prepared"));
+            File.WriteAllText(Path.Combine(prepared, "AudioShare.App.exe"), "forbidden");
+
+            var result = await RunPowerShellScriptAsync(
+                FindRepositoryFile("scripts", "publish-lyrics.ps1"),
+                "-OutputDirectory", Path.Combine(root, "output"),
+                "-PreparedPublishDirectory", prepared);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Forbidden payload", result.AllOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(root);
+        }
+    }
+
+    [Fact]
     public async Task PublishScript_RejectsAReparseDescendantBeforeCleaningOutput()
     {
         var root = CreateTemporaryDirectory();
@@ -237,6 +287,31 @@ public sealed class LyricsGlassPackagingTests
         {
             DeleteJunctionIfPresent(junction);
             DeleteDirectoryIfPresent(root);
+        }
+    }
+
+    [Fact]
+    public void TestCleanup_RejectsAReparseDescendant()
+    {
+        var root = CreateTemporaryDirectory();
+        var junction = Path.Combine(root, "escape");
+        var outside = CreateTemporaryDirectory();
+        var sentinel = Path.Combine(outside, "sentinel.txt");
+        try
+        {
+            File.WriteAllText(sentinel, "keep");
+            CreateJunction(junction, outside);
+
+            var exception = Assert.Throws<InvalidOperationException>(() => DeleteDirectoryIfPresent(root));
+
+            Assert.Contains("reparse", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("keep", File.ReadAllText(sentinel));
+        }
+        finally
+        {
+            DeleteJunctionIfPresent(junction);
+            DeleteDirectoryIfPresent(root);
+            DeleteDirectoryIfPresent(outside);
         }
     }
 
@@ -317,7 +392,9 @@ public sealed class LyricsGlassPackagingTests
 
     private static string CreateTemporaryDirectory()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"FlowCast.Lyrics.PackageTests.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(PackagingTestTempRoot);
+        AssertNoReparseAncestors(PackagingTestTempRoot);
+        var path = Path.Combine(PackagingTestTempRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
     }
@@ -419,9 +496,59 @@ public sealed class LyricsGlassPackagingTests
 
     private static void DeleteDirectoryIfPresent(string path)
     {
-        if (Directory.Exists(path))
+        var fullPath = Path.GetFullPath(path);
+        var tempPrefix = PackagingTestTempRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(tempPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            Directory.Delete(path, recursive: true);
+            throw new InvalidOperationException($"Refusing test cleanup outside the packaging temp root: {fullPath}");
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            return;
+        }
+
+        AssertNoReparseAncestors(fullPath);
+        AssertNoReparseTree(fullPath);
+        Directory.Delete(fullPath, recursive: true);
+    }
+
+    private static void AssertNoReparseAncestors(string path)
+    {
+        for (var directory = new DirectoryInfo(Path.GetFullPath(path)); directory is not null; directory = directory.Parent)
+        {
+            if (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException($"Test cleanup path contains a reparse-point ancestor: {directory.FullName}");
+            }
+        }
+    }
+
+    private static void AssertNoReparseTree(string path)
+    {
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(new DirectoryInfo(Path.GetFullPath(path)));
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException($"Test cleanup path contains a reparse point: {current.FullName}");
+            }
+
+            foreach (var child in current.EnumerateFileSystemInfos())
+            {
+                if ((child.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new InvalidOperationException($"Test cleanup path contains a reparse point: {child.FullName}");
+                }
+
+                if (child is DirectoryInfo directory)
+                {
+                    pending.Push(directory);
+                }
+            }
         }
     }
 
