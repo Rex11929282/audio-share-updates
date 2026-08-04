@@ -519,6 +519,64 @@ public sealed class LyricsGlassRendererSupervisorTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task ExitAfterReadyWithDeferredExitedEvent_RestartsWithoutHandshakeDiagnosticOrDoubleCleanup()
+    {
+        var launcher = new FakeRendererLauncher();
+        await using var supervisor = CreateSupervisor(launcher);
+        var writeGate = GetWriteGate(supervisor);
+        await writeGate.WaitAsync(timeout.Token);
+        RendererClient? firstClient = null;
+        try
+        {
+            var start = supervisor.StartAsync(timeout.Token);
+            var firstLaunch = await launcher.NextLaunchAsync(timeout.Token);
+            firstClient = await RendererClient.ConnectAsync(firstLaunch, timeout.Token);
+            await firstClient.SendEventAsync($"{{\"version\":1,\"type\":\"hello\",\"token\":{JsonSerializer.Serialize(firstLaunch.Token)}}}", timeout.Token);
+            writeGate.Release();
+            using (JsonDocument.Parse(await firstClient.ReadHostCommandAsync(timeout.Token)))
+            {
+            }
+
+            await writeGate.WaitAsync(timeout.Token);
+            await firstClient.SendEventAsync("{\"version\":1,\"type\":\"ready\"}", timeout.Token);
+            await WaitForAvailabilityAsync(supervisor, global::AudioShare.Lyrics.RendererAvailability.Available, timeout.Token);
+            firstLaunch.Process.ExitWithoutRaisingEvent();
+            await firstClient.DisposeAsync();
+            firstClient = null;
+            writeGate.Release();
+
+            await start.WaitAsync(timeout.Token);
+            var secondLaunch = await launcher.NextLaunchAsync(timeout.Token);
+            await using var secondClient = await RendererClient.ConnectAsync(secondLaunch, timeout.Token);
+            await secondClient.SendEventAsync($"{{\"version\":1,\"type\":\"hello\",\"token\":{JsonSerializer.Serialize(secondLaunch.Token)}}}", timeout.Token);
+            await secondClient.ReadHostCommandAsync(timeout.Token);
+            await secondClient.SendEventAsync("{\"version\":1,\"type\":\"ready\"}", timeout.Token);
+            await secondClient.ReadHostCommandAsync(timeout.Token);
+            await WaitForAvailabilityAsync(supervisor, global::AudioShare.Lyrics.RendererAvailability.Available, timeout.Token);
+
+            Assert.Equal(2, launcher.Launches.Count);
+            Assert.Equal(1, firstLaunch.Process.DisposeCount);
+            var diagnosticPath = Path.Combine(directory, "diagnostics.log");
+            if (File.Exists(diagnosticPath))
+            {
+                Assert.DoesNotContain("stage=handshake", await File.ReadAllTextAsync(diagnosticPath, timeout.Token));
+            }
+        }
+        finally
+        {
+            if (writeGate.CurrentCount == 0)
+            {
+                writeGate.Release();
+            }
+
+            if (firstClient is not null)
+            {
+                await firstClient.DisposeAsync();
+            }
+        }
+    }
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     public Task DisposeAsync()
@@ -671,6 +729,17 @@ public sealed class LyricsGlassRendererSupervisorTests : IAsyncLifetime
             HasExited = true;
             exited.TrySetResult();
             Exited?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ExitWithoutRaisingEvent()
+        {
+            if (HasExited)
+            {
+                return;
+            }
+
+            HasExited = true;
+            exited.TrySetResult();
         }
 
         public void Dispose()

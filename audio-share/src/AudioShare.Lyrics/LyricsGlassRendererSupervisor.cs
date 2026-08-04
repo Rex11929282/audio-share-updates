@@ -377,24 +377,22 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
             await SendLatestConnectionStateAsync(run, readyCancellation.Token);
             _ = ReceiveEventsAsync(run);
         }
-        catch
+        catch (Exception exception)
         {
-            await CleanupRunAsync(run, waitForGracefulExit: false);
-            var terminationOwned = run.Ready && Volatile.Read(ref run.TerminationSignaled) != 0;
-            if (!terminationOwned)
+            if (run.Ready &&
+                !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
-                lock (stateGate)
-                {
-                    if (ReferenceEquals(currentRun, run))
-                    {
-                        currentRun = null;
-                    }
-                }
+                _ = ObserveUnexpectedTerminationAsync(run, "pipe-write", exception, allowRestart: true);
+                return;
             }
 
-            if (terminationOwned)
+            await CleanupRunAsync(run, waitForGracefulExit: false);
+            lock (stateGate)
             {
-                return;
+                if (ReferenceEquals(currentRun, run))
+                {
+                    currentRun = null;
+                }
             }
 
             throw;
