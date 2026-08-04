@@ -34,11 +34,19 @@ If a selected application closes, a required endpoint disappears, or Windows cha
 - End sound: optional confirmation after a normal stop or disconnect.
 - System tray: open, start, mute or resume, stop, or exit FlowCast without reopening the main window.
 
+## FlowCast Lyrics
+
+FlowCast Lyrics is a separately packaged and separately updated Windows companion. Friends open only `FlowCast Lyrics.exe`; it automatically discovers FlowCast on the same Radmin VPN and does not ask for an IP address, port, pairing code, or QR code.
+
+The companion shows one draggable, borderless glass capsule. Right-click the capsule to choose `Adjust Glass` or `Close FlowCast Lyrics`. The adjustment sheet changes the native glass parameters and saves them with the capsule position. The private renderer is bundled inside the package, so FlowCast Lyrics does not require a separately installed Java runtime.
+
+This version reports only whether it is looking for FlowCast or connected and waiting. It does not provide a lyric source yet and never invents lyric text.
+
 ## Updates And Publishing
 
 FlowCast checks the latest GitHub release in the background after startup. It shows an update dialog only when a newer approved release exists. Choosing `立即更新` downloads the signed release asset, verifies SHA-256, safely stops an active share, installs the update, and restarts FlowCast.
 
-Only approved major releases are published. Small local changes are not uploaded and therefore do not create an update notice for users. The installer includes FlowCast and FlowCast Lyrics. A release must include:
+Only approved major releases are published. Small local changes are not uploaded and therefore do not create an update notice for users. The FlowCast installer and FlowCast Lyrics package are separate products with separate update payloads. A FlowCast release must include:
 
 - `FlowCast-Setup.exe`
 - `FlowCast-Setup.exe.sha256` or a GitHub-provided SHA-256 digest

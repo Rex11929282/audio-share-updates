@@ -24,4 +24,10 @@
     <Content Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <Target Name="BuildLyricsGlassRenderer"
+          BeforeTargets="Publish"
+          Condition="'$(BuildLyricsGlassRenderer)' == 'true'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\build-lyrics-glass.ps1&quot; -DestinationDirectory &quot;$(PublishDir).&quot;" />
+  </Target>
+
 </Project>
