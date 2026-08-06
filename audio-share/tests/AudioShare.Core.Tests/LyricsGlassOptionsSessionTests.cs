@@ -33,10 +33,13 @@ public sealed class LyricsGlassOptionsSessionTests
     }
 
     [Fact]
-    public void Reset_RestoresDefaultSettings()
+    public void Reset_ReplacesAllCurrentValuesWithDefaults()
     {
         var initial = new global::AudioShare.Lyrics.LyricsGlassSettings(0.2, 3, 0.4, 0.5, true);
-        var session = new global::AudioShare.Lyrics.LyricsGlassOptionsSession(initial);
+        var session = new global::AudioShare.Lyrics.LyricsGlassOptionsSession(initial)
+        {
+            Current = new global::AudioShare.Lyrics.LyricsGlassSettings(0.1, 18, 0.9, 0.2, false)
+        };
 
         session.Reset();
 

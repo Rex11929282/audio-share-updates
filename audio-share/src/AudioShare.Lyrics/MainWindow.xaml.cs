@@ -10,6 +10,7 @@ public partial class MainWindow : Window
     private readonly LyricsConnectionRuntime connectionRuntime;
     private readonly LyricsGlassHostStatePersistence hostStatePersistence;
     private readonly LyricsHostShutdownCoordinator shutdownCoordinator;
+    private LyricsGlassOptionsWindow? optionsWindow;
     private bool closeCleanupStarted;
     private bool finalCloseAllowed;
 
@@ -30,6 +31,7 @@ public partial class MainWindow : Window
         renderer.SettingsCommitted += Renderer_OnSettingsCommitted;
         renderer.PositionChanged += Renderer_OnPositionChanged;
         renderer.CloseRequested += Renderer_OnCloseRequested;
+        renderer.OptionsRequested += Renderer_OnOptionsRequested;
         connectionRuntime.ConnectionStateChanged += ConnectionRuntime_OnConnectionStateChanged;
         Loaded += MainWindow_OnLoaded;
         Closing += MainWindow_OnClosing;
@@ -88,6 +90,48 @@ public partial class MainWindow : Window
     private void Renderer_OnCloseRequested(object? sender, EventArgs eventArgs) =>
         Dispatcher.BeginInvoke(new Action(Close));
 
+    private void Renderer_OnOptionsRequested(object? sender, EventArgs eventArgs) =>
+        Dispatcher.BeginInvoke(new Action(OpenOptionsWindow));
+
+    private void OpenOptionsWindow()
+    {
+        if (closeCleanupStarted || optionsWindow is not null)
+        {
+            return;
+        }
+
+        var window = new LyricsGlassOptionsWindow(hostStatePersistence.Current.Glass);
+        optionsWindow = window;
+        try
+        {
+            if (window.ShowDialog() == true && window.Settings is { } settings)
+            {
+                _ = SetGlassSettingsAsync(settings);
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(optionsWindow, window))
+            {
+                optionsWindow = null;
+            }
+        }
+    }
+
+    private async Task SetGlassSettingsAsync(LyricsGlassSettings settings)
+    {
+        try
+        {
+            await renderer.SetGlassSettingsAsync(settings, lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (lifetimeCancellation.IsCancellationRequested)
+        {
+        }
+        catch (ObjectDisposedException) when (closeCleanupStarted)
+        {
+        }
+    }
+
     private void MainWindow_OnClosing(object? sender, CancelEventArgs eventArgs)
     {
         if (finalCloseAllowed)
@@ -107,12 +151,16 @@ public partial class MainWindow : Window
 
     private async Task ShutdownAndCloseAsync()
     {
+        var window = optionsWindow;
+        optionsWindow = null;
+        window?.Close();
         lifetimeCancellation.Cancel();
         await shutdownCoordinator.ShutdownAsync();
 
         renderer.SettingsCommitted -= Renderer_OnSettingsCommitted;
         renderer.PositionChanged -= Renderer_OnPositionChanged;
         renderer.CloseRequested -= Renderer_OnCloseRequested;
+        renderer.OptionsRequested -= Renderer_OnOptionsRequested;
         connectionRuntime.ConnectionStateChanged -= ConnectionRuntime_OnConnectionStateChanged;
         lifetimeCancellation.Dispose();
         finalCloseAllowed = true;
