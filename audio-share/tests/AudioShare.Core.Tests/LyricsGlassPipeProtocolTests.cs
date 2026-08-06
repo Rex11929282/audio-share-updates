@@ -38,6 +38,15 @@ public sealed class LyricsGlassPipeProtocolTests
         Assert.Equal(json, result);
     }
 
+    [Fact]
+    public async Task ReadAsync_AcceptsOpenOptionsEventEnvelope()
+    {
+        const string json = "{\"version\":1,\"type\":\"open-options\"}";
+        await using var stream = new MemoryStream(Frame(json));
+
+        Assert.Equal(json, await global::AudioShare.Lyrics.LyricsGlassPipeProtocol.ReadAsync(stream, CancellationToken.None));
+    }
+
     [Theory]
     [MemberData(nameof(InvalidFrames))]
     public async Task ReadAsync_RejectsInvalidFrames(byte[] frame)

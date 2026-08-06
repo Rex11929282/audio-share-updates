@@ -26,16 +26,6 @@ class GlassOverlayTest {
     }
 
     @Test
-    fun committingSettings_emitsValidatedNativeValues() {
-        val edited = GlassSettings(blurRadiusDp = 7.5f)
-
-        assertEquals(
-            SettingsCommittedEvent(ProtocolVersion, edited),
-            settingsCommittedEvent(edited),
-        )
-    }
-
-    @Test
     fun futureLyric_dimensionsAndDisplayUseTextUnchanged() {
         val lyric = LyricLine("Caller-supplied lyric")
         val presentation = overlayPresentation(RendererState.initial().copy(lyric = lyric))

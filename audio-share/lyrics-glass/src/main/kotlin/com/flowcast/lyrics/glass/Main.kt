@@ -63,6 +63,8 @@ fun main(arguments: Array<String>) {
 
                             is ConnectionStateCommand -> rendererState = rendererState.reduce(command)
 
+                            is GlassSettingsCommand -> rendererState = rendererState.reduce(command)
+
                             is InitializeCommand -> throw ProtocolException("Initialize may only be sent once.")
                         }
                     }

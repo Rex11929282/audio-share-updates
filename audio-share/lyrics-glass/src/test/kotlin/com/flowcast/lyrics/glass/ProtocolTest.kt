@@ -74,6 +74,18 @@ class ProtocolTest {
     }
 
     @Test
+    fun nativeOptionsMessagesRoundTripAndRejectExtraProperties() {
+        val command = GlassSettingsCommand(ProtocolVersion, GlassSettings(blurRadiusDp = 7f))
+        val event = OpenOptionsEvent(ProtocolVersion)
+
+        assertEquals(command, decodeHostCommand(encodeHostCommand(command)))
+        assertEquals(event, decodeRendererEvent(encodeRendererEvent(event)))
+        assertFailsWith<ProtocolException> {
+            decodeRendererEvent("""{"version":1,"type":"open-options","unexpected":true}""")
+        }
+    }
+
+    @Test
     fun defaultSettingsAndNativeRangesAreValidated() {
         assertEquals(1f, GlassSettings().cornerRadiusFraction)
         assertEquals(2f, GlassSettings().blurRadiusDp)

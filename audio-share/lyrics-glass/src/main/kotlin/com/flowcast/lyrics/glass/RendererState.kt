@@ -9,6 +9,7 @@ data class RendererState(
     fun reduce(command: HostCommand): RendererState = when (command) {
         is InitializeCommand -> copy(position = command.position, glass = command.glass)
         is ConnectionStateCommand -> copy(connectionState = command.state, lyric = null)
+        is GlassSettingsCommand -> copy(glass = command.glass)
         is ShutdownCommand -> this
     }
 

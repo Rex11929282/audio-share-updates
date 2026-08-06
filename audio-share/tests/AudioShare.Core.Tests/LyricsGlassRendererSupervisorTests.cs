@@ -158,6 +158,35 @@ public sealed class LyricsGlassRendererSupervisorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task OpenOptionsEvent_RaisesOptionsRequested()
+    {
+        var launcher = new FakeRendererLauncher();
+        await using var supervisor = CreateSupervisor(launcher);
+        var requested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        supervisor.OptionsRequested += (_, _) => requested.TrySetResult();
+
+        await using var client = await StartReadyAsync(supervisor, launcher);
+        await client.SendEventAsync("{\"version\":1,\"type\":\"open-options\"}", timeout.Token);
+
+        await requested.Task.WaitAsync(timeout.Token);
+    }
+
+    [Fact]
+    public async Task SetGlassSettingsAsync_SendsGlassSettingsToAReadyRenderer()
+    {
+        var launcher = new FakeRendererLauncher();
+        await using var supervisor = CreateSupervisor(launcher);
+        await using var client = await StartReadyAsync(supervisor, launcher);
+        var settings = global::AudioShare.Lyrics.LyricsGlassSettings.Defaults with { BlurRadiusDp = 7 };
+
+        var send = supervisor.SetGlassSettingsAsync(settings, timeout.Token);
+        using var command = JsonDocument.Parse(await client.ReadHostCommandAsync(timeout.Token));
+        await send;
+        Assert.Equal("glass-settings", command.RootElement.GetProperty("type").GetString());
+        Assert.Equal(7, command.RootElement.GetProperty("glass").GetProperty("blurRadiusDp").GetDouble());
+    }
+
+    [Fact]
     public async Task CloseRequest_RemainsConnectedUntilHostSendsShutdownAndDoesNotRestart()
     {
         var launcher = new FakeRendererLauncher();

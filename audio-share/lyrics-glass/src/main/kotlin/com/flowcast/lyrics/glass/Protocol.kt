@@ -70,6 +70,13 @@ data class ConnectionStateCommand(
 ) : HostCommand
 
 @Serializable
+@SerialName("glass-settings")
+data class GlassSettingsCommand(
+    override val version: Int,
+    val glass: GlassSettings,
+) : HostCommand
+
+@Serializable
 @SerialName("shutdown")
 data class ShutdownCommand(override val version: Int) : HostCommand
 
@@ -106,11 +113,14 @@ data class PositionChangedEvent(
 data class CloseRequestEvent(override val version: Int) : RendererEvent
 
 @Serializable
+@SerialName("open-options")
+data class OpenOptionsEvent(override val version: Int) : RendererEvent
+
+@Serializable
 @SerialName("fault")
 data class FaultEvent(override val version: Int, val message: String) : RendererEvent
 
 private val protocolJson = Json {
-    ignoreUnknownKeys = true
     classDiscriminator = "type"
 }
 

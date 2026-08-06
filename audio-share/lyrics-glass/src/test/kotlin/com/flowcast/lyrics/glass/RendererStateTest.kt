@@ -49,6 +49,17 @@ class RendererStateTest {
     }
 
     @Test
+    fun glassSettingsCommandReplacesOnlyGlassSettings() {
+        val state = RendererState.initial().copy(position = OverlayPosition(20.0, 30.0))
+        val glass = GlassSettings(blurRadiusDp = 7f)
+
+        val reduced = state.reduce(GlassSettingsCommand(ProtocolVersion, glass))
+
+        assertEquals(glass, reduced.glass)
+        assertEquals(state.position, reduced.position)
+    }
+
+    @Test
     fun shutdownLeavesStateUnchanged() {
         val state = RendererState.initial()
 

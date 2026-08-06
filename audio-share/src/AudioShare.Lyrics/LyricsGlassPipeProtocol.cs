@@ -17,6 +17,7 @@ internal static class LyricsGlassPipeProtocol
         "ready",
         "settings-committed",
         "position-changed",
+        "open-options",
         "close-request",
         "fault"
     };

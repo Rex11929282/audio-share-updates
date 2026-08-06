@@ -141,6 +141,8 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
 
     internal event EventHandler? CloseRequested;
 
+    internal event EventHandler? OptionsRequested;
+
     internal event EventHandler<LyricsGlassFaultedEventArgs>? Faulted;
 
     internal RendererAvailability Availability
@@ -221,6 +223,44 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
         try
         {
             await SendLatestConnectionStateAsync(run, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await HandleUnexpectedTerminationAsync(run, "pipe-write", exception, allowRestart: true);
+        }
+    }
+
+    internal async Task SetGlassSettingsAsync(LyricsGlassSettings settings, CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(settings);
+        if (!settings.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settings));
+        }
+
+        RendererRun? run;
+        lock (stateGate)
+        {
+            latestHostState = latestHostState with { Glass = settings };
+            run = currentRun is { Ready: true } candidate && !stopping ? candidate : null;
+        }
+
+        if (run is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await SendCommandAsync(
+                run,
+                new { version = LyricsGlassPipeProtocol.CurrentVersion, type = "glass-settings", glass = settings },
+                cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -529,6 +569,11 @@ internal sealed class LyricsGlassRendererSupervisor : IAsyncDisposable
                 PositionChanged?.Invoke(this, new LyricsGlassPositionChangedEventArgs(position));
                 return Task.CompletedTask;
             }
+
+            case "open-options":
+                ValidateExactProperties(root, "version", "type");
+                OptionsRequested?.Invoke(this, EventArgs.Empty);
+                return Task.CompletedTask;
 
             case "close-request":
                 ValidateExactProperties(root, "version", "type");
