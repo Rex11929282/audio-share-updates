@@ -38,7 +38,7 @@ If a selected application closes, a required endpoint disappears, or Windows cha
 
 FlowCast Lyrics is a separately packaged and separately updated Windows companion. Friends open only `FlowCast Lyrics.exe`; it automatically discovers FlowCast on the same Radmin VPN and does not ask for an IP address, port, pairing code, or QR code.
 
-The companion shows one draggable, borderless glass capsule. Right-click the capsule to choose `Adjust Glass` or `Close FlowCast Lyrics`. The adjustment sheet changes the native glass parameters and saves them with the capsule position. The private renderer is bundled inside the package, so FlowCast Lyrics does not require a separately installed Java runtime.
+The companion shows one draggable, borderless glass capsule. Right-click the capsule to choose `調整玻璃` or `結束 FlowCast Lyrics`. `調整玻璃` opens a native Windows options bar for changing the glass parameters, which are saved with the capsule position. The private renderer is bundled inside the package, so FlowCast Lyrics does not require a separately installed Java runtime.
 
 This version reports only whether it is looking for FlowCast or connected and waiting. It does not provide a lyric source yet and never invents lyric text.
 

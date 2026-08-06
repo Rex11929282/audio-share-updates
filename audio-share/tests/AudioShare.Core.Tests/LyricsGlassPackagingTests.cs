@@ -345,8 +345,10 @@ public sealed class LyricsGlassPackagingTests
         Assert.Contains("same Radmin VPN", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("automatically", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("draggable", readme, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Adjust Glass", readme);
-        Assert.Contains("Close FlowCast Lyrics", readme);
+        Assert.Contains("調整玻璃", readme);
+        Assert.Contains("結束 FlowCast Lyrics", readme);
+        Assert.Contains("native Windows options bar", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("adjustment sheet", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not provide a lyric source", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not ask for an IP address, port, pairing code, or QR code", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not require a separately installed Java runtime", readme, StringComparison.OrdinalIgnoreCase);
