@@ -4,7 +4,7 @@ using AudioShare.Core;
 
 namespace AudioShare.Windows;
 
-public sealed class VoicemeeterSharingBusService
+public sealed class VoicemeeterSharingBusService : ISharingBusController
 {
     private const string RemoteDll = @"C:\Program Files (x86)\VB\Voicemeeter\VoicemeeterRemote64.dll";
 
@@ -67,6 +67,13 @@ public sealed class VoicemeeterSharingBusService
             VBVMR_Logout();
         }
     }
+
+    public Task SetSharedAsync(bool enabled, CancellationToken token) =>
+        Task.Run(() =>
+        {
+            token.ThrowIfCancellationRequested();
+            SetMainInputShared(enabled);
+        }, token);
 
     public void DisableAuxInputSharing()
     {
@@ -139,4 +146,11 @@ public sealed class VoicemeeterSharingBusService
             VBVMR_Logout();
         }
     }
+
+    public Task<SharingBusStatus> ReadAsync(CancellationToken token) =>
+        Task.Run(() =>
+        {
+            token.ThrowIfCancellationRequested();
+            return GetStatus();
+        }, token);
 }

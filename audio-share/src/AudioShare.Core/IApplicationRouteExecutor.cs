@@ -10,7 +10,13 @@ public interface IApplicationRouteExecutor
 {
     Task<ApplicationRouteExecutionResult> ApplyAsync(ApplicationRoutePlan plan, CancellationToken token);
 
+    Task<ApplicationRouteExecutionResult> ApplyAdditionalAsync(ApplicationRoutePlan plan, CancellationToken token);
+
     Task<ApplicationRouteExecutionResult> RestoreAsync(CancellationToken token);
+
+    Task<ApplicationRouteExecutionResult> RestoreAsync(
+        IReadOnlyList<ApplicationRouteSnapshot> snapshots,
+        CancellationToken token);
 
     void CompletePersistentRouting();
 }

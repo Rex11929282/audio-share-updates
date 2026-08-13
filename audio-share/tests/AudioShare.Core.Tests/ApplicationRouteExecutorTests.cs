@@ -299,6 +299,32 @@ public sealed class ApplicationRouteExecutorTests
             helper.Calls);
     }
 
+    [Fact]
+    public async Task ApplyAdditionalAsync_ExtendsTheOwnedRestoreTransactionForNewApplications()
+    {
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new("chrome-console", "chrome-multimedia"),
+                [2] = new("steam-console", "steam-multimedia"),
+            });
+        var executor = new ApplicationRouteExecutor(helper);
+
+        await executor.ApplyAsync(
+            new ApplicationRoutePlan([new(1, 101, "chrome.exe", "input")]),
+            CancellationToken.None);
+        var additional = await executor.ApplyAdditionalAsync(
+            new ApplicationRoutePlan([new(2, 202, "steam.exe", "aux")]),
+            CancellationToken.None);
+        var restored = await executor.RestoreAsync(CancellationToken.None);
+
+        Assert.True(additional.Succeeded);
+        Assert.Equal(2, additional.Snapshots.Count);
+        Assert.True(restored.Succeeded);
+        Assert.Contains("restore:2:202:steam.exe:steam-console:steam-multimedia", helper.Calls);
+        Assert.Contains("restore:1:101:chrome.exe:chrome-console:chrome-multimedia", helper.Calls);
+    }
+
     private sealed class RecordingHelper : IExternalRoutingHelper
     {
         private readonly IReadOnlyDictionary<int, ApplicationRouteState> routes;
