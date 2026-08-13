@@ -19,9 +19,9 @@ public partial class App : Application
     private bool isCheckingForUpdates;
     private Mutex? instanceMutex;
     private EventWaitHandle? activateInstanceEvent;
-    private RadminLyricsHost? lyricsHost;
+    private FlowCastRuntimeHost? runtimeHost;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out var isFirstInstance);
         if (!isFirstInstance)
@@ -37,8 +37,8 @@ public partial class App : Application
             name: ActivateInstanceEventName);
         _ = Task.Run(WaitForExistingInstanceActivation);
         base.OnStartup(e);
-        StartLyricsHost();
-
+        runtimeHost = FlowCastRuntimeHost.CreateDefault();
+        await runtimeHost.InitializeAsync(CancellationToken.None);
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         mainWindow.Show();
@@ -56,7 +56,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        lyricsHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        runtimeHost = null;
         activateInstanceEvent?.Dispose();
         if (instanceMutex is not null)
         {
@@ -73,26 +73,6 @@ public partial class App : Application
         }
 
         base.OnExit(e);
-    }
-
-    private void StartLyricsHost()
-    {
-        var radminAddress = RadminAdapterSelector.SelectActiveAddress();
-        if (radminAddress is null)
-        {
-            return;
-        }
-
-        try
-        {
-            lyricsHost = new RadminLyricsHost(radminAddress, port: 0);
-            lyricsHost.StartAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception)
-        {
-            lyricsHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            lyricsHost = null;
-        }
     }
 
     private void WaitForExistingInstanceActivation()

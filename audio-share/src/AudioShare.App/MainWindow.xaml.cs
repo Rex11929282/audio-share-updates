@@ -17,7 +17,6 @@ namespace AudioShare.App;
 public partial class MainWindow : Window
 {
     private const string VoicemeeterBananaDownloadUrl = "https://vb-audio.com/Voicemeeter/banana.htm";
-    private const string DiscordVoiceVideoSettingsUri = "discord://-/settings/voice";
     private static readonly TimeSpan ResetRecoveryRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan PassiveRefreshInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan SharingRefreshInterval = TimeSpan.FromSeconds(15);
@@ -79,7 +78,7 @@ public partial class MainWindow : Window
     private int backgroundRefreshCount;
     private SharingRouteState sharingRouteState = SharingRouteState.Unknown;
     private SharingBusStatus? sharingBusStatus;
-    private HealthSummary healthSummary = HealthSummary.Create(false, false, false, false, false);
+    private HealthSummary healthSummary = HealthSummary.Create(false, false, false, false);
 
     public MainWindow()
     {
@@ -153,7 +152,6 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        await StartVoicemeeterBananaIfInstalledAsync();
         await RefreshAsync();
         refreshTimer.Start();
         signalTimer.Start();
@@ -272,6 +270,13 @@ public partial class MainWindow : Window
 
             experimentalRoutingStatus = "正在完成音频回复，完成后会自动关闭。";
             UpdateRoutingSetupState();
+            return;
+        }
+
+        if (GetSelectedSessions().Count == 0 &&
+            shareSession.State is ShareSessionState.Idle or ShareSessionState.Disconnected)
+        {
+            PrepareForClose();
             return;
         }
 
@@ -511,31 +516,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task StartVoicemeeterBananaIfInstalledAsync()
-    {
-        if (IsVoicemeeterBananaRunning() ||
-            !VoicemeeterBananaInstallationDetector.TryGetExecutablePath(out var executablePath) ||
-            string.IsNullOrWhiteSpace(executablePath))
-        {
-            return;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(executablePath) { UseShellExecute = true });
-            for (var attempt = 0; attempt < 20 && !IsVoicemeeterBananaRunning(); attempt++)
-            {
-                await Task.Delay(250);
-            }
-        }
-        catch (Exception exception)
-        {
-            SetExperimentalRoutingUnavailable(
-                "已找到 Voicemeeter Banana，但暂时无法自动打开。请手动打开 Banana 后点击“刷新”。",
-                exception);
-        }
-    }
-
     private void TutorialButton_Click(object sender, RoutedEventArgs e) => new TutorialWindow(this).ShowDialog();
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -564,18 +544,6 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             ShowError("无法打开 Voicemeeter Banana 官方下载页面。", exception);
-        }
-    }
-
-    private void OpenDiscordVoiceVideoSettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(DiscordVoiceVideoSettingsUri) { UseShellExecute = true });
-        }
-        catch (Exception exception)
-        {
-            ShowError("无法打开 Discord 的“语音和视频”设置。", exception);
         }
     }
 
