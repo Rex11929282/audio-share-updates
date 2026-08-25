@@ -26,12 +26,11 @@ public sealed class FlowCastHealthProbe
         var bananaInstalled = VoicemeeterBananaInstallationDetector.IsInstalled();
         var bananaRunning = IsProcessRunning("voicemeeterpro");
         var hasDefaultPlayback = HasDefaultPlayback();
-        var discordRunning = IsProcessRunning("Discord");
         var helperHealth = await routingHelper.CheckHealthAsync(token);
         if (!helperHealth.IsAvailable)
         {
             return new FlowCastHealthProbeResult(
-                HealthSummary.Create(bananaRunning, hasDefaultPlayback, false, false, discordRunning),
+                HealthSummary.Create(bananaRunning, hasDefaultPlayback, false, false, routingHelperReady: false),
                 bananaInstalled,
                 false,
                 helperHealth.Message,
@@ -49,18 +48,17 @@ public sealed class FlowCastHealthProbe
                     bananaRunning,
                     hasDefaultPlayback,
                     endpointHealth.HasInput,
-                    endpointHealth.HasAux,
-                    discordRunning),
+                    endpointHealth.HasAux),
                 bananaInstalled,
                 hasEndpoints,
-                hasEndpoints ? "音频路由已就绪。" : "未检测到 Voicemeeter Banana 的必要音频设备。",
+                hasEndpoints ? "音頻路由已就緒。" : "未檢測到 Voicemeeter Banana 的必要音頻設備。",
                 endpoints,
                 devices);
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !token.IsCancellationRequested)
         {
             return new FlowCastHealthProbeResult(
-                HealthSummary.Create(bananaRunning, hasDefaultPlayback, false, false, discordRunning),
+                HealthSummary.Create(bananaRunning, hasDefaultPlayback, false, false, routingHelperReady: false),
                 bananaInstalled,
                 false,
                 exception.Message,

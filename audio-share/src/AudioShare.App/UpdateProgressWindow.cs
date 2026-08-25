@@ -26,7 +26,7 @@ public sealed class UpdateProgressWindow : FlowCastDialogWindow
 
         messageText = new TextBlock
         {
-            Text = "正在准备更新",
+            Text = "正在準備更新",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
         };

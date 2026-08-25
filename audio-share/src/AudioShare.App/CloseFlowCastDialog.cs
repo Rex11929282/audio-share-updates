@@ -16,7 +16,7 @@ internal sealed class CloseFlowCastDialog : FlowCastDialogWindow
     public CloseFlowCastDialog(Window owner)
     {
         Owner = owner;
-        Title = "关闭 FlowCast";
+        Title = "關閉 FlowCast";
         Tone = FlowCastWindowTone.Settings;
         Width = 430;
         Height = 220;
@@ -32,14 +32,14 @@ internal sealed class CloseFlowCastDialog : FlowCastDialogWindow
         var panel = new StackPanel { Margin = new Thickness(26) };
         panel.Children.Add(new TextBlock
         {
-            Text = "要如何关闭 FlowCast？",
+            Text = "要如何關閉 FlowCast？",
             FontSize = 20,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(23, 45, 69)),
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "最小化会继续在系统托盘运行；结束会先停止分享，再关闭程序。",
+            Text = "最小化會繼續在系統托盤運行；結束會先停止分享，再關閉程序。",
             Margin = new Thickness(0, 9, 0, 20),
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(91, 113, 137)),
@@ -51,8 +51,8 @@ internal sealed class CloseFlowCastDialog : FlowCastDialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
         };
         buttons.Children.Add(CreateButton("取消", (_, _) => Close(), false));
-        buttons.Children.Add(CreateButton("最小化到系统托盘", (_, _) => Complete(CloseFlowCastAction.Minimize), false));
-        buttons.Children.Add(CreateButton("结束 FlowCast", (_, _) => Complete(CloseFlowCastAction.Exit), true));
+        buttons.Children.Add(CreateButton("最小化到系統托盤", (_, _) => Complete(CloseFlowCastAction.Minimize), false));
+        buttons.Children.Add(CreateButton("結束 FlowCast", (_, _) => Complete(CloseFlowCastAction.Exit), true));
         panel.Children.Add(buttons);
         Content = panel;
     }

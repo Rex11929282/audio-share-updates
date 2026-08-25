@@ -36,7 +36,7 @@ public sealed class TutorialWindow : FlowCastDialogWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "按顺序设置。红色箭头标出需要看的位置。",
+            Text = "按順序設置。紅色箭頭標出需要看的位置。",
             Margin = new Thickness(0, 5, 0, 18),
             Foreground = MutedBrush,
         });
@@ -46,14 +46,14 @@ public sealed class TutorialWindow : FlowCastDialogWindow
             content.Children.Add(BuildStepCard(step));
         }
 
-        content.Children.Add(BuildInfoCard("使用规则", TutorialContent.Rules, Color.FromRgb(232, 242, 255), PrimaryBrush));
+        content.Children.Add(BuildInfoCard("使用規則", TutorialContent.Rules, Color.FromRgb(232, 242, 255), PrimaryBrush));
         content.Children.Add(BuildInfoCard(
-            "常见问题",
+            "常見問題",
             [
-                "听不到电脑声音：检查 Banana 的 A1 是否还是你的耳机。",
-                "朋友听不到音乐：确认程序已勾选，并确认该程序正在播放声音。",
-                "朋友听到自己的声音：确认 Discord 扬声器是 Voicemeeter AUX Input，且 Discord 没有被勾选分享。",
-                "程序不在列表：先让程序开始播放，再点击“重新检测”。",
+                "聽不到電腦聲音：檢查 Banana 的 A1 是否還是你的耳機。",
+                "朋友聽不到音樂：確認程序已勾選，並確認該程序正在播放聲音。",
+                "朋友聽到自己的聲音：確認 Discord 揚聲器是 Voicemeeter AUX Input，且 Discord 沒有被勾選分享。",
+                "程序不在列表：先讓程序開始播放，再點擊“重新檢測”。",
             ],
             Color.FromRgb(255, 247, 226),
             new SolidColorBrush(Color.FromRgb(151, 96, 10))));
@@ -149,7 +149,7 @@ public sealed class TutorialWindow : FlowCastDialogWindow
         {
             panel.Children.Add(new TextBlock
             {
-                Text = $"重点：{rule}",
+                Text = $"重點：{rule}",
                 Foreground = new SolidColorBrush(Color.FromRgb(22, 111, 78)),
                 FontWeight = FontWeights.SemiBold,
             });

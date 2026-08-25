@@ -25,7 +25,7 @@ public class FlowCastDialogWindow : Window
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         FontFamily = new FontFamily("Microsoft YaHei UI");
-        Background = new SolidColorBrush(Color.FromRgb(244, 248, 252));
+        Background = new SolidColorBrush(Color.FromRgb(247, 249, 253));
         Loaded += (_, _) => ApplyShell();
     }
 
@@ -40,10 +40,10 @@ public class FlowCastDialogWindow : Window
         Content = null;
 
         var shell = new Grid();
-        shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42) });
+        shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(46) });
         shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var header = new Grid { Background = new SolidColorBrush(HeaderColor()) };
+        var header = new Grid { Background = new SolidColorBrush(Color.FromArgb(236, 255, 255, 255)) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.MouseLeftButtonDown += Header_MouseLeftButtonDown;
@@ -52,8 +52,8 @@ public class FlowCastDialogWindow : Window
         {
             Text = Title,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(16, 0, 0, 0),
-            Foreground = Brushes.White,
+            Margin = new Thickness(18, 0, 0, 0),
+            Foreground = new SolidColorBrush(HeaderColor()),
             FontWeight = FontWeights.SemiBold,
             FontSize = 13,
             IsHitTestVisible = false,
@@ -62,16 +62,17 @@ public class FlowCastDialogWindow : Window
         var closeButton = new Button
         {
             Content = "×",
-            Width = 42,
-            Height = 32,
-            Margin = new Thickness(0, 5, 7, 5),
+            Width = 38,
+            Height = 30,
+            Margin = new Thickness(0, 8, 10, 8),
             Padding = new Thickness(0),
             FontSize = 19,
-            Foreground = Brushes.White,
-            Background = Brushes.Transparent,
+            Foreground = new SolidColorBrush(HeaderColor()),
+            Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255)),
             BorderThickness = new Thickness(0),
             Cursor = Cursors.Hand,
-            ToolTip = "关闭",
+            Template = CreateHeaderButtonTemplate(),
+            ToolTip = "關閉",
         };
         closeButton.Click += (_, _) => Close();
         Grid.SetColumn(closeButton, 1);
@@ -104,4 +105,28 @@ public class FlowCastDialogWindow : Window
         FlowCastWindowTone.Error => Color.FromRgb(193, 75, 77),
         _ => Color.FromRgb(38, 151, 164),
     };
+
+    private static ControlTemplate CreateHeaderButtonTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var surface = new FrameworkElementFactory(typeof(Border));
+        surface.Name = "HeaderButtonSurface";
+        surface.SetValue(Border.CornerRadiusProperty, new CornerRadius(12));
+        surface.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        presenter.SetValue(ContentPresenter.ContentSourceProperty, "Content");
+        surface.AppendChild(presenter);
+        template.VisualTree = surface;
+
+        var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(
+            Border.BackgroundProperty,
+            new SolidColorBrush(Color.FromArgb(26, 24, 70, 112)),
+            "HeaderButtonSurface"));
+        template.Triggers.Add(hover);
+        return template;
+    }
 }

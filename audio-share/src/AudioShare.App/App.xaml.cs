@@ -1,4 +1,4 @@
-﻿using System.Configuration;
+using System.Configuration;
 using System.Data;
 using System.Windows;
 using AudioShare.Core;
@@ -21,7 +21,7 @@ public partial class App : Application
     private EventWaitHandle? activateInstanceEvent;
     private FlowCastRuntimeHost? runtimeHost;
 
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out var isFirstInstance);
         if (!isFirstInstance)
@@ -38,8 +38,8 @@ public partial class App : Application
         _ = Task.Run(WaitForExistingInstanceActivation);
         base.OnStartup(e);
         runtimeHost = FlowCastRuntimeHost.CreateDefault();
-        await runtimeHost.InitializeAsync(CancellationToken.None);
-        var mainWindow = new MainWindow();
+        var runtimeInitialization = runtimeHost.InitializeAsync(CancellationToken.None);
+        var mainWindow = new MainWindow(runtimeInitialization);
         MainWindow = mainWindow;
         mainWindow.Show();
         if (UpdateService.IsUpdateFailedRestart(e.Args))
@@ -133,7 +133,7 @@ public partial class App : Application
 
         if (stagedUpdate is not null)
         {
-            FlowCastMessageDialog.Show(owner, "FlowCast 更新", "更新已下载并验证完成。请关闭并重新打开 FlowCast 完成更新。", FlowCastWindowTone.Update);
+            FlowCastMessageDialog.Show(owner, "FlowCast 更新", "更新已下載並驗證完成。請關閉並重新打開 FlowCast 完成更新。", FlowCastWindowTone.Update);
             return;
         }
 
@@ -168,8 +168,8 @@ public partial class App : Application
                 if (!FlowCastMessageDialog.Confirm(
                         owner,
                         "FlowCast 更新",
-                        "更新会停止当前分享并恢复分享前的播放路径。要继续吗？",
-                        "继续更新",
+                        "更新會停止當前分享並恢復分享前的播放路徑。要繼續嗎？",
+                        "繼續更新",
                         "取消",
                         FlowCastWindowTone.Update))
                 {
@@ -181,7 +181,7 @@ public partial class App : Application
                     FlowCastMessageDialog.Show(
                         owner,
                         "FlowCast 更新",
-                        "为了保护你的声音，FlowCast 还不能确认分享已停止。请先停止分享后再更新。",
+                        "為了保護你的聲音，FlowCast 還不能確認分享已停止。請先停止分享後再更新。",
                         FlowCastWindowTone.Error);
                     return;
                 }
@@ -191,11 +191,11 @@ public partial class App : Application
             SetUpdateStaging(owner, true);
             owner.IsEnabled = false;
             progressWindow.Show();
-            await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.Downloading, "正在准备更新", null));
+            await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.Downloading, "正在準備更新", null));
             var updateToRestart = await updateService.DownloadAndStageAsync(
                 update,
                 progressWindow.UpdateAndRenderAsync);
-            await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "正在重新启动 FlowCast", 100));
+            await progressWindow.UpdateAndRenderAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "正在重新啟動 FlowCast", 100));
             updateService.BeginStagedReplacementAndRestart(updateToRestart);
             stagedUpdate = updateToRestart;
             restartStarted = true;
@@ -218,7 +218,7 @@ public partial class App : Application
             FlowCastMessageDialog.Show(
                 owner,
                 "FlowCast 更新",
-                "这次更新没有完成，FlowCast 仍会使用当前版本。\n\n下一步：请关闭其他 FlowCast 窗口后重试；如果仍然失败，请重新打开 FlowCast 后再试。",
+                "這次更新沒有完成，FlowCast 仍會使用當前版本。\n\n下一步：請關閉其他 FlowCast 窗口後重試；如果仍然失敗，請重新打開 FlowCast 後再試。",
                 FlowCastWindowTone.Error);
         }
         finally

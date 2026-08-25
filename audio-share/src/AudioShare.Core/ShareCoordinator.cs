@@ -101,39 +101,6 @@ public sealed class ShareCoordinator : IShareCoordinator, IDisposable
         }
     }
 
-    public async Task<ShareCommandResult> SetMutedAsync(bool muted, CancellationToken token)
-    {
-        await gate.WaitAsync(token);
-        try
-        {
-            if (state.Snapshot.State is not (FlowCastShareState.Sharing or FlowCastShareState.Muted))
-            {
-                return Result(false, "not_sharing");
-            }
-
-            var operation = state.BeginMuteChange();
-            try
-            {
-                await runtime.SetSharingBusAsync(!muted, token);
-                state.CompleteMute(operation, muted);
-                return Result(true, null);
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                state.RequireAttention(operation, exception.Message);
-                return Result(false, "banana_unavailable", exception.Message);
-            }
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
     public async Task<ShareCommandResult> ReconcileAsync(IReadOnlyList<AudioSession> active, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(active);
@@ -141,7 +108,7 @@ public sealed class ShareCoordinator : IShareCoordinator, IDisposable
         try
         {
             var selected = state.Snapshot.Selected;
-            if (selected is null || state.Snapshot.State is not (FlowCastShareState.Sharing or FlowCastShareState.Muted))
+            if (selected is null || state.Snapshot.State != FlowCastShareState.Sharing)
             {
                 return Result(true, null);
             }

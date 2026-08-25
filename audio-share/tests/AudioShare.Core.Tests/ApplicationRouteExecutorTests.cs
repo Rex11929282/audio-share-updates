@@ -184,6 +184,27 @@ public sealed class ApplicationRouteExecutorTests
     }
 
     [Fact]
+    public async Task RestoreAsync_WhenTrackedProcessExited_DiscardsTheStaleSnapshotInsteadOfBlocking()
+    {
+        // The shared app (e.g. bilibili) closed its process and reopened under a new PID, so
+        // restoring the original PID reports a "Process identity mismatch". Stop must still finish.
+        var helper = new RecordingHelper(
+            new Dictionary<int, ApplicationRouteState>
+            {
+                [1] = new("old-console", "old-multimedia"),
+            },
+            identityMismatchSessions: new HashSet<int>([1]));
+        var executor = new ApplicationRouteExecutor(helper);
+        var plan = new ApplicationRoutePlan([new(1, 101, "bilibili.exe", "input")]);
+
+        await executor.ApplyAsync(plan, CancellationToken.None);
+        var result = await executor.RestoreAsync(CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.False(result.HasPendingTransaction);
+    }
+
+    [Fact]
     public async Task ApplyAsync_WhenAnAppHasNoCurrentAudioSession_WritesItsFuturePlaybackRoute()
     {
         var helper = new RecordingHelper(
@@ -335,6 +356,7 @@ public sealed class ApplicationRouteExecutorTests
         private readonly IReadOnlySet<int> missingRouteReadSessions;
         private readonly IReadOnlySet<int> missingOutputSessions;
         private readonly IReadOnlySet<int> missingPlaybackDevices;
+        private readonly IReadOnlySet<int> identityMismatchSessions;
 
         public RecordingHelper(
             IReadOnlyDictionary<int, ApplicationRouteState> routes,
@@ -344,7 +366,8 @@ public sealed class ApplicationRouteExecutorTests
             Dictionary<int, int>? restoreFailures = null,
             IReadOnlySet<int>? missingRouteReadSessions = null,
             IReadOnlySet<int>? missingOutputSessions = null,
-            IReadOnlySet<int>? missingPlaybackDevices = null)
+            IReadOnlySet<int>? missingPlaybackDevices = null,
+            IReadOnlySet<int>? identityMismatchSessions = null)
         {
             this.routes = routes;
             this.failAfterSetProcessId = failAfterSetProcessId;
@@ -354,6 +377,7 @@ public sealed class ApplicationRouteExecutorTests
             this.missingRouteReadSessions = missingRouteReadSessions ?? new HashSet<int>();
             this.missingOutputSessions = missingOutputSessions ?? new HashSet<int>();
             this.missingPlaybackDevices = missingPlaybackDevices ?? new HashSet<int>();
+            this.identityMismatchSessions = identityMismatchSessions ?? new HashSet<int>();
         }
 
         public List<string> Calls { get; } = [];
@@ -410,6 +434,11 @@ public sealed class ApplicationRouteExecutorTests
             {
                 restoreFailures[processId]--;
                 throw new InvalidOperationException("Route restore failed.");
+            }
+
+            if (identityMismatchSessions.Contains(processId))
+            {
+                throw new InvalidOperationException("Process identity mismatch.");
             }
 
             if (missingOutputSessions.Contains(processId))

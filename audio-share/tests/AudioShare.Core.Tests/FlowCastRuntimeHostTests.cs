@@ -6,6 +6,52 @@ namespace AudioShare.Core.Tests;
 public sealed class FlowCastRuntimeHostTests
 {
     [Fact]
+    public async Task Startup_StartsVoicemodBeforeWaitingForBanana()
+    {
+        var calls = new List<string>();
+        var host = new FlowCastRuntimeHost(
+            new RecordingRuntime(calls),
+            new RecordingJournal(calls, null),
+            _ =>
+            {
+                calls.Add("banana-ready");
+                return Task.FromResult(true);
+            },
+            _ =>
+            {
+                calls.Add("voicemod");
+                return Task.FromResult(true);
+            });
+
+        await host.InitializeAsync(CancellationToken.None);
+
+        Assert.Equal(["voicemod", "banana-ready"], calls);
+    }
+
+    [Fact]
+    public async Task Startup_StartsVoicemodEvenWhenBananaIsNotReady()
+    {
+        var calls = new List<string>();
+        var host = new FlowCastRuntimeHost(
+            new RecordingRuntime(calls),
+            new RecordingJournal(calls, null),
+            _ =>
+            {
+                calls.Add("banana-not-ready");
+                return Task.FromResult(false);
+            },
+            _ =>
+            {
+                calls.Add("voicemod");
+                return Task.FromResult(false);
+            });
+
+        await host.InitializeAsync(CancellationToken.None);
+
+        Assert.Equal(["voicemod", "banana-not-ready"], calls);
+    }
+
+    [Fact]
     public async Task StartupDisablesBusBeforeRecoveringJournal()
     {
         var calls = new List<string>();
@@ -16,11 +62,54 @@ public sealed class FlowCastRuntimeHostTests
             [new ApplicationRouteSnapshot(1, 2, "chrome.exe", new ApplicationRouteState(null, null))],
             DateTimeOffset.UnixEpoch));
         var runtime = new RecordingRuntime(calls);
-        var host = new FlowCastRuntimeHost(runtime, journal, () => calls.Add("banana"), () => calls.Add("voicemod"));
+        var host = new FlowCastRuntimeHost(
+            runtime,
+            journal,
+            _ =>
+            {
+                calls.Add("banana");
+                return Task.FromResult(true);
+            },
+            _ =>
+            {
+                calls.Add("voicemod");
+                return Task.FromResult(true);
+            });
 
         await host.InitializeAsync(CancellationToken.None);
 
-        Assert.Equal(["banana", "voicemod", "bus:false", "restore:snapshots", "journal:clear"], calls);
+        Assert.Equal(["voicemod", "banana", "bus:false", "restore:snapshots", "journal:clear"], calls);
+    }
+
+    [Fact]
+    public async Task Startup_WaitsForVoicemodReadinessBeforeStartingBanana()
+    {
+        var calls = new List<string>();
+        var voicemodReady = new TaskCompletionSource<bool>();
+        var host = new FlowCastRuntimeHost(
+            new RecordingRuntime(calls),
+            new RecordingJournal(calls, null),
+            _ =>
+            {
+                calls.Add("banana");
+                return Task.FromResult(true);
+            },
+            async _ =>
+            {
+                calls.Add("voicemod:start");
+                await voicemodReady.Task;
+                calls.Add("voicemod:ready");
+                return true;
+            });
+
+        var initialization = host.InitializeAsync(CancellationToken.None);
+        await Task.Yield();
+        Assert.Equal(["voicemod:start"], calls);
+
+        voicemodReady.SetResult(true);
+        await initialization;
+
+        Assert.Equal(["voicemod:start", "voicemod:ready", "banana"], calls);
     }
 
     private sealed class RecordingJournal : IShareRecoveryJournal

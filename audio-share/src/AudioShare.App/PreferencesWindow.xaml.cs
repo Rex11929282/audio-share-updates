@@ -7,14 +7,18 @@ namespace AudioShare.App;
 
 public partial class PreferencesWindow : FlowCastDialogWindow
 {
+    private readonly FlowCastPreferences originalPreferences;
+
     public PreferencesWindow(Window owner, FlowCastPreferences preferences)
     {
         InitializeComponent();
         Owner = owner;
+        originalPreferences = preferences;
         ExcludedPrograms = new ObservableCollection<string>(preferences.ExcludedProcesses.Order(StringComparer.OrdinalIgnoreCase));
         ReduceMotionCheckBox.IsChecked = preferences.ReduceMotion;
         EndSharingSoundCheckBox.IsChecked = preferences.EndSharingSoundEnabled;
         DisconnectNotificationsCheckBox.IsChecked = preferences.DisconnectNotificationsEnabled;
+        GlobalHotkeysCheckBox.IsChecked = preferences.GlobalHotkeysEnabled;
         DataContext = this;
     }
 
@@ -43,7 +47,9 @@ public partial class PreferencesWindow : FlowCastDialogWindow
             ReduceMotionCheckBox.IsChecked == true,
             true,
             EndSharingSoundCheckBox.IsChecked != false,
-            DisconnectNotificationsCheckBox.IsChecked != false);
+            DisconnectNotificationsCheckBox.IsChecked != false,
+            originalPreferences.QuickStartCompleted,
+            GlobalHotkeysCheckBox.IsChecked != false);
         DialogResult = true;
     }
 

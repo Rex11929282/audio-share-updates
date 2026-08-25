@@ -33,14 +33,17 @@ UninstPage instfiles
 
 Function .onInit
     StrCpy $CreateDesktopShortcut "1"
-    IfFileExists "$INSTDIR\AudioShare.App.exe" 0 done
-    ClearErrors
-    Rename "$INSTDIR\AudioShare.App.exe" "$INSTDIR\.flowcast-install-lockcheck.exe"
-    IfErrors 0 unlocked
+    nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq AudioShare.App.exe" /FO CSV /NH'
+    Pop $0
+    Pop $1
+    StrCpy $2 $1 1
+    StrCmp $2 "$\"" 0 done
+    IfSilent silentLocked interactiveLocked
+interactiveLocked:
     MessageBox MB_ICONEXCLAMATION|MB_OK "Please exit FlowCast, then run Setup again."
-    Abort
-unlocked:
-    Rename "$INSTDIR\.flowcast-install-lockcheck.exe" "$INSTDIR\AudioShare.App.exe"
+silentLocked:
+    SetErrorLevel 1
+    Quit
 done:
 FunctionEnd
 
@@ -63,6 +66,7 @@ Section "Install FlowCast"
     RMDir /r "$INSTDIR"
     SetOutPath "$INSTDIR"
     File /r "${PUBLISH_DIR}\*.*"
+    SetFileAttributes "$INSTDIR\router-helper" HIDDEN
 
     WriteRegStr HKCU "Software\FlowCast" "InstallPath" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowCast" "DisplayName" "FlowCast"
@@ -74,7 +78,6 @@ Section "Install FlowCast"
     StrCmp $INSTDIR "$LOCALAPPDATA\Programs\FlowCast" 0 skipShortcuts
     CreateDirectory "$SMPROGRAMS\FlowCast"
     CreateShortcut "$SMPROGRAMS\FlowCast\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
-    CreateShortcut "$SMPROGRAMS\FlowCast\FlowCast Lyrics.lnk" "$INSTDIR\FlowCast Lyrics.exe"
     StrCmp $CreateDesktopShortcut 1 0 skipDesktopShortcut
     CreateShortcut "$DESKTOP\FlowCast.lnk" "$INSTDIR\AudioShare.App.exe"
 skipDesktopShortcut:
@@ -84,7 +87,6 @@ SectionEnd
 Section "Uninstall"
     Delete "$DESKTOP\FlowCast.lnk"
     Delete "$SMPROGRAMS\FlowCast\FlowCast.lnk"
-    Delete "$SMPROGRAMS\FlowCast\FlowCast Lyrics.lnk"
     RMDir "$SMPROGRAMS\FlowCast"
     DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowCast"
     DeleteRegKey HKCU "Software\FlowCast"

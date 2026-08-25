@@ -31,7 +31,7 @@ public sealed class VoicemeeterSharingBusService : ISharingBusController
         var loginResult = VBVMR_Login();
         if (loginResult < 0)
         {
-            throw new InvalidOperationException("无法连接 Voicemeeter Banana。");
+            throw new InvalidOperationException("無法連接 Voicemeeter Banana。");
         }
 
         try
@@ -40,7 +40,7 @@ public sealed class VoicemeeterSharingBusService : ISharingBusController
             var result = VBVMR_SetParameters($"Strip[3].B1={(shared ? 1 : 0)};Strip[4].B1=0;");
             if (result != 0)
             {
-                throw new InvalidOperationException("无法更新 Voicemeeter B1 输出。");
+                throw new InvalidOperationException("無法更新 Voicemeeter B1 輸出。");
             }
 
             var target = shared ? 1f : 0f;
@@ -60,7 +60,7 @@ public sealed class VoicemeeterSharingBusService : ISharingBusController
                 Thread.Sleep(100);
             }
 
-            throw new InvalidOperationException("Voicemeeter 未在 5 秒内确认 B1 状态。");
+            throw new InvalidOperationException("Voicemeeter 未在 5 秒內確認 B1 狀態。");
         }
         finally
         {

@@ -43,18 +43,10 @@ public sealed class ShareStateMachineTests
     }
 
     [Fact]
-    public void MutePreservesTheSelectedApplication()
+    public void StateMachine_DoesNotExposeMutedStateOrTransition()
     {
-        var machine = new ShareStateMachine();
-        var chrome = Session("chrome");
-        var startOperation = machine.BeginStart(chrome);
-        machine.CompleteStart(startOperation);
-
-        var muteOperation = machine.BeginMuteChange();
-
-        Assert.True(machine.CompleteMute(muteOperation, muted: true));
-        Assert.Equal(FlowCastShareState.Muted, machine.Snapshot.State);
-        Assert.Same(chrome, machine.Snapshot.Selected);
+        Assert.DoesNotContain("Muted", Enum.GetNames<FlowCastShareState>());
+        Assert.DoesNotContain(typeof(ShareStateMachine).GetMethods(), method => method.Name is "BeginMuteChange" or "CompleteMute");
     }
 
     [Fact]

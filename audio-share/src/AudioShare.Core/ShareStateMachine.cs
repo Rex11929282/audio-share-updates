@@ -30,29 +30,8 @@ public sealed class ShareStateMachine
         return Snapshot.OperationId;
     }
 
-    public long BeginMuteChange()
-    {
-        if (Snapshot.State is not (FlowCastShareState.Sharing or FlowCastShareState.Muted))
-        {
-            throw new InvalidOperationException("Sharing must be active before changing mute state.");
-        }
-
-        Snapshot = Snapshot with { OperationId = NextOperation(), AttentionMessage = null };
-        return Snapshot.OperationId;
-    }
-
     public bool CompleteStart(long operation) =>
         Commit(operation, FlowCastShareState.Preparing, FlowCastShareState.Sharing, Snapshot.Selected, null);
-
-    public bool CompleteMute(long operation, bool muted) =>
-        Commit(
-            operation,
-            Snapshot.State,
-            muted ? FlowCastShareState.Muted : FlowCastShareState.Sharing,
-            Snapshot.Selected,
-            null,
-            FlowCastShareState.Sharing,
-            FlowCastShareState.Muted);
 
     public bool CompleteRestore(long operation) =>
         Commit(operation, FlowCastShareState.Restoring, FlowCastShareState.LocalOnly, null, null);

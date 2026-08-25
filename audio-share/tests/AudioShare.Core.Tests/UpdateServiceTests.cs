@@ -45,6 +45,39 @@ public sealed class UpdateServiceTests
     }
 
     [Fact]
+    public async Task DownloadAndStageAsync_UsesRegisteredInstallDirectoryForSetupRestart()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FlowCastTests", Guid.NewGuid().ToString("N"));
+        var downloadsDirectory = Path.Combine(root, "Downloads", "FlowCast");
+        var installedDirectory = Path.Combine(root, "AppData", "Programs", "FlowCast");
+        Directory.CreateDirectory(downloadsDirectory);
+        Directory.CreateDirectory(installedDirectory);
+        try
+        {
+            var temporaryExecutablePath = Path.Combine(downloadsDirectory, "AudioShare.App.exe");
+            var installedExecutablePath = Path.Combine(installedDirectory, "AudioShare.App.exe");
+            await File.WriteAllTextAsync(temporaryExecutablePath, "old download copy");
+            await File.WriteAllTextAsync(installedExecutablePath, "installed copy");
+            using var client = CreatePackageClient(Encoding.UTF8.GetBytes("setup"));
+            var service = new UpdateService(client, temporaryExecutablePath, installedDirectory);
+            var update = new ReleaseUpdate(
+                new Version(2, 0, 14),
+                new Uri("https://example.com/FlowCast-Setup.exe"),
+                new Uri("https://example.com/FlowCast-Setup.exe.sha256"));
+
+            var staged = await service.DownloadAndStageAsync(update);
+
+            Assert.True(staged.UsesInstaller);
+            Assert.Equal(installedExecutablePath, staged.ExecutablePath);
+            Directory.Delete(staged.UpdateDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task TreatsGitHubLatestReleaseNotFoundAsNoUpdate()
     {
         using var client = new HttpClient(new StaticResponseHandler(HttpStatusCode.NotFound));
@@ -515,7 +548,7 @@ public sealed class UpdateServiceTests
     [Fact]
     public void UpdateProgress_UsesIndeterminateProgressWhenByteCountIsUnavailable()
     {
-        Assert.Null(new UpdateProgress(UpdateStage.Downloading, "正在下载更新", null).Percentage);
+        Assert.Null(new UpdateProgress(UpdateStage.Downloading, "正在下載更新", null).Percentage);
     }
 
     [Fact]

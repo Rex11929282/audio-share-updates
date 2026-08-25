@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using AudioShare.Core;
 
 namespace AudioShare.Windows;
@@ -243,6 +245,16 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
                     continue;
                 }
 
+                // The routed process exited (or its PID was reused by a different process). The
+                // per-app route Windows persisted can linger on a restarted instance, so clear it
+                // on a live instance of the same executable when one exists; then treat the gone
+                // process as recovered instead of blocking the whole stop on it.
+                if (IsProcessGone(exception))
+                {
+                    await TryRestoreOnLiveInstanceAsync(snapshot);
+                    continue;
+                }
+
                 if (IsMissingPlaybackDevice(exception) &&
                     await RestoreWindowsDefaultAsync(snapshot))
                 {
@@ -260,10 +272,82 @@ public sealed class ApplicationRouteExecutor : IApplicationRouteExecutor
     private static bool IsMissingActiveOutputSession(Exception exception) =>
         exception.Message.Contains("Active output session not found", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsProcessGone(Exception exception) =>
+        exception.Message.Contains("identity mismatch", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("process not found", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsMissingPlaybackDevice(Exception exception) =>
         exception.Message.Contains("device not found", StringComparison.OrdinalIgnoreCase) ||
         exception.Message.Contains("endpoint not found", StringComparison.OrdinalIgnoreCase) ||
         exception.Message.Contains("device is not connected", StringComparison.OrdinalIgnoreCase);
+
+    // Best-effort: the original process is gone, but Windows persisted the routing override by
+    // executable identity. Replay the restore against a live instance of the same executable so a
+    // restarted app (e.g. bilibili reopening under a new PID) returns to its pre-share playback.
+    private async Task<bool> TryRestoreOnLiveInstanceAsync(ApplicationRouteSnapshot snapshot)
+    {
+        foreach (var (processId, startUtcTicks) in EnumerateLiveInstances(snapshot.ProcessName))
+        {
+            try
+            {
+                await helper.RestoreRouteAsync(
+                    processId,
+                    startUtcTicks,
+                    snapshot.ProcessName,
+                    snapshot.PreviousRoute,
+                    CancellationToken.None);
+                return true;
+            }
+            catch (Exception exception) when (IsMissingActiveOutputSession(exception) || IsProcessGone(exception))
+            {
+                // This instance cannot be routed right now; try the next one.
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<(int ProcessId, long StartUtcTicks)> EnumerateLiveInstances(string processName)
+    {
+        var name = Path.GetFileNameWithoutExtension(processName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return [];
+        }
+
+        Process[] processes;
+        try
+        {
+            processes = Process.GetProcessesByName(name);
+        }
+        catch
+        {
+            return [];
+        }
+
+        var instances = new List<(int, long)>(processes.Length);
+        foreach (var process in processes)
+        {
+            try
+            {
+                instances.Add((process.Id, process.StartTime.ToUniversalTime().Ticks));
+            }
+            catch
+            {
+                // Access-denied or already-exited processes are simply skipped.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return instances;
+    }
 
     private async Task<bool> RestoreWindowsDefaultAsync(ApplicationRouteSnapshot snapshot)
     {

@@ -10,7 +10,6 @@
   <ItemGroup>
     <PackageReference Include="NAudio" />
     <ProjectReference Include="..\AudioShare.Core\AudioShare.Core.csproj" />
-    <ProjectReference Include="..\AudioShare.Lyrics.Contracts\AudioShare.Lyrics.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

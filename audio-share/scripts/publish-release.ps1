@@ -2,7 +2,6 @@ param(
     [Parameter(Mandatory)]
     [string]$OutputDirectory,
 
-    [Parameter(Mandatory)]
     [string]$PythonEmbedZip,
 
     [string]$HostPython
@@ -10,14 +9,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$PythonEmbedZip = [System.IO.Path]::GetFullPath($PythonEmbedZip)
 if (-not [string]::IsNullOrWhiteSpace($HostPython)) {
     $HostPython = [System.IO.Path]::GetFullPath($HostPython)
 }
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$PythonEmbedZip = if ([string]::IsNullOrWhiteSpace($PythonEmbedZip)) {
+    Join-Path $projectRoot 'router-helper\runtime\flowcast-router-runtime.zip'
+}
+else {
+    [System.IO.Path]::GetFullPath($PythonEmbedZip)
+}
 $projectFile = Join-Path $projectRoot 'src\AudioShare.App\AudioShare.App.csproj'
-$lyricsProjectFile = Join-Path $projectRoot 'src\AudioShare.Lyrics\AudioShare.Lyrics.csproj'
 $routerHelperBuildPath = Join-Path $projectRoot 'scripts\build-router-helper.ps1'
 $thirdPartyNoticesPath = Join-Path $projectRoot 'ThirdPartyNotices.txt'
 $dotNetRuntimeLicensePath = Join-Path $projectRoot 'DotNetRuntimeLicense.txt'
@@ -42,14 +45,6 @@ dotnet publish $projectFile --configuration Release --runtime win-x64 --self-con
 
 if ($LASTEXITCODE -ne 0) {
     throw 'dotnet publish failed.'
-}
-
-dotnet publish $lyricsProjectFile --configuration Release --runtime win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:DebugType=None -p:DebugSymbols=false --output $publishDirectory
-
-if ($LASTEXITCODE -ne 0) {
-    throw 'FlowCast Lyrics publish failed.'
 }
 
 $helperBuildArguments = @{

@@ -6,6 +6,7 @@ from contextlib import ExitStack
 
 PROTECTED_PREFIXES = ("discord", "voicemod", "voicemeeter")
 ROUTE_COMMANDS = {"get-route", "set-route", "clear-route", "restore-route"}
+ROUTER_VERSION = "1.2.1"
 UNIX_EPOCH_UTC_TICKS = 621355968000000000
 WINDOWS_EPOCH_UTC_TICKS = 504911232000000000
 START_TIME_TOLERANCE_TICKS = 10000
@@ -257,7 +258,7 @@ def handle(request):
 
     command = request.get("command")
     if command == "health":
-        return {"ok": True, "value": {"version": "1.1.2"}}
+        return {"ok": True, "value": {"version": ROUTER_VERSION}}
     if command == "list-devices":
         try:
             return {
@@ -330,7 +331,9 @@ def handle(request):
 
 
 def main():
-    line = sys.stdin.readline()
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8-sig")
+    line = sys.stdin.readline().lstrip("\ufeff")
     try:
         response = handle(json.loads(line))
     except json.JSONDecodeError:

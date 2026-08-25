@@ -5,7 +5,6 @@ public enum FlowCastShareState
     LocalOnly,
     Preparing,
     Sharing,
-    Muted,
     Restoring,
     AttentionRequired,
 }

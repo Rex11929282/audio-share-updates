@@ -11,8 +11,7 @@ public sealed class HealthSummaryTests
             bananaRunning: true,
             hasDefaultPlayback: true,
             hasInput: false,
-            hasAux: true,
-            discordRunning: false);
+            hasAux: true);
 
         var input = Assert.Single(summary.Items.Where(item => item.Key == "Input"));
         Assert.Equal(HealthState.Attention, input.State);
@@ -25,8 +24,7 @@ public sealed class HealthSummaryTests
             bananaRunning: true,
             hasDefaultPlayback: true,
             hasInput: true,
-            hasAux: false,
-            discordRunning: false);
+            hasAux: false);
 
         var input = Assert.Single(summary.Items.Where(item => item.Key == "Input"));
         var aux = Assert.Single(summary.Items.Where(item => item.Key == "AUX"));
@@ -35,17 +33,45 @@ public sealed class HealthSummaryTests
     }
 
     [Fact]
-    public void Create_RunningDiscordIsReadyAndRequestsManualB1Confirmation()
+    public void Create_WhenRoutingHelperNotReady_DoesNotClaimTheDeviceIsMissing()
+    {
+        var summary = HealthSummary.Create(
+            bananaRunning: true,
+            hasDefaultPlayback: true,
+            hasInput: false,
+            hasAux: false,
+            routingHelperReady: false);
+
+        var input = Assert.Single(summary.Items.Where(item => item.Key == "Input"));
+        Assert.Equal(HealthState.Attention, input.State);
+        Assert.Contains("路由組件尚未就緒", input.Message);
+        Assert.DoesNotContain("未檢測到 Voicemeeter Input。", input.Message);
+    }
+
+    [Fact]
+    public void Create_WhenRoutingHelperReady_ReportsTheDeviceAsMissing()
+    {
+        var summary = HealthSummary.Create(
+            bananaRunning: true,
+            hasDefaultPlayback: true,
+            hasInput: false,
+            hasAux: true,
+            routingHelperReady: true);
+
+        var input = Assert.Single(summary.Items.Where(item => item.Key == "Input"));
+        Assert.Equal("未檢測到 Voicemeeter Input。", input.Message);
+    }
+
+    [Fact]
+    public void Create_DoesNotExposeDiscord()
     {
         var summary = HealthSummary.Create(
             bananaRunning: true,
             hasDefaultPlayback: true,
             hasInput: true,
-            hasAux: true,
-            discordRunning: true);
+            hasAux: true);
 
-        var discord = Assert.Single(summary.Items.Where(item => item.Key == "Discord"));
-        Assert.Equal(HealthState.Ready, discord.State);
-        Assert.Contains("手动确认 B1", discord.Message, StringComparison.Ordinal);
+        Assert.Equal(["Banana", "A1", "Input", "AUX"], summary.Items.Select(item => item.Key));
+        Assert.DoesNotContain(summary.Items, item => item.Key == "Discord");
     }
 }

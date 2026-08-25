@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 
 namespace AudioShare.App;
 
@@ -9,20 +9,30 @@ internal sealed class MotionController
 {
     private const int MaximumFramesPerSecond = 60;
     private static readonly TimeSpan AudioPulseCooldown = TimeSpan.FromMilliseconds(850);
+
+    // Launch draw-on timings, indexed to match the launchStrokes / launchAccents lists.
+    private static readonly (double BeginMs, double DurationMs)[] LaunchStrokeTimings =
+    [
+        (90, 620),    // flow wave
+        (540, 300),   // note stem + flag
+        (780, 250),   // cast arc one
+        (900, 270),   // cast arc two
+    ];
+
+    private static readonly (double BeginMs, double DurationMs)[] LaunchAccentTimings =
+    [
+        (700, 240),   // note head
+        (1140, 230),  // play triangle
+    ];
+
     private readonly Window owner;
     private readonly FrameworkElement mainContent;
     private readonly FrameworkElement logo;
-    private readonly FrameworkElement launchSheen;
     private readonly FrameworkElement launchOverlay;
     private readonly FrameworkElement launchBrand;
     private readonly FrameworkElement launchTitle;
-    private readonly BlurEffect launchBrandBlur;
-    private readonly FrameworkElement launchRingOuter;
-    private readonly FrameworkElement launchRingInner;
-    private readonly IReadOnlyList<FrameworkElement> launchWaveBars;
-    private readonly IReadOnlyList<FrameworkElement> launchNoteParts;
-    private readonly IReadOnlyList<FrameworkElement> launchSignalParts;
-    private readonly FrameworkElement launchStatusText;
+    private readonly IReadOnlyList<Shape> launchStrokes;
+    private readonly IReadOnlyList<FrameworkElement> launchAccents;
     private readonly FrameworkElement topCard;
     private readonly FrameworkElement statusPulse;
     private readonly FrameworkElement b1Fill;
@@ -32,7 +42,6 @@ internal sealed class MotionController
     private readonly FrameworkElement routeBeaconOne;
     private readonly FrameworkElement routeBeaconTwo;
     private readonly FrameworkElement listPanel;
-    private readonly FrameworkElement timerProgressGlow;
     private readonly List<RunningStoryboard> runningStoryboards = [];
     private DateTimeOffset lastAudioPulseAt;
     private double lastAudioLevel;
@@ -44,17 +53,11 @@ internal sealed class MotionController
         Window owner,
         FrameworkElement mainContent,
         FrameworkElement logo,
-        FrameworkElement launchSheen,
         FrameworkElement launchOverlay,
         FrameworkElement launchBrand,
         FrameworkElement launchTitle,
-        BlurEffect launchBrandBlur,
-        FrameworkElement launchRingOuter,
-        FrameworkElement launchRingInner,
-        IReadOnlyList<FrameworkElement> launchWaveBars,
-        IReadOnlyList<FrameworkElement> launchNoteParts,
-        IReadOnlyList<FrameworkElement> launchSignalParts,
-        FrameworkElement launchStatusText,
+        IReadOnlyList<Shape> launchStrokes,
+        IReadOnlyList<FrameworkElement> launchAccents,
         FrameworkElement topCard,
         FrameworkElement statusPulse,
         FrameworkElement b1Fill,
@@ -64,23 +67,16 @@ internal sealed class MotionController
         FrameworkElement routeBeaconOne,
         FrameworkElement routeBeaconTwo,
         FrameworkElement listPanel,
-        FrameworkElement timerProgressGlow,
         bool reduceMotion)
     {
         this.owner = owner;
         this.mainContent = mainContent;
         this.logo = logo;
-        this.launchSheen = launchSheen;
         this.launchOverlay = launchOverlay;
         this.launchBrand = launchBrand;
         this.launchTitle = launchTitle;
-        this.launchBrandBlur = launchBrandBlur;
-        this.launchRingOuter = launchRingOuter;
-        this.launchRingInner = launchRingInner;
-        this.launchWaveBars = launchWaveBars;
-        this.launchNoteParts = launchNoteParts;
-        this.launchSignalParts = launchSignalParts;
-        this.launchStatusText = launchStatusText;
+        this.launchStrokes = launchStrokes;
+        this.launchAccents = launchAccents;
         this.topCard = topCard;
         this.statusPulse = statusPulse;
         this.b1Fill = b1Fill;
@@ -90,7 +86,6 @@ internal sealed class MotionController
         this.routeBeaconOne = routeBeaconOne;
         this.routeBeaconTwo = routeBeaconTwo;
         this.listPanel = listPanel;
-        this.timerProgressGlow = timerProgressGlow;
         this.reduceMotion = reduceMotion;
 
         ApplyFinalValues();
@@ -122,11 +117,22 @@ internal sealed class MotionController
             return;
         }
 
-        PlayLaunchOverlay();
-        PlayLaunchBrand();
-        PlayLaunchWaves();
-        PlayLaunchSymbol(launchNoteParts, TimeSpan.FromMilliseconds(1120));
-        PlayLaunchSymbol(launchSignalParts, TimeSpan.FromMilliseconds(1580));
+        PrepareLaunch();
+        PlayLaunchReveal();
+        PlayLaunchTitle();
+
+        for (var index = 0; index < launchStrokes.Count && index < LaunchStrokeTimings.Length; index++)
+        {
+            var (beginMs, durationMs) = LaunchStrokeTimings[index];
+            PlayStrokeDrawOn(launchStrokes[index], TimeSpan.FromMilliseconds(beginMs), TimeSpan.FromMilliseconds(durationMs));
+        }
+
+        for (var index = 0; index < launchAccents.Count && index < LaunchAccentTimings.Length; index++)
+        {
+            var (beginMs, durationMs) = LaunchAccentTimings[index];
+            PlayAccentPop(launchAccents[index], TimeSpan.FromMilliseconds(beginMs), TimeSpan.FromMilliseconds(durationMs));
+        }
+
         _ = PlayStartupChimeAsync();
     }
 
@@ -192,14 +198,6 @@ internal sealed class MotionController
         if (CanPlay())
         {
             PlayPulse(topCard, 1.012, TimeSpan.FromMilliseconds(220));
-        }
-    }
-
-    public void PlayTimerScheduled()
-    {
-        if (CanPlay())
-        {
-            PlayFlash(timerProgressGlow, TimeSpan.FromMilliseconds(500));
         }
     }
 
@@ -302,18 +300,6 @@ internal sealed class MotionController
         Start(target, storyboard, () => SetVisual(target, 0, 0, 0, 1));
     }
 
-    private void PlayFlash(FrameworkElement target, TimeSpan duration)
-    {
-        var fadeIn = TimeSpan.FromMilliseconds(duration.TotalMilliseconds * 0.35);
-        var fadeOut = duration - fadeIn;
-        SetVisual(target, 0, 0, 0, 1);
-        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, target, UIElement.OpacityProperty, 0, 0.92, fadeIn, TimeSpan.Zero, easing);
-        Add(storyboard, target, UIElement.OpacityProperty, 0.92, 0, fadeOut, fadeIn, easing);
-        Start(target, storyboard, () => SetVisual(target, 0, 0, 0, 1));
-    }
-
     private void PlayAtmosphereEntrance()
     {
         if (!CanPlay())
@@ -335,42 +321,34 @@ internal sealed class MotionController
         }
     }
 
-    private void PlayLaunchSheen()
+    private void PlayLaunchReveal()
     {
-        if (!CanPlay())
-        {
-            return;
-        }
-
-        SetVisual(launchSheen, 0, -220, 0, 1);
-        var transforms = GetTransforms(launchSheen);
-        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, launchSheen, UIElement.OpacityProperty, 0, 0.5, TimeSpan.FromMilliseconds(420), TimeSpan.FromMilliseconds(220), easing);
-        Add(storyboard, launchSheen, UIElement.OpacityProperty, 0.5, 0.18, TimeSpan.FromMilliseconds(1700), TimeSpan.FromMilliseconds(640), easing);
-        Add(storyboard, launchSheen, UIElement.OpacityProperty, 0.18, 0, TimeSpan.FromMilliseconds(660), TimeSpan.FromMilliseconds(2340), easing);
-        Add(storyboard, transforms.Translate, TranslateTransform.XProperty, -220, 220, TimeSpan.FromMilliseconds(2140), TimeSpan.FromMilliseconds(220), easing);
-        Add(storyboard, transforms.Translate, TranslateTransform.XProperty, 220, 0, TimeSpan.FromMilliseconds(640), TimeSpan.FromMilliseconds(2360), easing);
-        Start(launchSheen, storyboard, () => SetVisual(launchSheen, 0, 0, 0, 1));
-    }
-
-    private void PlayLaunchOverlay()
-    {
+        launchOverlay.Visibility = Visibility.Visible;
+        launchOverlay.IsHitTestVisible = true;
         SetVisual(launchOverlay, 1, 0, 0, 1);
-        SetVisual(mainContent, 0, 0, 14, 0.985);
+        SetVisual(launchBrand, 1, 0, 0, 1);
+        mainContent.Visibility = Visibility.Hidden;
+        SetVisual(mainContent, 0, 0, 12, 0.99);
+        mainContent.Visibility = Visibility.Visible;
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 1, TimeSpan.FromMilliseconds(2740), TimeSpan.Zero, easing);
-        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(260), TimeSpan.FromMilliseconds(2740), easing);
-        Add(storyboard, mainContent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
-        var transforms = GetTransforms(mainContent);
-        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 10, 0, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.99, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.99, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(2780), easing);
+
+        // The overlay holds the finished mark, then lifts away as the main content settles in.
+        var brandTransforms = GetTransforms(launchBrand);
+        Add(storyboard, launchBrand, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(260), TimeSpan.FromMilliseconds(1780), easing);
+        Add(storyboard, brandTransforms.Translate, TranslateTransform.YProperty, 0, -10, TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(1780), easing);
+        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(1820), easing);
+
+        var mainTransforms = GetTransforms(mainContent);
+        Add(storyboard, mainContent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(360), TimeSpan.FromMilliseconds(1740), easing);
+        Add(storyboard, mainTransforms.Translate, TranslateTransform.YProperty, 12, 0, TimeSpan.FromMilliseconds(440), TimeSpan.FromMilliseconds(1740), easing);
+        Add(storyboard, mainTransforms.Scale, ScaleTransform.ScaleXProperty, 0.99, 1, TimeSpan.FromMilliseconds(440), TimeSpan.FromMilliseconds(1740), easing);
+        Add(storyboard, mainTransforms.Scale, ScaleTransform.ScaleYProperty, 0.99, 1, TimeSpan.FromMilliseconds(440), TimeSpan.FromMilliseconds(1740), easing);
         Start(launchOverlay, storyboard, () =>
         {
             SetVisual(launchOverlay, 0, 0, 0, 1);
             launchOverlay.IsHitTestVisible = false;
+            launchOverlay.Visibility = Visibility.Collapsed;
             SetVisual(mainContent, 1, 0, 0, 1);
         });
     }
@@ -378,96 +356,150 @@ internal sealed class MotionController
     private void PlayReducedLaunch()
     {
         SetVisual(launchOverlay, 1, 0, 0, 1);
+        launchOverlay.Visibility = Visibility.Visible;
+        SetVisual(launchBrand, 1, 0, 0, 1);
+        SetVisual(launchTitle, 1, 0, 0, 1);
+        foreach (var stroke in launchStrokes)
+        {
+            ShowStrokeSolid(stroke);
+        }
+
+        foreach (var accent in launchAccents)
+        {
+            SetVisual(accent, 1, 0, 0, 1);
+        }
+
+        mainContent.Visibility = Visibility.Hidden;
         SetVisual(mainContent, 0, 0, 0, 1);
+        mainContent.Visibility = Visibility.Visible;
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(120), easing);
-        Add(storyboard, mainContent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(120), easing);
+        Add(storyboard, launchOverlay, UIElement.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(360), easing);
+        Add(storyboard, mainContent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(360), easing);
         Start(launchOverlay, storyboard, () =>
         {
             SetVisual(launchOverlay, 0, 0, 0, 1);
             launchOverlay.IsHitTestVisible = false;
+            launchOverlay.Visibility = Visibility.Collapsed;
             SetVisual(mainContent, 1, 0, 0, 1);
         });
     }
 
-    private void PlayLaunchBrand()
+    private void PlayLaunchTitle()
     {
-        SetVisual(launchBrand, 0, 0, 3, 0.92);
-        SetVisual(launchTitle, 0, 0, 10, 1);
-        SetVisual(launchStatusText, 0, 0, 0, 1);
+        SetVisual(launchTitle, 0, 0, 14, 0.98);
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var transforms = GetTransforms(launchBrand);
-        Add(storyboard, launchBrand, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
-        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 3, 0, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.92, 1, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.92, 1, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(260), easing);
-        Add(storyboard, launchBrandBlur, BlurEffect.RadiusProperty, 16, 0, TimeSpan.FromMilliseconds(620), TimeSpan.FromMilliseconds(320), easing);
-        Add(storyboard, launchTitle, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(420), TimeSpan.FromMilliseconds(2060), easing);
-        var titleTransforms = GetTransforms(launchTitle);
-        Add(storyboard, titleTransforms.Translate, TranslateTransform.YProperty, 10, 0, TimeSpan.FromMilliseconds(420), TimeSpan.FromMilliseconds(2060), easing);
-        Start(launchBrand, storyboard, () =>
-        {
-            launchBrandBlur.Radius = 0;
-            SetVisual(launchBrand, 1, 0, 0, 1);
-        });
+        var transforms = GetTransforms(launchTitle);
+        Add(storyboard, launchTitle, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(360), TimeSpan.FromMilliseconds(1040), easing);
+        Add(storyboard, transforms.Translate, TranslateTransform.YProperty, 14, 0, TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(1040), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.98, 1, TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(1040), easing);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.98, 1, TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(1040), easing);
+        Start(launchTitle, storyboard, () => SetVisual(launchTitle, 1, 0, 0, 1));
     }
 
-    private void PlayLaunchRing(FrameworkElement ring, double fromScale, double toScale, TimeSpan beginTime)
+    private void PlayStrokeDrawOn(Shape stroke, TimeSpan beginTime, TimeSpan duration)
     {
-        SetVisual(ring, 0, 0, 0, fromScale);
-        var transforms = GetTransforms(ring);
+        var dashUnit = GetStrokeDashUnit(stroke);
+        stroke.Opacity = 1;
+        stroke.StrokeDashArray = new DoubleCollection { dashUnit, dashUnit };
+        stroke.StrokeDashOffset = dashUnit;
         var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Add(storyboard, ring, UIElement.OpacityProperty, 0, 0.78, TimeSpan.FromMilliseconds(110), beginTime, easing);
-        Add(storyboard, ring, UIElement.OpacityProperty, 0.78, 0, TimeSpan.FromMilliseconds(470), beginTime + TimeSpan.FromMilliseconds(270), easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, fromScale, toScale, TimeSpan.FromMilliseconds(740), beginTime, easing);
-        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, fromScale, toScale, TimeSpan.FromMilliseconds(740), beginTime, easing);
-        Start(ring, storyboard, () => SetVisual(ring, 0, 0, 0, 1));
+        var easing = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var animation = new DoubleAnimation(dashUnit, 0, new Duration(duration))
+        {
+            BeginTime = beginTime,
+            EasingFunction = easing,
+        };
+        Timeline.SetDesiredFrameRate(animation, MaximumFramesPerSecond);
+        Storyboard.SetTarget(animation, stroke);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(Shape.StrokeDashOffsetProperty));
+        storyboard.Children.Add(animation);
+        Start(stroke, storyboard, () => ShowStrokeSolid(stroke));
     }
 
-    private void PlayLaunchWaves()
+    private void PlayAccentPop(FrameworkElement accent, TimeSpan beginTime, TimeSpan duration)
     {
-        for (var index = 0; index < launchWaveBars.Count; index++)
-        {
-            var bar = launchWaveBars[index];
-            var peak = index == 2 ? 1.32 : index is 1 or 3 ? 1.16 : 1.04;
-            SetVisual(bar, 0, 0, 0, 0.4);
-            var transforms = GetTransforms(bar);
-            var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
-            var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-            var beginTime = TimeSpan.FromMilliseconds(500 + index * 110);
-            Add(storyboard, bar, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(180), beginTime, easing);
-            Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.4, peak, TimeSpan.FromMilliseconds(260), beginTime, easing);
-            Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, peak, 0.72, TimeSpan.FromMilliseconds(540), beginTime + TimeSpan.FromMilliseconds(260), easing);
-            Start(bar, storyboard, () => SetVisual(bar, 1, 0, 0, 1));
-        }
-    }
-
-    private void PlayLaunchSymbol(IReadOnlyList<FrameworkElement> parts, TimeSpan beginTime)
-    {
-        foreach (var part in parts)
-        {
-            SetVisual(part, 0, -8, 0, 0.82);
-            var transforms = GetTransforms(part);
-            var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
-            var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-            Add(storyboard, part, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(340), beginTime, easing);
-            Add(storyboard, transforms.Translate, TranslateTransform.XProperty, -8, 0, TimeSpan.FromMilliseconds(420), beginTime, easing);
-            Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.82, 1, TimeSpan.FromMilliseconds(420), beginTime, easing);
-            Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.82, 1, TimeSpan.FromMilliseconds(420), beginTime, easing);
-            Start(part, storyboard, () => SetVisual(part, 1, 0, 0, 1));
-        }
+        SetVisual(accent, 0, 0, 0, 0.6);
+        var transforms = GetTransforms(accent);
+        var storyboard = new Storyboard { FillBehavior = FillBehavior.HoldEnd };
+        var fade = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var overshoot = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.55 };
+        Add(storyboard, accent, UIElement.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(160), beginTime, fade);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleXProperty, 0.6, 1, duration, beginTime, overshoot);
+        Add(storyboard, transforms.Scale, ScaleTransform.ScaleYProperty, 0.6, 1, duration, beginTime, overshoot);
+        Start(accent, storyboard, () => SetVisual(accent, 1, 0, 0, 1));
     }
 
     private async Task PlayStartupChimeAsync()
     {
-        await Task.Delay(1460);
+        await Task.Delay(1050);
         if (!suspended && !reduceMotion)
         {
             StartupChime.Play();
         }
+    }
+
+    private static double GetStrokeDashUnit(Shape stroke)
+    {
+        var thickness = stroke.StrokeThickness > 0 ? stroke.StrokeThickness : 1;
+        var length = GetGeometryLength(stroke);
+        // Dash values are measured in multiples of the stroke thickness. One dash and one gap
+        // that each span the whole path let the stroke draw on cleanly from start to end.
+        return (length / thickness) + 2;
+    }
+
+    private static double GetGeometryLength(Shape stroke)
+    {
+        if (stroke is not Path path || path.Data is null)
+        {
+            return 0;
+        }
+
+        var flattened = path.Data.GetFlattenedPathGeometry(0.05, ToleranceType.Absolute);
+        double total = 0;
+        foreach (var figure in flattened.Figures)
+        {
+            var previous = figure.StartPoint;
+            foreach (var segment in figure.Segments)
+            {
+                if (segment is PolyLineSegment poly)
+                {
+                    foreach (var point in poly.Points)
+                    {
+                        total += (point - previous).Length;
+                        previous = point;
+                    }
+                }
+                else if (segment is LineSegment line)
+                {
+                    total += (line.Point - previous).Length;
+                    previous = line.Point;
+                }
+            }
+
+            if (figure.IsClosed)
+            {
+                total += (figure.StartPoint - previous).Length;
+            }
+        }
+
+        return total;
+    }
+
+    private static void ShowStrokeSolid(Shape stroke)
+    {
+        stroke.StrokeDashOffset = 0;
+        stroke.StrokeDashArray = null;
+        stroke.Opacity = 1;
+    }
+
+    private void HideStroke(Shape stroke)
+    {
+        var dashUnit = GetStrokeDashUnit(stroke);
+        stroke.Opacity = 1;
+        stroke.StrokeDashArray = new DoubleCollection { dashUnit, dashUnit };
+        stroke.StrokeDashOffset = dashUnit;
     }
 
     private Storyboard CreateTransformStoryboard(
@@ -533,23 +565,20 @@ internal sealed class MotionController
     {
         StopRunningStoryboards();
         SetVisual(logo, 1, 0, 0, 1);
+        mainContent.Visibility = Visibility.Visible;
         SetVisual(mainContent, 1, 0, 0, 1);
-        SetVisual(launchSheen, 0, 0, 0, 1);
-        launchBrandBlur.Radius = 0;
+        launchOverlay.Visibility = Visibility.Collapsed;
         SetVisual(launchOverlay, 0, 0, 0, 1);
         launchOverlay.IsHitTestVisible = false;
-        SetVisual(launchBrand, 0, 0, 0, 1);
-        SetVisual(launchTitle, 0, 0, 0, 1);
-        SetVisual(launchRingOuter, 0, 0, 0, 1);
-        SetVisual(launchRingInner, 0, 0, 0, 1);
-        SetVisual(launchStatusText, 0, 0, 0, 1);
-        foreach (var launchWaveBar in launchWaveBars)
+        SetVisual(launchBrand, 1, 0, 0, 1);
+        SetVisual(launchTitle, 1, 0, 0, 1);
+        foreach (var stroke in launchStrokes)
         {
-            SetVisual(launchWaveBar, 0, 0, 0, 1);
+            ShowStrokeSolid(stroke);
         }
-        foreach (var launchPart in launchNoteParts.Concat(launchSignalParts))
+        foreach (var accent in launchAccents)
         {
-            SetVisual(launchPart, 0, 0, 0, 1);
+            SetVisual(accent, 1, 0, 0, 1);
         }
         SetVisual(topCard, 1, 0, 0, 1);
         SetVisual(statusPulse, 1, 0, 0, 1);
@@ -560,27 +589,24 @@ internal sealed class MotionController
         SetVisual(routeBeaconOne, 0, 0, 0, 1);
         SetVisual(routeBeaconTwo, 0, 0, 0, 1);
         SetVisual(listPanel, 1, 0, 0, 1);
-        SetVisual(timerProgressGlow, 0, 0, 0, 1);
     }
 
     private void PrepareLaunch()
     {
-        SetVisual(mainContent, 0, 0, 10, 0.99);
+        mainContent.Visibility = Visibility.Hidden;
+        SetVisual(mainContent, 0, 0, 12, 0.99);
+        launchOverlay.Visibility = Visibility.Visible;
         SetVisual(launchOverlay, 1, 0, 0, 1);
         launchOverlay.IsHitTestVisible = true;
-        SetVisual(launchBrand, 0, 0, 3, 0.92);
-        SetVisual(launchTitle, 0, 0, 10, 1);
-        launchBrandBlur.Radius = 16;
-        SetVisual(launchRingOuter, 0, 0, 0, 0.5);
-        SetVisual(launchRingInner, 0, 0, 0, 0.72);
-        SetVisual(launchStatusText, 0, 0, 0, 1);
-        foreach (var launchWaveBar in launchWaveBars)
+        SetVisual(launchBrand, 1, 0, 0, 1);
+        SetVisual(launchTitle, 0, 0, 14, 0.98);
+        foreach (var stroke in launchStrokes)
         {
-            SetVisual(launchWaveBar, 0, 0, 0, 0.4);
+            HideStroke(stroke);
         }
-        foreach (var launchPart in launchNoteParts.Concat(launchSignalParts))
+        foreach (var accent in launchAccents)
         {
-            SetVisual(launchPart, 0, -8, 0, 0.82);
+            SetVisual(accent, 0, 0, 0, 0.6);
         }
     }
 

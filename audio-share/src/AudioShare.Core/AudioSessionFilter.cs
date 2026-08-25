@@ -39,8 +39,14 @@ public static class AudioSessionFilter
                         : representative.DisplayName,
                     HasAudio: group.Any(candidate => candidate.HasAudio),
                     OutputDeviceId: outputDevices.Length == 1 ? outputDevices[0].OutputDeviceId : string.Empty,
-                    OutputDeviceName: string.Join("、", outputDevices
-                        .Select(device => string.IsNullOrWhiteSpace(device.OutputDeviceName) ? "未知输出设备" : device.OutputDeviceName)));
+                    OutputDeviceName: outputDevices.Length switch
+                    {
+                        0 => string.Empty,
+                        1 => string.IsNullOrWhiteSpace(outputDevices[0].OutputDeviceName)
+                            ? "未知輸出設備"
+                            : outputDevices[0].OutputDeviceName,
+                        _ => "多個播放設備",
+                    });
             })
             .ToArray();
     }

@@ -86,7 +86,7 @@ public sealed class ReleaseUpdateParserTests
         var readmePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "README.md"));
         var readme = File.ReadAllText(readmePath);
 
-        Assert.Contains("click `开始分享`, then confirm the prompt. FlowCast changes only the selected application routes", readme, StringComparison.Ordinal);
+        Assert.Contains("click `開始分享`, then confirm the prompt. FlowCast changes only the selected application routes", readme, StringComparison.Ordinal);
     }
 
     [Fact]

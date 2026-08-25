@@ -47,8 +47,7 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
                         using var process = Process.GetProcessById(processId);
                         var processStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
                         var initialPeakLevel = session.AudioMeterInformation.MasterPeakValue;
-                        var hasAudio = session.State == AudioSessionState.AudioSessionStateActive &&
-                                       HasConfirmedOutput(session, initialPeakLevel);
+                        var hasAudio = HasAudible(session, initialPeakLevel);
                         candidates.Add(new AudioSessionCandidate(
                             processId,
                             processStartUtcTicks,
@@ -72,12 +71,13 @@ public sealed class WasapiAudioSessionDiscovery : IAudioSessionDiscovery
         return AudioSessionFilter.GetActiveProcessSessions(candidates);
     }
 
-    private static bool HasConfirmedOutput(AudioSessionControl session, float initialPeakLevel)
+    private static bool HasAudible(AudioSessionControl session, float initialPeakLevel)
     {
         Thread.Sleep(PeakConfirmationDelayMilliseconds);
         var confirmedPeakLevel = session.AudioMeterInformation.MasterPeakValue;
         Thread.Sleep(PeakConfirmationDelayMilliseconds);
-        return AudioActivityPolicy.HasConfirmedOutput(
+        return AudioActivityPolicy.IsAudible(
+            session.State == AudioSessionState.AudioSessionStateActive,
             initialPeakLevel,
             confirmedPeakLevel,
             session.AudioMeterInformation.MasterPeakValue);

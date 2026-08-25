@@ -27,7 +27,7 @@ public sealed class UpdateAvailableDialog : FlowCastDialogWindow
 
         var laterButton = new Button
         {
-            Content = "稍后更新",
+            Content = "稍後更新",
             IsCancel = true,
             MinWidth = 72,
         };
@@ -39,7 +39,7 @@ public sealed class UpdateAvailableDialog : FlowCastDialogWindow
             {
                 new TextBlock
                 {
-                    Text = "发现可用的 FlowCast 新版本",
+                    Text = "發現可用的 FlowCast 新版本",
                     FontSize = 20,
                     FontWeight = FontWeights.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
@@ -47,7 +47,7 @@ public sealed class UpdateAvailableDialog : FlowCastDialogWindow
                 },
                 new TextBlock
                 {
-                    Text = $"当前版本：{currentVersion}\n可用版本：{update.Version}",
+                    Text = $"當前版本：{currentVersion}\n可用版本：{update.Version}",
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 12),
                 },
@@ -55,7 +55,7 @@ public sealed class UpdateAvailableDialog : FlowCastDialogWindow
                 {
                     Text = update.Notes is { Count: > 0 }
                         ? "本次更新：\n• " + string.Join("\n• ", update.Notes)
-                        : "本次更新包含稳定性与体验改进。",
+                        : "本次更新包含穩定性與體驗改進。",
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 20),
                 },

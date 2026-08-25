@@ -135,4 +135,19 @@ public sealed class AudioSessionFilteringTests
         Assert.Equal("speaker-device", session.OutputDeviceId);
         Assert.Equal("Speakers (High Definition Audio Device)", session.OutputDeviceName);
     }
+
+    [Fact]
+    public void GetActiveProcessSessions_SummarizesMultipleOutputDevices()
+    {
+        var session = Assert.Single(AudioSessionFilter.GetActiveProcessSessions(
+        [
+            new AudioSessionCandidate(100, 1000, "cloudmusic.exe", "CloudMusic", true, false,
+                OutputDeviceId: "speakers", OutputDeviceName: "Speakers"),
+            new AudioSessionCandidate(100, 1000, "cloudmusic.exe", "CloudMusic", true, false,
+                OutputDeviceId: "aux", OutputDeviceName: "Voicemeeter AUX Input"),
+        ]));
+
+        Assert.Equal(string.Empty, session.OutputDeviceId);
+        Assert.Equal("多個播放設備", session.OutputDeviceName);
+    }
 }

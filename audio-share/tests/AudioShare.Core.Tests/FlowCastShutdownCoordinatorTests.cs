@@ -32,9 +32,6 @@ public sealed class FlowCastShutdownCoordinatorTests
                 _ => new ShareCommandResult(false, FlowCastShareState.LocalOnly, "restore_pending", null),
                 CancellationToken.None);
 
-        public Task<ShareCommandResult> SetMutedAsync(bool muted, CancellationToken token) =>
-            throw new NotSupportedException();
-
         public Task<ShareCommandResult> ReconcileAsync(IReadOnlyList<AudioSession> active, CancellationToken token) =>
             throw new NotSupportedException();
     }

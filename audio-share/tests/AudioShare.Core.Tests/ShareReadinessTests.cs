@@ -17,12 +17,6 @@ public sealed class ShareReadinessTests
     }
 
     [Fact]
-    public void ProvidesTheApprovedTimerPresets()
-    {
-        Assert.Equal([5, 15, 30, 60], ShareTimerPresets.Minutes);
-    }
-
-    [Fact]
     public void RequiresTwoClearPeakSamplesBeforeAProgramIsConsideredAudible()
     {
         Assert.False(AudioActivityPolicy.HasConfirmedOutput(0.03f, 0.01f));
@@ -30,6 +24,12 @@ public sealed class ShareReadinessTests
         Assert.True(AudioActivityPolicy.HasConfirmedOutput(0.03f, 0.04f));
         Assert.True(AudioActivityPolicy.HasConfirmedOutput(0.01f, 0.03f, 0.04f));
         Assert.False(AudioActivityPolicy.HasConfirmedOutput(0.03f, 0.01f, 0.01f));
+    }
+
+    [Fact]
+    public void TreatsAnActiveWindowsAudioSessionAsAudibleWhenPeakSamplingMissesTheSound()
+    {
+        Assert.True(AudioActivityPolicy.IsAudible(isSessionActive: true, 0f, 0f, 0f));
     }
 
     [Fact]

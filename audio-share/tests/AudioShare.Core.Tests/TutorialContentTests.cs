@@ -23,7 +23,7 @@ public sealed class TutorialContentTests
         Assert.Contains("B1", text, StringComparison.Ordinal);
         Assert.Contains("AUX", text, StringComparison.Ordinal);
         Assert.Contains("Discord", text, StringComparison.Ordinal);
-        Assert.Contains("关闭", text, StringComparison.Ordinal);
+        Assert.Contains("關閉", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Voicemod", tutorialText, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -32,10 +32,10 @@ public sealed class TutorialContentTests
     {
         foreach (var step in TutorialContent.Steps)
         {
-            Assert.Contains("怎么做", step.Body, StringComparison.Ordinal);
-            Assert.Contains("为什么", step.Body, StringComparison.Ordinal);
-            Assert.Contains("成功后", step.Body, StringComparison.Ordinal);
-            Assert.Contains("出问题时", step.Body, StringComparison.Ordinal);
+            Assert.Contains("怎麼做", step.Body, StringComparison.Ordinal);
+            Assert.Contains("為什麼", step.Body, StringComparison.Ordinal);
+            Assert.Contains("成功後", step.Body, StringComparison.Ordinal);
+            Assert.Contains("出問題時", step.Body, StringComparison.Ordinal);
             Assert.DoesNotContain("Voicemod", step.Body, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -51,13 +51,18 @@ public sealed class TutorialContentTests
     }
 
     [Fact]
-    public void Tutorial_ExplainsCurrentSharingControls()
+    public void Tutorial_ExplainsSingleProgramConfirmationAndAutomaticInternalRoutes()
     {
         var text = string.Join("\n", TutorialContent.Rules.Concat(TutorialContent.Steps.SelectMany(step => new[] { step.Title, step.Body })));
 
-        Assert.Contains("开始分享", text, StringComparison.Ordinal);
-        Assert.Contains("静音分享", text, StringComparison.Ordinal);
-        Assert.Contains("系统托盘", text, StringComparison.Ordinal);
+        Assert.Contains("一次只分享一個程序", text, StringComparison.Ordinal);
+        Assert.Contains("勾選", text, StringComparison.Ordinal);
+        Assert.Contains("確認", text, StringComparison.Ordinal);
+        Assert.Contains("不會顯示 Voicemeeter Input 或 AUX", text, StringComparison.Ordinal);
+        Assert.Contains("下次打開", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("靜音分享", text, StringComparison.Ordinal);
+        Assert.Contains("系統托盤", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("點擊開始分享", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -75,8 +80,8 @@ public sealed class TutorialContentTests
         Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("B1", StringComparison.Ordinal));
         Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("Voicemeeter Input", StringComparison.Ordinal));
         Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("Voicemeeter AUX Input", StringComparison.Ordinal));
-        Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("麦克风", StringComparison.Ordinal));
-        Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("扬声器", StringComparison.Ordinal));
+        Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("麥克風", StringComparison.Ordinal));
+        Assert.Contains(visualSteps.SelectMany(step => step.Screenshot!.Callouts), callout => callout.Label.Contains("揚聲器", StringComparison.Ordinal));
         Assert.All(
             visualSteps.SelectMany(step => step.Screenshot!.Callouts),
             callout =>

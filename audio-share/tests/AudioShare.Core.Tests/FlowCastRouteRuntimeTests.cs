@@ -36,6 +36,22 @@ public sealed class FlowCastRouteRuntimeTests
     }
 
     [Fact]
+    public async Task ReconcileApplicationsKeepsTheSelectedProgramOnInputWhileNewProgramsStayLocalOnly()
+    {
+        var executor = new RecordingRouteExecutor();
+        var runtime = CreateRuntime(executor, new RecordingBus());
+        var cloudMusic = Session(1, "cloudmusic.exe", hasAudio: true);
+        var game = Session(2, "game.exe", hasAudio: true);
+
+        await runtime.BeginShareAsync(cloudMusic, [cloudMusic], CancellationToken.None);
+        var result = await runtime.ReconcileApplicationsAsync(cloudMusic, [cloudMusic, game], CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("input-id", executor.TargetFor("cloudmusic.exe"));
+        Assert.Equal("aux-id", executor.TargetFor("game.exe"));
+    }
+
+    [Fact]
     public async Task ReadTruthReportsSharingOnlyWhenSelectedRouteAndB1AreBothCorrect()
     {
         var chrome = Session(1, "chrome.exe", hasAudio: false);

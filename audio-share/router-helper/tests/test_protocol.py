@@ -1,6 +1,8 @@
 import importlib
 import io
 import json
+import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -669,6 +671,34 @@ def test_main_reads_one_request_and_writes_one_json_response(helper, monkeypatch
         "ok": True,
         "value": {"version": "1.1.2"},
     }
+
+
+def test_main_accepts_windows_utf8_bom_request(helper, monkeypatch):
+    module, _ = helper
+    stdout = io.StringIO()
+    monkeypatch.setattr(module.sys, "stdin", io.StringIO('\ufeff{"command":"health"}\n'))
+    monkeypatch.setattr(module.sys, "stdout", stdout)
+
+    assert module.main() == 0
+    assert json.loads(stdout.getvalue()) == {
+        "ok": True,
+        "value": {"version": "1.1.2"},
+    }
+
+
+def test_helper_process_reads_utf8_bom_when_windows_console_encoding_differs():
+    environment = os.environ | {"PYTHONIOENCODING": "cp1252"}
+
+    result = subprocess.run(
+        [sys.executable, str(HELPER_DIRECTORY / "audio_share_router_helper.py")],
+        input=b'\xef\xbb\xbf{"command":"health"}\n',
+        capture_output=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == {"ok": True, "value": {"version": "1.1.2"}}
 
 
 def test_main_reports_malformed_json_with_nonzero_exit(helper, monkeypatch):

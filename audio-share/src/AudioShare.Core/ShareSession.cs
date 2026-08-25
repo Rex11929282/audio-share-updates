@@ -4,7 +4,6 @@ public enum ShareSessionState
 {
     Idle,
     Sharing,
-    Muted,
     Disconnected,
 }
 
@@ -20,7 +19,7 @@ public sealed class ShareSession
 
     public bool Start(DateTimeOffset now)
     {
-        if (State is ShareSessionState.Sharing or ShareSessionState.Muted)
+        if (State == ShareSessionState.Sharing)
         {
             return false;
         }
@@ -32,20 +31,9 @@ public sealed class ShareSession
         return true;
     }
 
-    public bool SetMuted(bool muted)
-    {
-        if (State is not (ShareSessionState.Sharing or ShareSessionState.Muted))
-        {
-            return false;
-        }
-
-        State = muted ? ShareSessionState.Muted : ShareSessionState.Sharing;
-        return true;
-    }
-
     public bool Stop(DateTimeOffset now, string? reason = null, bool disconnected = false)
     {
-        if (State is not (ShareSessionState.Sharing or ShareSessionState.Muted) || startedAt is null)
+        if (State != ShareSessionState.Sharing || startedAt is null)
         {
             return false;
         }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using Microsoft.Win32;
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -25,7 +26,7 @@ public sealed class UpdateService
     private readonly string? registeredInstallationDirectory;
 
     public const string UpdateFailureSignal = "--update-failed";
-    public const string UpdateFailedRestartNotice = "上一次更新未完成，已保留原程序并重新启动。";
+    public const string UpdateFailedRestartNotice = "上一次更新未完成，已保留原程序並重新啟動。";
     internal static string? LastUpdateError { get; private set; }
 
     public UpdateService()
@@ -85,11 +86,12 @@ public sealed class UpdateService
         ArgumentNullException.ThrowIfNull(reportProgressAsync);
 
         var executablePath = this.executablePath ?? Environment.ProcessPath ??
-            throw new InvalidOperationException("找不到当前程序文件。");
+            throw new InvalidOperationException("找不到當前程序文件。");
         var applicationDirectory = GetCanonicalInstallationDirectory(executablePath, registeredInstallationDirectory);
+        var installerApplicationDirectory = GetInstallerApplicationDirectory(applicationDirectory, registeredInstallationDirectory);
         EnsureApplicationDirectoryIsWritable(applicationDirectory);
         var applicationParent = Path.GetDirectoryName(applicationDirectory) ??
-            throw new InvalidOperationException("找不到程序文件夹的上级目录。");
+            throw new InvalidOperationException("找不到程序文件夾的上級目錄。");
         EnsureApplicationDirectoryIsWritable(applicationParent);
 
         var updateDirectory = Path.Combine(Path.GetTempPath(), "FlowCast", "updates", Guid.NewGuid().ToString("N"));
@@ -118,7 +120,7 @@ public sealed class UpdateService
             await reportProgressAsync(new UpdateProgress(UpdateStage.Verifying, "Verifying update", null));
             if (!HasMatchingChecksum(packagePath, await File.ReadAllTextAsync(checksumPath, cancellationToken)))
             {
-                throw new InvalidDataException("更新文件的 SHA-256 验证失败。");
+                throw new InvalidDataException("更新文件的 SHA-256 驗證失敗。");
             }
 
             if (usesInstaller)
@@ -133,7 +135,7 @@ public sealed class UpdateService
                     update.Version,
                     updateDirectory,
                     packagePath,
-                    Path.Combine(applicationDirectory, "AudioShare.App.exe"),
+                    Path.Combine(installerApplicationDirectory, "AudioShare.App.exe"),
                     UsesInstaller: true);
             }
 
@@ -150,7 +152,7 @@ public sealed class UpdateService
             };
             if (requiredFiles.Any(fileName => !File.Exists(Path.Combine(extractedDirectory, fileName))))
             {
-                throw new InvalidDataException("更新压缩包未包含预期的程序、授权说明或路由组件。");
+                throw new InvalidDataException("更新壓縮包未包含預期的程序、授權說明或路由組件。");
             }
 
             await reportProgressAsync(new UpdateProgress(UpdateStage.ReadyToRestart, "Update ready to restart", 100));
@@ -204,7 +206,7 @@ public sealed class UpdateService
 
         if (process is null)
         {
-            throw new InvalidOperationException("无法启动更新程序。");
+            throw new InvalidOperationException("無法啟動更新程序。");
         }
     }
 
@@ -219,12 +221,12 @@ public sealed class UpdateService
         string? registeredInstallationDirectory = null)
     {
         var applicationDirectory = Path.GetDirectoryName(executablePath) ??
-            throw new InvalidOperationException("找不到程序文件夹。");
+            throw new InvalidOperationException("找不到程序文件夾。");
 
         while (IsFlowCastUpdateTransactionDirectory(Path.GetFileName(applicationDirectory)))
         {
             applicationDirectory = Path.GetDirectoryName(applicationDirectory) ??
-                throw new InvalidOperationException("找不到程序文件夹的上级目录。");
+                throw new InvalidOperationException("找不到程序文件夾的上級目錄。");
         }
 
         if (!IsFlowCastTemporaryUpdateDirectory(applicationDirectory))
@@ -239,6 +241,38 @@ public sealed class UpdateService
         return File.Exists(Path.Combine(installedDirectory, "AudioShare.App.exe"))
             ? installedDirectory
             : applicationDirectory;
+    }
+
+    private static string GetInstallerApplicationDirectory(
+        string applicationDirectory,
+        string? registeredInstallationDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(registeredInstallationDirectory))
+        {
+            return Path.GetFullPath(registeredInstallationDirectory);
+        }
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\FlowCast");
+            if (key?.GetValue("InstallPath") is string installPath &&
+                Path.IsPathFullyQualified(installPath))
+            {
+                return Path.GetFullPath(installPath);
+            }
+        }
+        catch
+        {
+            // A missing or inaccessible user registry entry simply uses Setup's default location.
+        }
+
+        var defaultDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs",
+            "FlowCast");
+        return string.Equals(applicationDirectory, defaultDirectory, StringComparison.OrdinalIgnoreCase)
+            ? applicationDirectory
+            : defaultDirectory;
     }
 
     private static bool IsFlowCastUpdateTransactionDirectory(string directoryName) =>

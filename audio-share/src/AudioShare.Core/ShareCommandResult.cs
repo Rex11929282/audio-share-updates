@@ -22,7 +22,5 @@ public interface IShareCoordinator
 
     Task<ShareCommandResult> StopAsync(string reason, TimeSpan timeout, CancellationToken token);
 
-    Task<ShareCommandResult> SetMutedAsync(bool muted, CancellationToken token);
-
     Task<ShareCommandResult> ReconcileAsync(IReadOnlyList<AudioSession> active, CancellationToken token);
 }

@@ -7,24 +7,32 @@ public sealed class ShareSignalSelfTestTests
     [Fact]
     public void GetMessage_WhenNotSharing_DoesNotClaimSignal()
     {
-        var message = ShareSignalSelfTest.GetMessage(false, false, 1f);
+        var message = ShareSignalSelfTest.GetMessage(false, false, 1f, 1f);
 
-        Assert.Equal("B1 自测：开始分享后会在这里确认音频信号。", message);
+        Assert.Equal("尚未開始分享。勾選應用程式後，朋友才會聽到。", message);
     }
 
     [Fact]
     public void GetMessage_WhenB1HasSignal_ReportsOnlyTheMeasuredSignal()
     {
-        var message = ShareSignalSelfTest.GetMessage(true, true, 0.02f);
+        var message = ShareSignalSelfTest.GetMessage(true, true, 0.02f, 0.02f);
 
-        Assert.Equal("B1 自测：已收到音乐信号。请确认 Discord 麦克风选择 Voicemeeter Out B1。", message);
+        Assert.Equal("正在分享，朋友應該能聽到目前的聲音。", message);
     }
 
     [Fact]
     public void GetMessage_WhenB1HasNoSignal_AsksUserToPlayTheSelectedProgram()
     {
-        var message = ShareSignalSelfTest.GetMessage(true, true, 0.019f);
+        var message = ShareSignalSelfTest.GetMessage(true, true, 0.019f, 0.019f);
 
-        Assert.Equal("B1 自测：正在分享，但还没收到所选程序的音频。请播放音乐后再确认。", message);
+        Assert.Equal("正在分享，但 FlowCast 尚未收到聲音。請確認該程式正在播放；若它指定了其他輸出，請改為跟隨系統預設。", message);
+    }
+
+    [Fact]
+    public void GetMessage_WhenInputHasSignalButB1DoesNot_ExplainsTheBananaIssue()
+    {
+        var message = ShareSignalSelfTest.GetMessage(true, true, 0.02f, 0f);
+
+        Assert.Equal("聲音已進入 FlowCast，但尚未送到朋友。請檢查 Voicemeeter Banana 的 B1 是否開啟。", message);
     }
 }

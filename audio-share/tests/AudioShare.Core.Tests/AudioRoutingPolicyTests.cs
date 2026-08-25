@@ -124,7 +124,7 @@ public sealed class AudioRoutingPolicyTests
     {
         var instruction = AudioRoutingPolicy.GetSetupInstruction([]);
 
-        Assert.Contains("未勾选任何程序", instruction, StringComparison.Ordinal);
+        Assert.Contains("未勾選任何程序", instruction, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class AudioRoutingPolicyTests
         var text = AudioRoutingPolicy.GetRouteConfirmationText([selected], 1, 2);
 
         Assert.Contains("Chrome", text, StringComparison.Ordinal);
-        Assert.Contains("同一程序名称的全部活动进程", text, StringComparison.Ordinal);
+        Assert.Contains("同一程序名稱的全部活動進程", text, StringComparison.Ordinal);
         Assert.Contains("Discord", text, StringComparison.Ordinal);
         Assert.Contains("Voicemeeter", text, StringComparison.Ordinal);
         Assert.Contains("1", text, StringComparison.Ordinal);
@@ -164,7 +164,7 @@ public sealed class AudioRoutingPolicyTests
     {
         var text = AudioRoutingPolicy.GetRouteConfirmationText([], 0, 2);
 
-        Assert.Contains("未勾选任何程序", text, StringComparison.Ordinal);
+        Assert.Contains("未勾選任何程序", text, StringComparison.Ordinal);
         Assert.Contains("0", text, StringComparison.Ordinal);
         Assert.Contains("2", text, StringComparison.Ordinal);
     }

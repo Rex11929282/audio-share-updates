@@ -33,11 +33,6 @@ public sealed class FavoritePrograms
         Path.GetFileNameWithoutExtension(processName).Trim().ToUpperInvariant();
 }
 
-public static class ShareTimerPresets
-{
-    public static IReadOnlyList<int> Minutes { get; } = [5, 15, 30, 60];
-}
-
 public static class AudioActivityPolicy
 {
     // Ignore persistent background noise from applications with an idle audio session.
@@ -49,6 +44,13 @@ public static class AudioActivityPolicy
     public static bool HasConfirmedOutput(float initialPeakLevel, float confirmedPeakLevel, float sustainedPeakLevel) =>
         new[] { initialPeakLevel, confirmedPeakLevel, sustainedPeakLevel }
             .Count(level => level >= MinimumPeakLevel) >= 2;
+
+    public static bool IsAudible(
+        bool isSessionActive,
+        float initialPeakLevel,
+        float confirmedPeakLevel,
+        float sustainedPeakLevel) =>
+        isSessionActive || HasConfirmedOutput(initialPeakLevel, confirmedPeakLevel, sustainedPeakLevel);
 }
 
 public static class ShareStartPolicy

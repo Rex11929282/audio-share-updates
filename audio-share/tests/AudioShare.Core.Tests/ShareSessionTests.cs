@@ -18,16 +18,10 @@ public sealed class ShareSessionTests
     }
 
     [Fact]
-    public void Muting_KeepsTheSharingDurationRunning()
+    public void Session_DoesNotExposeAMuteTransition()
     {
-        var session = new ShareSession();
-        session.Start(Start);
-
-        Assert.True(session.SetMuted(true));
-        Assert.Equal(ShareSessionState.Muted, session.State);
-        Assert.Equal(TimeSpan.FromSeconds(12), session.Duration(Start.AddSeconds(12)));
-        Assert.True(session.SetMuted(false));
-        Assert.Equal(ShareSessionState.Sharing, session.State);
+        Assert.DoesNotContain("Muted", Enum.GetNames<ShareSessionState>());
+        Assert.DoesNotContain(typeof(ShareSession).GetMethods(), method => method.Name == "SetMuted");
     }
 
     [Fact]

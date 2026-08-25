@@ -5,36 +5,71 @@ using Forms = System.Windows.Forms;
 
 namespace AudioShare.App;
 
+/// <summary>A shareable program shown in the tray quick-switch submenu.</summary>
+internal sealed record TrayProgramEntry(string DisplayName, bool IsShared, Action Share);
+
 internal sealed class FlowCastTrayIcon : IDisposable
 {
     private readonly Forms.NotifyIcon notifyIcon;
     private readonly Forms.ToolStripMenuItem startItem;
-    private readonly Forms.ToolStripMenuItem muteItem;
     private readonly Forms.ToolStripMenuItem stopItem;
+    private readonly Forms.ToolStripMenuItem programsItem;
+    private readonly Func<IReadOnlyList<TrayProgramEntry>> getPrograms;
     private Icon? currentIcon;
     private IntPtr currentIconHandle;
 
-    public FlowCastTrayIcon(Action showWindow, Action startSharing, Action toggleMute, Action stopSharing, Action exitApplication)
+    public FlowCastTrayIcon(
+        Action showWindow,
+        Action startSharing,
+        Action stopSharing,
+        Action exitApplication,
+        Func<IReadOnlyList<TrayProgramEntry>> getPrograms)
     {
+        this.getPrograms = getPrograms ?? throw new ArgumentNullException(nameof(getPrograms));
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("打开 FlowCast", null, (_, _) => showWindow());
-        startItem = new Forms.ToolStripMenuItem("开始分享", null, (_, _) => startSharing());
-        muteItem = new Forms.ToolStripMenuItem("静音分享", null, (_, _) => toggleMute());
+        menu.Items.Add("打開 FlowCast", null, (_, _) => showWindow());
+        startItem = new Forms.ToolStripMenuItem("開始分享", null, (_, _) => startSharing());
         stopItem = new Forms.ToolStripMenuItem("停止分享", null, (_, _) => stopSharing());
+        programsItem = new Forms.ToolStripMenuItem("切換分享的程序");
         menu.Items.Add(startItem);
-        menu.Items.Add(muteItem);
         menu.Items.Add(stopItem);
+        menu.Items.Add(programsItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("结束 FlowCast", null, (_, _) => exitApplication());
+        menu.Items.Add("結束 FlowCast", null, (_, _) => exitApplication());
+        menu.Opening += (_, _) => RebuildProgramsMenu();
 
         notifyIcon = new Forms.NotifyIcon
         {
             ContextMenuStrip = menu,
-            Text = "FlowCast - 只自己听到",
+            Text = "FlowCast - 只自己聽到",
             Visible = true,
         };
         notifyIcon.DoubleClick += (_, _) => showWindow();
         SetState(ShareSessionState.Idle);
+    }
+
+    private void RebuildProgramsMenu()
+    {
+        programsItem.DropDownItems.Clear();
+        var programs = getPrograms();
+        if (programs.Count == 0)
+        {
+            programsItem.DropDownItems.Add(new Forms.ToolStripMenuItem("暫無可分享的程序") { Enabled = false });
+            return;
+        }
+
+        foreach (var program in programs)
+        {
+            // Already-shared program is shown checked and disabled; picking another routes
+            // through the same confirm/switch path the main window uses.
+            var share = program.Share;
+            var item = new Forms.ToolStripMenuItem(program.DisplayName, null, (_, _) => share())
+            {
+                Checked = program.IsShared,
+                Enabled = !program.IsShared,
+            };
+            programsItem.DropDownItems.Add(item);
+        }
     }
 
     public void SetState(ShareSessionState state)
@@ -42,16 +77,13 @@ internal sealed class FlowCastTrayIcon : IDisposable
         var (text, color) = state switch
         {
             ShareSessionState.Sharing => ("FlowCast - 正在分享", Color.MediumSeaGreen),
-            ShareSessionState.Muted => ("FlowCast - 分享已静音", Color.DarkOrange),
-            ShareSessionState.Disconnected => ("FlowCast - 分享已断开", Color.IndianRed),
-            _ => ("FlowCast - 只自己听到", Color.SlateGray),
+            ShareSessionState.Disconnected => ("FlowCast - 分享已斷開", Color.IndianRed),
+            _ => ("FlowCast - 只自己聽到", Color.SlateGray),
         };
 
         notifyIcon.Text = text;
         startItem.Enabled = state is ShareSessionState.Idle or ShareSessionState.Disconnected;
-        muteItem.Enabled = state is ShareSessionState.Sharing or ShareSessionState.Muted;
-        muteItem.Text = state == ShareSessionState.Muted ? "恢复分享" : "静音分享";
-        stopItem.Enabled = state is ShareSessionState.Sharing or ShareSessionState.Muted or ShareSessionState.Disconnected;
+        stopItem.Enabled = state is ShareSessionState.Sharing or ShareSessionState.Disconnected;
         ReplaceIcon(color);
     }
 

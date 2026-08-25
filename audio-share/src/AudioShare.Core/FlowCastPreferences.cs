@@ -16,6 +16,8 @@ public sealed record FlowCastPreferences
 
     public bool QuickStartCompleted { get; init; }
 
+    public bool GlobalHotkeysEnabled { get; init; } = true;
+
     public static FlowCastPreferences Empty { get; } = new(
         ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase),
         reduceMotion: false);
@@ -26,7 +28,8 @@ public sealed record FlowCastPreferences
         bool restoreLocalPlayback = true,
         bool endSharingSoundEnabled = true,
         bool disconnectNotificationsEnabled = true,
-        bool quickStartCompleted = false)
+        bool quickStartCompleted = false,
+        bool globalHotkeysEnabled = true)
     {
         ExcludedProcesses = (excludedProcesses ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -38,17 +41,18 @@ public sealed record FlowCastPreferences
         EndSharingSoundEnabled = endSharingSoundEnabled;
         DisconnectNotificationsEnabled = disconnectNotificationsEnabled;
         QuickStartCompleted = quickStartCompleted;
+        GlobalHotkeysEnabled = globalHotkeysEnabled;
     }
 
     public FlowCastPreferences Exclude(string processName) =>
-        new(ExcludedProcesses.Append(Normalize(processName)).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled, QuickStartCompleted);
+        new(ExcludedProcesses.Append(Normalize(processName)).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled, QuickStartCompleted, GlobalHotkeysEnabled);
 
     public FlowCastPreferences Restore(string processName) =>
         new(ExcludedProcesses.Where(name => !string.Equals(name, Normalize(processName), StringComparison.OrdinalIgnoreCase))
-            .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled, QuickStartCompleted);
+            .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled, QuickStartCompleted, GlobalHotkeysEnabled);
 
     public FlowCastPreferences CompleteQuickStart() =>
-        new(ExcludedProcesses, ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled, quickStartCompleted: true);
+        new(ExcludedProcesses, ReduceMotion, RestoreLocalPlayback, EndSharingSoundEnabled, DisconnectNotificationsEnabled, quickStartCompleted: true, GlobalHotkeysEnabled);
 
     public bool IsExcluded(string processName) => ExcludedProcesses.Contains(Normalize(processName));
 

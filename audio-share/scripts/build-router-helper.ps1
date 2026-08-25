@@ -3,15 +3,14 @@ param(
     [Parameter(Mandatory)]
     [string]$OutputDirectory,
 
-    [Parameter(Mandatory)]
-    [string]$PythonEmbedZip,
+    [string]$PythonEmbedZip = (Join-Path $PSScriptRoot '..\router-helper\runtime\flowcast-router-runtime.zip'),
 
     [string]$HostPython
 )
 
 $ErrorActionPreference = 'Stop'
 
-$routerVersion = '1.1.2'
+$routerVersion = '1.2.1'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $sourceDirectory = Join-Path $projectRoot 'router-helper'
 $helperSourcePath = Join-Path $sourceDirectory 'audio_share_router_helper.py'
@@ -22,24 +21,6 @@ foreach ($path in @($PythonEmbedZip, $helperSourcePath, $lockPath, $noticesPath)
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required input is missing: $path"
     }
-}
-
-if ([string]::IsNullOrWhiteSpace($HostPython)) {
-    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-    if ($null -eq $pythonCommand) {
-        throw 'Host Python 3.12 is required. Supply -HostPython when python is not on PATH.'
-    }
-
-    $HostPython = $pythonCommand.Source
-}
-
-if (-not (Test-Path -LiteralPath $HostPython -PathType Leaf)) {
-    throw "Host Python executable is missing: $HostPython"
-}
-
-& $HostPython -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)'
-if ($LASTEXITCODE -ne 0) {
-    throw 'Host Python must be 3.12.'
 }
 
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -89,14 +70,36 @@ if (-not $importsSite) {
 Set-Content -LiteralPath $embeddedPth -Value $updatedPthLines -Encoding ascii
 
 $sitePackages = Join-Path $packageDirectory 'site-packages'
-& $HostPython -m pip install --disable-pip-version-check --require-hashes --no-deps --target $sitePackages -r $lockPath
-if ($LASTEXITCODE -ne 0) {
-    throw 'Installing locked router helper packages failed.'
-}
+$requiredPackages = @('comtypes', 'psutil', 'pycaw', 'winappaudiorouter')
+$missingPackages = @($requiredPackages | Where-Object {
+    if (-not (Test-Path -LiteralPath (Join-Path $sitePackages $_))) {
+        $true
+    }
+})
 
-foreach ($package in @('comtypes', 'psutil', 'pycaw', 'winappaudiorouter')) {
-    if (-not (Test-Path -LiteralPath (Join-Path $sitePackages $package))) {
-        throw "Locked router helper package is missing after installation: $package"
+if ($missingPackages.Count -gt 0) {
+    if ([string]::IsNullOrWhiteSpace($HostPython)) {
+        throw "PythonEmbedZip is missing locked router packages: $($missingPackages -join ', '). Use the source-managed runtime or supply a Python 3.12 host."
+    }
+
+    if (-not (Test-Path -LiteralPath $HostPython -PathType Leaf)) {
+        throw "Host Python executable is missing: $HostPython"
+    }
+
+    & $HostPython -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)'
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Host Python must be 3.12.'
+    }
+
+    & $HostPython -m pip install --disable-pip-version-check --require-hashes --no-deps --target $sitePackages -r $lockPath
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Installing locked router helper packages failed.'
+    }
+
+    foreach ($package in $missingPackages) {
+        if (-not (Test-Path -LiteralPath (Join-Path $sitePackages $package))) {
+            throw "Locked router helper package is missing after installation: $package"
+        }
     }
 }
 

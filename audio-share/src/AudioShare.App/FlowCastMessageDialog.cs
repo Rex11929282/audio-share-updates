@@ -66,7 +66,7 @@ internal sealed class FlowCastMessageDialog : FlowCastDialogWindow
         Window? owner,
         string title,
         string message,
-        string confirmText = "继续",
+        string confirmText = "繼續",
         string cancelText = "取消",
         FlowCastWindowTone tone = FlowCastWindowTone.Share) =>
         new FlowCastMessageDialog(owner, title, message, tone, confirmText, cancelText).ShowDialog() == true;

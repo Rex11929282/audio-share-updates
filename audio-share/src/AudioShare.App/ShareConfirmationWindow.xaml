@@ -2,38 +2,38 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:AudioShare.App"
-        Title="确认分享"
+        Title="確認分享"
         Width="520"
         Height="550"
         MinWidth="440"
         MinHeight="440"
-        Background="#F4F8FC"
+        Background="#F7F9FD"
         FontFamily="Microsoft YaHei UI"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Tone="Share">
     <Window.Resources>
-        <DropShadowEffect x:Key="SoftShadow" BlurRadius="16" ShadowDepth="5" Opacity="0.10" Color="#45678F" />
+        <DropShadowEffect x:Key="SoftShadow" BlurRadius="24" ShadowDepth="8" Opacity="0.09" Color="#476481" />
         <Style x:Key="GlassCard" TargetType="Border">
             <Setter Property="Background" Value="#D9FFFFFF" />
-            <Setter Property="BorderBrush" Value="#A8FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E8FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="20" />
+            <Setter Property="CornerRadius" Value="22" />
             <Setter Property="Effect" Value="{StaticResource SoftShadow}" />
         </Style>
         <Style x:Key="UtilityButton" TargetType="Button">
             <Setter Property="Padding" Value="15,8" />
             <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="Background" Value="#BFFFFFFF" />
-            <Setter Property="BorderBrush" Value="#B8D7E1EF" />
+            <Setter Property="BorderBrush" Value="#80FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Foreground" Value="#29425D" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource UtilityButton}">
-            <Setter Property="Background" Value="#1976F3" />
-            <Setter Property="BorderBrush" Value="#5AA7FF" />
+            <Setter Property="Background" Value="#0A84FF" />
+            <Setter Property="BorderBrush" Value="#5FB3FF" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Margin" Value="0" />
         </Style>
@@ -71,8 +71,8 @@
             </Grid.RowDefinitions>
 
             <StackPanel Margin="3,0,3,20">
-                <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="#172D45" Text="确认分享" />
-                <TextBlock Margin="0,5,0,0" Foreground="#687D94" Text="确认后才会更改音频路由。" />
+                <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="#172D45" Text="確認分享" />
+                <TextBlock Margin="0,5,0,0" Foreground="#687D94" Text="確認後才會更改音頻路由。" />
             </StackPanel>
 
             <Grid Grid.Row="1">
@@ -87,7 +87,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#147F95" Text="分享给朋友" />
+                        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#147F95" Text="分享給朋友" />
                         <ListBox Grid.Row="1" Margin="0,10,0,0" Style="{StaticResource SessionList}" ItemsSource="{Binding InputSessions}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -103,7 +103,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#4F6E8D" Text="仅自己听" />
+                        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#4F6E8D" Text="僅自己聽" />
                         <ListBox Grid.Row="1" Margin="0,10,0,0" Style="{StaticResource SessionList}" ItemsSource="{Binding AuxSessions}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -117,7 +117,7 @@
 
             <StackPanel Grid.Row="2" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
                 <Button Style="{StaticResource UtilityButton}" Click="CancelButton_Click" Content="取消" />
-                <Button Style="{StaticResource PrimaryButton}" Click="ConfirmButton_Click" Content="确认分享" />
+                <Button Style="{StaticResource PrimaryButton}" Click="ConfirmButton_Click" Content="確認分享" />
             </StackPanel>
         </Grid>
     </Grid>

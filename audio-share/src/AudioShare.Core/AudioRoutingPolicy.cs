@@ -29,9 +29,9 @@ public static class AudioRoutingPolicy
         }
 
         return selectedSessions.Count == 0
-            ? "当前未勾选任何程序。未勾选程序不会分享到 B1；应用路由后会送到 Voicemeeter AUX Input。"
-            : "可在 Windows 音量混音器中将所选程序的输出设置为 Voicemeeter Input。" +
-              "Discord 和正常播放应保持在 Voicemeeter AUX Input。";
+            ? "當前未勾選任何程序。未勾選程序不會分享到 B1；應用路由後會送到 Voicemeeter AUX Input。"
+            : "可在 Windows 音量混音器中將所選程序的輸出設置為 Voicemeeter Input。" +
+              "Discord 和正常播放應保持在 Voicemeeter AUX Input。";
     }
 
     public static string GetRouteConfirmationText(
@@ -53,12 +53,12 @@ public static class AudioRoutingPolicy
 
         var selectedApplicationsText = selectedApplications.Any()
             ? string.Join(", ", selectedApplications)
-            : "未勾选任何程序";
+            : "未勾選任何程序";
 
-        return $"已勾选程序：{selectedApplicationsText}。\n" +
-               $"{selectedToInputCount} 个正在播放的程序会送到 Voicemeeter Input（B1 分享总线）。\n" +
-               $"{unselectedToAuxCount} 个正在播放的程序会送到 Voicemeeter AUX Input（仅本机收听）。\n\n" +
-               "勾选一个程序会影响同一程序名称的全部活动进程。例如，勾选 Chrome 会影响同时播放音频的所有 Chrome 进程。\n\n" +
-               "Discord 和 Voicemeeter 不会被本程序路由。";
+        return $"已勾選程序：{selectedApplicationsText}。\n" +
+               $"{selectedToInputCount} 個正在播放的程序會送到 Voicemeeter Input（B1 分享總線）。\n" +
+               $"{unselectedToAuxCount} 個正在播放的程序會送到 Voicemeeter AUX Input（僅本機收聽）。\n\n" +
+               "勾選一個程序會影響同一程序名稱的全部活動進程。例如，勾選 Chrome 會影響同時播放音頻的所有 Chrome 進程。\n\n" +
+               "Discord 和 Voicemeeter 不會被本程序路由。";
     }
 }

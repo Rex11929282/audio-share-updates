@@ -8,14 +8,14 @@ public sealed class FlowCastRuntimeHost
 {
     private readonly IShareRouteRuntime runtime;
     private readonly IShareRecoveryJournal journal;
-    private readonly Action startBanana;
-    private readonly Action startVoicemod;
+    private readonly Func<CancellationToken, Task<bool>> startBanana;
+    private readonly Func<CancellationToken, Task<bool>> startVoicemod;
 
     public FlowCastRuntimeHost(
         IShareRouteRuntime runtime,
         IShareRecoveryJournal journal,
-        Action startBanana,
-        Action startVoicemod)
+        Func<CancellationToken, Task<bool>> startBanana,
+        Func<CancellationToken, Task<bool>> startVoicemod)
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         this.journal = journal ?? throw new ArgumentNullException(nameof(journal));
@@ -27,8 +27,8 @@ public sealed class FlowCastRuntimeHost
 
     public async Task InitializeAsync(CancellationToken token)
     {
-        TryStart(startBanana);
-        TryStart(startVoicemod);
+        await TryStartVoicemodAsync(token);
+        await TryStartBananaAsync(token);
 
         ShareRecoveryRecord? recovery;
         try
@@ -92,19 +92,41 @@ public sealed class FlowCastRuntimeHost
         return new FlowCastRuntimeHost(
             runtime,
             new FlowCastRecoveryJournal(),
-            bananaWindow.TryStartAndMinimize,
-            voicemod.TryStart);
+            bananaWindow.EnsureReadyAndMinimizeAsync,
+            voicemod.EnsureReadyAsync);
     }
 
-    private static void TryStart(Action action)
+    private async Task<bool> TryStartBananaAsync(CancellationToken token)
     {
         try
         {
-            action();
+            return await startBanana(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
-            // Optional startup helpers must not block the FlowCast window.
+            // Banana is optional during startup; FlowCast can still recover routes later.
+            return false;
+        }
+    }
+
+    private async Task<bool> TryStartVoicemodAsync(CancellationToken token)
+    {
+        try
+        {
+            return await startVoicemod(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Voicemod remains optional, so a failed launch cannot block FlowCast.
+            return false;
         }
     }
 }

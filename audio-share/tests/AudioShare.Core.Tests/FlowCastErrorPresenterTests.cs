@@ -9,7 +9,7 @@ public sealed class FlowCastErrorPresenterTests
     {
         var message = FlowCastErrorPresenter.FromCode("route_start_failed");
 
-        Assert.Equal("没有连接到分享路径", message.Title);
+        Assert.Equal("沒有連接到分享路徑", message.Title);
         Assert.Equal(FlowCastRepairAction.ReconnectRoute, message.Action);
     }
 }

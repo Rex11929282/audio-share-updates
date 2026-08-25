@@ -4,15 +4,20 @@ public static class ShareSignalSelfTest
 {
     private const float SignalThreshold = 0.02f;
 
-    public static string GetMessage(bool isSharing, bool isMainInputShared, float b1Level)
+    public static string GetMessage(bool isSharing, bool isMainInputShared, float inputLevel, float b1Level)
     {
         if (!isSharing || !isMainInputShared)
         {
-            return "B1 自测：开始分享后会在这里确认音频信号。";
+            return "尚未開始分享。勾選應用程式後，朋友才會聽到。";
         }
 
-        return b1Level >= SignalThreshold
-            ? "B1 自测：已收到音乐信号。请确认 Discord 麦克风选择 Voicemeeter Out B1。"
-            : "B1 自测：正在分享，但还没收到所选程序的音频。请播放音乐后再确认。";
+        if (b1Level >= SignalThreshold)
+        {
+            return "正在分享，朋友應該能聽到目前的聲音。";
+        }
+
+        return inputLevel >= SignalThreshold
+            ? "聲音已進入 FlowCast，但尚未送到朋友。請檢查 Voicemeeter Banana 的 B1 是否開啟。"
+            : "正在分享，但 FlowCast 尚未收到聲音。請確認該程式正在播放；若它指定了其他輸出，請改為跟隨系統預設。";
     }
 }
