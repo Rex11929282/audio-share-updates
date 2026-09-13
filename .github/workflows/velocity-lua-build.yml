@@ -1,0 +1,106 @@
+name: velocity-lua-build
+
+on:
+  push:
+    branches: [velocity-lua-build-temp]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Velocity source
+        shell: pwsh
+        run: |
+          git clone https://github.com/0x12F/velocity-improved.git velocity-src
+          git -C velocity-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
+
+      - name: Apply crash fix and Lua integration
+        shell: pwsh
+        run: |
+          python velocity-build/apply_source_fix.py velocity-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/apply_lua.py velocity-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate patched source
+        shell: pwsh
+        run: |
+          $r='velocity-src\cs2\velocity-cs2'
+          $checks=@(
+            @("$r\project\core\systems\impl\prediction.cpp", 'missing schema %s::%s (simulate)'),
+            @("$r\project\core\systems\impl\prediction.cpp", 'missing schema %s::%s (capture_prestate)'),
+            @("$r\project\entry.cpp", 'scripting::g_lua.initialize'),
+            @("$r\project\core\rendering\impl\context.cpp", 'scripting::g_lua.on_frame'),
+            @("$r\project\core\scripting\lua_manager.cpp", '[lua] initialized; scripts='),
+            @("$r\vcpkg.json", '"lua"')
+          )
+          foreach($c in $checks) {
+            if(-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker $($c[1])" }
+          }
+
+      - name: Locate Visual Studio and vcpkg
+        shell: pwsh
+        run: |
+          $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if(-not $vs){throw 'Visual Studio not found'}
+          "VSROOT=$vs" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $v=@("$vs\VC\vcpkg",'C:\vcpkg') | Where-Object { Test-Path "$_\vcpkg.exe" } | Select-Object -First 1
+          if(-not $v){throw 'vcpkg not found'}
+          "VCPKG_ROOT=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build Development DLL
+        shell: pwsh
+        run: |
+          $msbuild="$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe"
+          & $msbuild 'velocity-src\cs2\velocity-cs2\velocity-cs2.vcxproj' /m /p:Configuration=Development /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\"
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+
+      - name: Lua runtime smoke test
+        shell: pwsh
+        run: |
+          $root=Resolve-Path 'velocity-src\cs2\velocity-cs2'
+          $lua=Get-ChildItem $root -Recurse -Filter lua.lib -ErrorAction SilentlyContinue | Select-Object -First 1
+          if(-not $lua){throw 'lua.lib not found'}
+          $inc=Get-ChildItem $root -Recurse -Filter lua.hpp | Select-Object -First 1 | ForEach-Object {$_.Directory.FullName}
+          if(-not $inc){throw 'lua.hpp not found'}
+          @'
+#include <lua.hpp>
+#include <cstdio>
+int main(){ lua_State* L=luaL_newstate(); if(!L)return 10; luaL_openlibs(L); if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11; lua_close(L); std::puts("LUA_SMOKE_OK"); return 0; }
+'@ | Set-Content lua_smoke.cpp -Encoding ascii
+          $msvc=(Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
+          $cl="$env:VSROOT\VC\Tools\MSVC\$msvc\bin\Hostx64\x64\cl.exe"
+          & $cl /nologo /EHsc /std:c++20 /I"$inc" lua_smoke.cpp "$($lua.FullName)" /Fe:lua_smoke.exe
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+          .\lua_smoke.exe
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+
+      - name: Validate and package DLL
+        shell: pwsh
+        run: |
+          $dll='velocity-src\cs2\bin\velocity-cs2-dev.dll'
+          if(-not(Test-Path $dll)){throw 'DLL missing'}
+          $b=[IO.File]::ReadAllBytes($dll)
+          if($b.Length -lt 100000 -or $b[0] -ne 0x4d -or $b[1] -ne 0x5a){throw 'invalid PE DLL'}
+          $a=[Text.Encoding]::ASCII.GetString($b)
+          if(-not $a.Contains('[lua] initialized; scripts=')){throw 'Lua marker absent'}
+          $msvc=(Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
+          $dump="$env:VSROOT\VC\Tools\MSVC\$msvc\bin\Hostx64\x64\dumpbin.exe"
+          & $dump /headers $dll | Out-File dll_headers.txt
+          & $dump /imports $dll | Out-File dll_imports.txt
+          $hash=(Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+          New-Item -ItemType Directory -Force release\scripts | Out-Null
+          Copy-Item $dll release\velocity-cs2-dev-lua.dll
+          Copy-Item 'velocity-src\cs2\velocity-cs2\lua_examples\hello.lua' release\scripts\hello.lua
+          "sha256=$hash`nsize=$($b.Length)`nlua_smoke=PASS`npe=PASS`nlua_marker=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt
+          Copy-Item dll_headers.txt,dll_imports.txt release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: velocity-cs2-dev-lua-tested
+          path: release
+          if-no-files-found: error
