@@ -84,17 +84,25 @@ xui.write_text(t, encoding="utf-8")
 
 
 # 3) Defer Traditional-Chinese atlas prewarm out of font initialization. It is
-# performed once from the menu render path instead of delaying module startup.
+# performed once from the live menu render path instead of delaying startup.
 fonts = v / "project/core/rendering/impl/fonts.cpp"
 t = fonts.read_text(encoding="utf-8")
-prewarm = '''
-\t\t// Prewarm Traditional-Chinese glyphs once so switching to a page does not
-\t\t// cause a one-frame atlas rebuild/flicker.
-\t\tconst auto zh_prewarm = localization::prewarm_chars( );
-\t\t( void )xdraw::measure_text( zh_prewarm );
+prewarm_actual = '''
+\t\t// Prewarm Traditional-Chinese glyphs once. Without this, entering a page
+\t\t// for the first time can rebuild the CJK atlas mid-frame and visibly flash.
+\t\tif ( auto* primary = xdraw::primary_font( ) )
+\t\t{
+\t\t\t( void )primary->measure( localization::prewarm_chars );
+\t\t\tif ( primary->fallback )
+\t\t\t{
+\t\t\t\tprimary->fallback->flush_atlas( );
+\t\t\t}
+\t\t}
 '''
-if prewarm in t:
-    t = t.replace(prewarm, '\n', 1)
+if prewarm_actual in t:
+    t = t.replace(prewarm_actual, '\n', 1)
+else:
+    die('font init CJK prewarm block not found')
 fonts.write_text(t, encoding="utf-8")
 
 hpp = v / "project/core/rendering/rendering.hpp"
@@ -125,7 +133,7 @@ replacement = '''\t\tif ( !g_context.ui_assets_ready( ) )
 \t\t// DLL initialization lighter while still preventing first-page flicker.
 \t\tif ( !this->m_cjk_prewarm_done )
 \t\t{
-\t\t\t( void )xdraw::measure_text( localization::prewarm_chars( ) );
+\t\t\t( void )xdraw::measure_text( localization::prewarm_chars );
 \t\t\tthis->m_cjk_prewarm_done = true;
 \t\t}
 
