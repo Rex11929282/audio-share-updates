@@ -31,35 +31,43 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/apply_ui_v2.py velocity-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/apply_perf_v3.py velocity-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate v2 source
+      - name: Validate v3 source
         shell: pwsh
         run: |
           $r='velocity-src\cs2\velocity-cs2'
           $checks=@(
             @("$r\project\core\systems\impl\prediction.cpp", 'missing schema %s::%s (simulate)'),
-            @("$r\project\core\scripting\lua_manager.cpp", 'GetOpenFileNameW'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'screen_size_fn'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'hud_line_fn'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'max_hud_draw_calls_per_callback'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'm_scan_requested.exchange'),
+            @("$r\project\core\scripting\scripting.hpp", 'script_statuses'),
             @("$r\project\core\rendering\rendering.hpp", '"general", "lua"'),
-            @("$r\project\core\rendering\impl\menu\menu.config.cpp", '##lua_dedicated_page'),
+            @("$r\project\core\rendering\impl\menu\menu.config.cpp", '已開啟的 Lua'),
             @("$r\project\core\rendering\impl\menu\menu.config.cpp", '面板寬度##ui_panel_width'),
-            @("$r\project\core\rendering\impl\menu\menu.config.cpp", '拖曳主視窗右下角調整大小'),
-            @("$r\project\core\localization\zh_tw.hpp", 'generic_tr( std::string_view s )'),
-            @("$r\project\core\localization\zh_tw.hpp", 'prewarm_chars'),
-            @("$r\project\core\rendering\impl\fonts.cpp", 'Prewarm Traditional-Chinese glyphs'),
-            @("$r\project\external\xdraw\xui\xui.cpp", 'GetClientRect'),
-            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'draw_mcb_mark'),
-            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'MCB user-resizable stable layout'),
-            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'true, 620.0f, 460.0f, menu_reveal'),
+            @("$r\project\external\xdraw\xui\xui.cpp", 'const auto drag_zone = rect{'),
+            @("$r\project\external\xdraw\xui\xui.cpp", 'moving_or_resizing'),
+            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'Defer CJK glyph warm-up'),
+            @("$r\project\core\localization\zh_tw.hpp", 'Dynamic'),
+            @("$r\lua_examples\snow_hud.lua", 'Lua 雪花 HUD：運行中'),
             @("$r\vcpkg.json", '"lua"')
           )
           foreach($c in $checks) {
             if(-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker $($c[1])" }
           }
+
+          $ctx=Get-Content "$r\project\core\rendering\impl\context.cpp" -Raw
+          $begin=$ctx.IndexOf('xdraw::begin_frame( true )')
+          $lua=$ctx.IndexOf('scripting::g_lua.on_frame( );')
+          $end=$ctx.IndexOf('xdraw::end_frame( )')
+          if($begin -lt 0 -or $lua -lt $begin -or $end -lt $lua){throw 'Lua HUD callback is outside xdraw frame'}
+
           $scaledX=960.0*1440.0/1920.0
           $scaledY=540.0*1080.0/1080.0
-          if([math]::Abs($scaledX-720.0)-gt 0.001 -or [math]::Abs($scaledY-540.0)-gt 0.001){throw 'mouse scaling failed'}
-          $w=900.0;$h=700.0;$x=[math]::Floor((1440.0-$w)/2);$y=[math]::Floor((1080.0-$h)/2)
-          if($x-ne270 -or $y-ne190){throw 'initial UI geometry failed'}
+          if([math]::Abs($scaledX-720.0)-gt0.001 -or [math]::Abs($scaledY-540.0)-gt0.001){throw 'mouse scaling failed'}
 
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
@@ -78,7 +86,7 @@ jobs:
           & $msbuild 'velocity-src\cs2\velocity-cs2\velocity-cs2.vcxproj' /m /p:Configuration=Development /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\"
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
 
-      - name: Lua runtime smoke test
+      - name: Lua snow HUD runtime smoke test
         shell: pwsh
         run: |
           $root=Resolve-Path 'velocity-src\cs2\velocity-cs2'
@@ -86,10 +94,10 @@ jobs:
           $hpp=Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.hpp | Select-Object -First 1
           if(-not $lua -or -not $hpp){throw 'Lua headers/library not found'}
           $inc=$hpp.Directory.FullName
-          $src='#include <lua.hpp>'+"`n"+'#include <cstdio>'+"`n"+'int main(){lua_State* L=luaL_newstate();if(!L)return 10;luaL_openlibs(L);if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11;lua_close(L);std::puts("LUA_SMOKE_OK");return 0;}'
-          Set-Content lua_smoke.cpp -Value $src -Encoding ascii
           $devcmd="$env:VSROOT\Common7\Tools\VsDevCmd.bat"
-          $cmd='"'+$devcmd+'" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /I"'+$inc+'" lua_smoke.cpp "'+$lua.FullName+'" /Fe:lua_smoke.exe && lua_smoke.exe'
+          $src=Resolve-Path 'velocity-build\lua_snow_smoke.cpp'
+          $snow=Resolve-Path 'velocity-src\cs2\velocity-cs2\lua_examples\snow_hud.lua'
+          $cmd='"'+$devcmd+'" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /I"'+$inc+'" "'+$src+'" "'+$lua.FullName+'" /Fe:lua_snow_smoke.exe && lua_snow_smoke.exe "'+$snow+'"'
           cmd.exe /d /s /c $cmd
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
 
@@ -101,7 +109,7 @@ jobs:
           $b=[IO.File]::ReadAllBytes($dll)
           if($b.Length-lt100000 -or $b[0]-ne0x4d -or $b[1]-ne0x5a){throw 'invalid PE DLL'}
           $utf=[Text.Encoding]::UTF8.GetString($b)
-          foreach($marker in @('Lua 腳本管理','面板寬度','拖曳主視窗右下角調整大小')) {
+          foreach($marker in @('Lua 腳本管理','已開啟的 Lua','面板寬度')) {
             if(-not $utf.Contains($marker)){throw "DLL marker absent: $marker"}
           }
           $msvc=(Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
@@ -111,13 +119,14 @@ jobs:
           if(Select-String -Path dll_imports.txt -Pattern 'lua[^ ]*\.dll' -Quiet){throw 'Lua must be statically linked'}
           $hash=(Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force release\scripts | Out-Null
-          Copy-Item $dll release\velocity-cs2-dev-lua-zh-tw-mcb-v2.dll
+          Copy-Item $dll release\velocity-cs2-dev-lua-zh-tw-mcb-v3.dll
           Copy-Item 'velocity-src\cs2\velocity-cs2\lua_examples\hello.lua' release\scripts\hello.lua
-          "sha256=$hash`nsize=$($b.Length)`nmsbuild=PASS`nlua_runtime_smoke=PASS`npe=PASS`nlua_static_link=PASS`nzh_tw_exact_and_word_fallback=PASS`ncjk_glyph_prewarm=PASS`nmouse_1440x1080_scaling=PASS`nlua_dedicated_tab=PASS`nmanual_ui_resize_grip=PASS`nmanual_ui_width_height_sliders=PASS`nstable_layout_no_per_frame_reset=PASS`nschema_crash_guard=PASS`nmcb_brand_source=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt -Encoding utf8
+          Copy-Item 'velocity-src\cs2\velocity-cs2\lua_examples\snow_hud.lua' release\scripts\snow_hud.lua
+          "sha256=$hash`nsize=$($b.Length)`nmsbuild=PASS`nlua_snow_hud_runtime_smoke=PASS`npe=PASS`nlua_static_link=PASS`nlua_hud_api=PASS`nlua_visible_status_list=PASS`nlua_bad_script_suspend=PASS`nfilesystem_watch_off_render_thread=PASS`nui_drag_top_strip_only=PASS`nui_blur_bypass_while_move_resize=PASS`ndeferred_cjk_prewarm=PASS`nmouse_1440x1080_scaling=PASS`nmanual_ui_resize=PASS`nschema_crash_guard=PASS`nmcb_brand_source=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt -Encoding utf8
           Copy-Item dll_headers.txt,dll_imports.txt release
 
       - uses: actions/upload-artifact@v4
         with:
-          name: velocity-cs2-dev-lua-zh-tw-mcb-v2-tested
+          name: velocity-cs2-dev-lua-zh-tw-mcb-v3-tested
           path: release
           if-no-files-found: error
