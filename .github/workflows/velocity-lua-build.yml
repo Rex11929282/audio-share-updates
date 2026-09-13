@@ -67,11 +67,8 @@ jobs:
           if(-not $lua){throw 'lua.lib not found'}
           $inc=Get-ChildItem $root -Recurse -Filter lua.hpp | Select-Object -First 1 | ForEach-Object {$_.Directory.FullName}
           if(-not $inc){throw 'lua.hpp not found'}
-          @'
-#include <lua.hpp>
-#include <cstdio>
-int main(){ lua_State* L=luaL_newstate(); if(!L)return 10; luaL_openlibs(L); if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11; lua_close(L); std::puts("LUA_SMOKE_OK"); return 0; }
-'@ | Set-Content lua_smoke.cpp -Encoding ascii
+          $src = '#include <lua.hpp>' + "`n" + '#include <cstdio>' + "`n" + 'int main(){ lua_State* L=luaL_newstate(); if(!L)return 10; luaL_openlibs(L); if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11; lua_close(L); std::puts("LUA_SMOKE_OK"); return 0; }'
+          Set-Content lua_smoke.cpp -Value $src -Encoding ascii
           $msvc=(Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
           $cl="$env:VSROOT\VC\Tools\MSVC\$msvc\bin\Hostx64\x64\cl.exe"
           & $cl /nologo /EHsc /std:c++20 /I"$inc" lua_smoke.cpp "$($lua.FullName)" /Fe:lua_smoke.exe
