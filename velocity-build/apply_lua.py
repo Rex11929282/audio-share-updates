@@ -3,7 +3,7 @@ import json,sys,shutil
 r=Path(sys.argv[1]); base=Path(__file__).parent/'overlay'; v=r/'cs2/velocity-cs2';
 s=v/'project/core/scripting';s.mkdir(parents=True,exist_ok=True)
 shutil.copy2(base/'scripting.hpp',s/'scripting.hpp');shutil.copy2(base/'lua_manager.cpp',s/'lua_manager.cpp')
-e=v/'lua_examples';e.mkdir(exist_ok=True);shutil.copy2(base/'hello.lua',e/'hello.lua')
+e=v/'lua_examples';e.mkdir(exist_ok=True);shutil.copy2(base/'hello.lua',e/'hello.lua');shutil.copy2(base/'snow_hud.lua',e/'snow_hud.lua')
 p=v/'vcpkg.json';d=json.loads(p.read_text());deps=d.setdefault('dependencies',[]);names={x if isinstance(x,str) else x.get('name') for x in deps};
 if 'lua' not in names:deps.append('lua');p.write_text(json.dumps(d,indent=2)+'\n')
 p=v/'velocity-cs2.vcxproj';t=p.read_text()
