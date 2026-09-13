@@ -1,0 +1,50 @@
+#pragma once
+
+#include <chrono>
+#include <filesystem>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+struct lua_State;
+
+namespace scripting
+{
+    class lua_manager
+    {
+    public:
+        bool initialize( void* module_handle );
+        void shutdown( );
+        void on_frame( );
+        void reload_all( );
+
+        [[nodiscard]] const std::filesystem::path& script_directory( ) const
+        {
+            return m_script_directory;
+        }
+
+    private:
+        struct script
+        {
+            std::filesystem::path path{};
+            std::filesystem::file_time_type write_time{};
+            lua_State* state{};
+        };
+
+        void scan_unlocked( bool force_reload );
+        void load_script_unlocked( script& value );
+        void unload_script_unlocked( script& value );
+        bool call_unlocked( script& value, const char* callback, double number_arg, bool has_number_arg );
+        void log_error_unlocked( const script& value, const char* phase, const char* error ) const;
+
+        std::mutex m_mutex{};
+        std::filesystem::path m_script_directory{};
+        std::vector<std::unique_ptr<script>> m_scripts{};
+        std::chrono::steady_clock::time_point m_last_scan{};
+        std::chrono::steady_clock::time_point m_last_frame{};
+        bool m_initialized{};
+    };
+
+    inline lua_manager g_lua{};
+}
