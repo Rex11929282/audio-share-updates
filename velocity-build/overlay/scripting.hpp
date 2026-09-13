@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -18,6 +19,11 @@ namespace scripting
         void shutdown( );
         void on_frame( );
         void reload_all( );
+
+        // GUI helpers. These only manage .lua files in the sandboxed scripts folder.
+        bool import_script_dialog( void* owner_window );
+        bool open_script_directory( );
+        [[nodiscard]] std::size_t script_count( );
 
         [[nodiscard]] const std::filesystem::path& script_directory( ) const
         {
