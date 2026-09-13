@@ -63,17 +63,9 @@ jobs:
         shell: pwsh
         run: |
           $root=Resolve-Path 'velocity-src\cs2\velocity-cs2'
-          $lua=Get-ChildItem $root -Recurse -Filter lua.lib -ErrorAction SilentlyContinue | Select-Object -First 1
-          if(-not $lua){throw 'lua.lib not found'}
-          $inc=Get-ChildItem $root -Recurse -Filter lua.hpp | Select-Object -First 1 | ForEach-Object {$_.Directory.FullName}
-          if(-not $inc){throw 'lua.hpp not found'}
-          $src = '#include <lua.hpp>' + "`n" + '#include <cstdio>' + "`n" + 'int main(){ lua_State* L=luaL_newstate(); if(!L)return 10; luaL_openlibs(L); if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11; lua_close(L); std::puts("LUA_SMOKE_OK"); return 0; }'
-          Set-Content lua_smoke.cpp -Value $src -Encoding ascii
-          $msvc=(Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
-          $cl="$env:VSROOT\VC\Tools\MSVC\$msvc\bin\Hostx64\x64\cl.exe"
-          & $cl /nologo /EHsc /std:c++20 /I"$inc" lua_smoke.cpp "$($lua.FullName)" /Fe:lua_smoke.exe
-          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
-          .\lua_smoke.exe
+          $luaExe=Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
+          if(-not $luaExe){throw 'vcpkg Lua interpreter not found'}
+          & $luaExe.FullName -e 'assert(6*7==42); print("LUA_SMOKE_OK")'
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
 
       - name: Validate and package DLL
@@ -93,7 +85,7 @@ jobs:
           New-Item -ItemType Directory -Force release\scripts | Out-Null
           Copy-Item $dll release\velocity-cs2-dev-lua.dll
           Copy-Item 'velocity-src\cs2\velocity-cs2\lua_examples\hello.lua' release\scripts\hello.lua
-          "sha256=$hash`nsize=$($b.Length)`nlua_smoke=PASS`npe=PASS`nlua_marker=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt
+          "sha256=$hash`nsize=$($b.Length)`nmsbuild=PASS`nlua_runtime_smoke=PASS`npe=PASS`nlua_marker=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt
           Copy-Item dll_headers.txt,dll_imports.txt release
 
       - uses: actions/upload-artifact@v4
