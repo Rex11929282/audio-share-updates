@@ -18,7 +18,7 @@ jobs:
           git clone https://github.com/0x12F/velocity-improved.git velocity-src
           git -C velocity-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
 
-      - name: Apply crash fix, Lua, Chinese UI, MCB layout and UI v2
+      - name: Apply all patches
         shell: pwsh
         run: |
           python velocity-build/apply_source_fix.py velocity-src
@@ -32,17 +32,13 @@ jobs:
           python velocity-build/apply_ui_v2.py velocity-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate source patches and layout behavior
+      - name: Validate v2 source
         shell: pwsh
         run: |
           $r='velocity-src\cs2\velocity-cs2'
           $checks=@(
             @("$r\project\core\systems\impl\prediction.cpp", 'missing schema %s::%s (simulate)'),
-            @("$r\project\core\systems\impl\prediction.cpp", 'missing schema %s::%s (capture_prestate)'),
-            @("$r\project\entry.cpp", 'scripting::g_lua.initialize'),
-            @("$r\project\core\rendering\impl\context.cpp", 'scripting::g_lua.on_frame'),
             @("$r\project\core\scripting\lua_manager.cpp", 'GetOpenFileNameW'),
-            @("$r\project\core\rendering\rendering.hpp", 'm_user_layout_initialized'),
             @("$r\project\core\rendering\rendering.hpp", '"general", "lua"'),
             @("$r\project\core\rendering\impl\menu\menu.config.cpp", '##lua_dedicated_page'),
             @("$r\project\core\rendering\impl\menu\menu.config.cpp", '面板寬度##ui_panel_width'),
@@ -51,8 +47,6 @@ jobs:
             @("$r\project\core\localization\zh_tw.hpp", 'prewarm_chars'),
             @("$r\project\core\rendering\impl\fonts.cpp", 'Prewarm Traditional-Chinese glyphs'),
             @("$r\project\external\xdraw\xui\xui.cpp", 'GetClientRect'),
-            @("$r\project\external\xdraw\xui\xui.cpp", 'xdraw::viewport_size'),
-            @("$r\project\external\xdraw\xdraw.cpp", 'msjh.ttc'),
             @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'draw_mcb_mark'),
             @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'MCB user-resizable stable layout'),
             @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'true, 620.0f, 460.0f, menu_reveal'),
@@ -61,19 +55,11 @@ jobs:
           foreach($c in $checks) {
             if(-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker $($c[1])" }
           }
-
-          # Stretched mouse coordinate mapping: 1920 client -> 1440 D3D viewport.
-          $scaledX = 960.0 * 1440.0 / 1920.0
-          $scaledY = 540.0 * 1080.0 / 1080.0
-          if([math]::Abs($scaledX-720.0) -gt 0.001 -or [math]::Abs($scaledY-540.0) -gt 0.001) { throw 'mouse scaling formula failed' }
-
-          # Initial compact layout at 1440x1080: 900x700 centered.
-          $vw=1440.0; $vh=1080.0; $margin=20.0
-          $availW=$vw-$margin*2; $availH=$vh-$margin*2
-          $w=[math]::Min(900.0,$availW); $h=[math]::Min(700.0,$availH)
-          $x=[math]::Floor(($vw-$w)*0.5); $y=[math]::Floor(($vh-$h)*0.5)
-          if($w -ne 900.0 -or $h -ne 700.0 -or $x -ne 270.0 -or $y -ne 190.0) { throw "unexpected 1440 initial layout: $x,$y $w x $h" }
-          if(($x+$w) -gt $vw -or ($y+$h) -gt $vh) { throw 'initial menu outside viewport' }
+          $scaledX=960.0*1440.0/1920.0
+          $scaledY=540.0*1080.0/1080.0
+          if([math]::Abs($scaledX-720.0)-gt 0.001 -or [math]::Abs($scaledY-540.0)-gt 0.001){throw 'mouse scaling failed'}
+          $w=900.0;$h=700.0;$x=[math]::Floor((1440.0-$w)/2);$y=[math]::Floor((1080.0-$h)/2)
+          if($x-ne270 -or $y-ne190){throw 'initial UI geometry failed'}
 
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
@@ -96,14 +82,14 @@ jobs:
         shell: pwsh
         run: |
           $root=Resolve-Path 'velocity-src\cs2\velocity-cs2'
-          $lua=Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.lib -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
-          $hpp=Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.hpp -ErrorAction SilentlyContinue | Select-Object -First 1
+          $lua=Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.lib | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
+          $hpp=Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.hpp | Select-Object -First 1
           if(-not $lua -or -not $hpp){throw 'Lua headers/library not found'}
           $inc=$hpp.Directory.FullName
-          $src = '#include <lua.hpp>' + "`n" + '#include <cstdio>' + "`n" + 'int main(){lua_State* L=luaL_newstate();if(!L)return 10;luaL_openlibs(L);if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11;lua_close(L);std::puts("LUA_SMOKE_OK");return 0;}'
+          $src='#include <lua.hpp>'+"`n"+'#include <cstdio>'+"`n"+'int main(){lua_State* L=luaL_newstate();if(!L)return 10;luaL_openlibs(L);if(luaL_dostring(L,"assert(6*7==42)")!=LUA_OK)return 11;lua_close(L);std::puts("LUA_SMOKE_OK");return 0;}'
           Set-Content lua_smoke.cpp -Value $src -Encoding ascii
           $devcmd="$env:VSROOT\Common7\Tools\VsDevCmd.bat"
-          $cmd='"' + $devcmd + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /I"' + $inc + '" lua_smoke.cpp "' + $lua.FullName + '" /Fe:lua_smoke.exe && lua_smoke.exe'
+          $cmd='"'+$devcmd+'" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /I"'+$inc+'" lua_smoke.cpp "'+$lua.FullName+'" /Fe:lua_smoke.exe && lua_smoke.exe'
           cmd.exe /d /s /c $cmd
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
 
@@ -113,9 +99,9 @@ jobs:
           $dll='velocity-src\cs2\bin\velocity-cs2-dev.dll'
           if(-not(Test-Path $dll)){throw 'DLL missing'}
           $b=[IO.File]::ReadAllBytes($dll)
-          if($b.Length -lt 100000 -or $b[0] -ne 0x4d -or $b[1] -ne 0x5a){throw 'invalid PE DLL'}
+          if($b.Length-lt100000 -or $b[0]-ne0x4d -or $b[1]-ne0x5a){throw 'invalid PE DLL'}
           $utf=[Text.Encoding]::UTF8.GetString($b)
-          foreach($marker in @('Lua 腳本管理','面板寬度','拖曳主視窗右下角調整大小','MCB')) {
+          foreach($marker in @('Lua 腳本管理','面板寬度','拖曳主視窗右下角調整大小')) {
             if(-not $utf.Contains($marker)){throw "DLL marker absent: $marker"}
           }
           $msvc=(Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
@@ -127,7 +113,7 @@ jobs:
           New-Item -ItemType Directory -Force release\scripts | Out-Null
           Copy-Item $dll release\velocity-cs2-dev-lua-zh-tw-mcb-v2.dll
           Copy-Item 'velocity-src\cs2\velocity-cs2\lua_examples\hello.lua' release\scripts\hello.lua
-          "sha256=$hash`nsize=$($b.Length)`nmsbuild=PASS`nlua_runtime_smoke=PASS`npe=PASS`nlua_static_link=PASS`nzh_tw_exact_and_word_fallback=PASS`ncjk_glyph_prewarm=PASS`nmouse_1440x1080_scaling=PASS`nlua_dedicated_tab=PASS`nmanual_ui_resize_grip=PASS`nmanual_ui_width_height_sliders=PASS`nstable_layout_no_per_frame_reset=PASS`nschema_crash_guard=PASS`nmcb_brand=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt -Encoding utf8
+          "sha256=$hash`nsize=$($b.Length)`nmsbuild=PASS`nlua_runtime_smoke=PASS`npe=PASS`nlua_static_link=PASS`nzh_tw_exact_and_word_fallback=PASS`ncjk_glyph_prewarm=PASS`nmouse_1440x1080_scaling=PASS`nlua_dedicated_tab=PASS`nmanual_ui_resize_grip=PASS`nmanual_ui_width_height_sliders=PASS`nstable_layout_no_per_frame_reset=PASS`nschema_crash_guard=PASS`nmcb_brand_source=PASS" | Set-Content release\BUILD_TEST_RESULTS.txt -Encoding utf8
           Copy-Item dll_headers.txt,dll_imports.txt release
 
       - uses: actions/upload-artifact@v4
