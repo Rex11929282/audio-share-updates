@@ -181,7 +181,7 @@ loc = v / "project/core/localization/zh_tw.hpp"
 t = loc.read_text(encoding="utf-8")
 anchor = '''    [[nodiscard]] inline std::string_view generic_tr( std::string_view s ) noexcept
     {
-        struct word_pair { std::string_view en; std::string_view zh; };'''
+        bool has_ascii_alpha{};'''
 replacement = '''    [[nodiscard]] inline std::string_view generic_tr( std::string_view s ) noexcept
     {
         // Generic fallback is for short, lower-case UI labels only. Dynamic
@@ -193,8 +193,8 @@ replacement = '''    [[nodiscard]] inline std::string_view generic_tr( std::stri
                 return s;
         }
 
-        struct word_pair { std::string_view en; std::string_view zh; };'''
-if 'Dynamic\n        // player/model/weapon text bypasses this path' not in t:
+        bool has_ascii_alpha{};'''
+if 'player/model/weapon text bypasses this path' not in t:
     t = replace_once(t, anchor, replacement, "translation fast path")
 loc.write_text(t, encoding="utf-8")
 
