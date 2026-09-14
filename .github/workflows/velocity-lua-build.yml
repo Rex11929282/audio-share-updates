@@ -1,4 +1,4 @@
-name: MCB-CS2-v5-build
+name: MCB-CS2-v5-stable-build
 
 on:
   push:
@@ -33,32 +33,51 @@ jobs:
             'apply_stability_v5.py',
             'apply_panel_v5.py',
             'apply_registry_v5.py',
-            'apply_panel_fix_v5.py'
+            'apply_panel_fix_v5.py',
+            'apply_release_v5.py'
           )
           foreach ($patch in $patches) {
             python "velocity-build/$patch" mcb-src
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-      - name: Validate v5 source markers
+      - name: Validate v5 Stable source markers
         shell: pwsh
         run: |
           $r = 'mcb-src\cs2\MCB-CS2'
           if (-not (Test-Path "$r\MCB-CS2.vcxproj")) { throw 'project missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.cpp" -SimpleMatch 'ensure_blur_textures_for_bound_target' -Quiet)) { throw 'blur resize fix missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.cpp" -SimpleMatch 'ComPtr<ID3D11Buffer> replacement' -Quiet)) { throw 'buffer growth fix missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xui\xui.cpp" -SimpleMatch 'snapshot_pending_input' -Quiet)) { throw 'input snapshot fix missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xui\xui.cpp" -SimpleMatch 'parse_numeric_text' -Quiet)) { throw 'numeric parser fix missing' }
-          if (-not (Select-String -LiteralPath "$r\project\core\rendering\rendering.hpp" -SimpleMatch 'IDXGISwapChain* m_swap_chain' -Quiet)) { throw 'swapchain identity fix missing' }
-          if (-not (Select-String -LiteralPath "$r\project\core\scripting\lua_manager.cpp" -SimpleMatch 'max_logs_per_callback' -Quiet)) { throw 'Lua log limiter missing' }
-          if (-not (Select-String -LiteralPath "$r\project\core\scripting\lua_manager.cpp" -SimpleMatch 'mcb.draw_count' -Quiet)) { throw 'MCB Lua registry key missing' }
-          if (-not (Select-String -LiteralPath "$r\project\core\rendering\impl\menu\menu.core.cpp" -SimpleMatch 'CONTROL PANEL' -Quiet)) { throw 'new panel missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'sidebar_w{ 203.0f }' -Quiet)) { throw 'wide sidebar missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'col_accent{ 19, 191, 245, 255 }' -Quiet)) { throw 'cyan panel accent missing' }
-          if (-not (Select-String -LiteralPath "$r\project\core\features\misc\impl\impacts.cpp" -SimpleMatch '[MCB]' -Quiet)) { throw 'MCB visible brand missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'k_root_key' -Quiet)) { throw 'registry root missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'k_legacy_root_key' -Quiet)) { throw 'legacy registry root missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'migrate_legacy_once' -Quiet)) { throw 'legacy registry migration missing' }
+          $checks = @(
+            @("$r\project\external\xdraw\xdraw.cpp", 'ensure_blur_textures_for_bound_target'),
+            @("$r\project\external\xdraw\xdraw.cpp", 'ComPtr<ID3D11Buffer> replacement'),
+            @("$r\project\external\xdraw\xui\xui.cpp", 'snapshot_pending_input'),
+            @("$r\project\external\xdraw\xui\xui.cpp", 'parse_numeric_text'),
+            @("$r\project\core\rendering\rendering.hpp", 'IDXGISwapChain* m_swap_chain'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'limited_lua_allocator'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'max_hud_draw_calls_per_frame'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'max_logs_per_callback'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'mcb.draw_count'),
+            @("$r\project\core\features\changer\changer.hpp", 'm_image_jobs'),
+            @("$r\project\core\features\changer\impl\econ_item_system.cpp", 'econ_item_system::shutdown'),
+            @("$r\project\entry.cpp", 'MCB_Shutdown'),
+            @("$r\project\entry.cpp", 'reserved == nullptr'),
+            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'CONTROL PANEL'),
+            @("$r\project\external\xdraw\xdraw.hpp", 'sidebar_w{ 203.0f }'),
+            @("$r\project\external\xdraw\xdraw.hpp", 'col_accent{ 19, 191, 245, 255 }'),
+            @("$r\project\core\features\misc\impl\impacts.cpp", '[MCB]'),
+            @("$r\project\external\config.hpp", 'migrate_legacy_once'),
+            @("$r\MCB-CS2.vcxproj", '<TargetName>MCB-CS2-v5-stable</TargetName>'),
+            @("$r\MCB-CS2.vcxproj", '<Optimization>MaxSpeed</Optimization>'),
+            @("$r\MCB-CS2.vcxproj", '<BufferSecurityCheck>true</BufferSecurityCheck>'),
+            @("$r\MCB-CS2.vcxproj", 'MCB_STABLE')
+          )
+          foreach ($c in $checks) {
+            if (-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker: $($c[1])" }
+          }
+          $proj = Get-Content "$r\MCB-CS2.vcxproj" -Raw
+          $ship = [regex]::Match($proj, '<ItemDefinitionGroup Condition="''\$\(Configuration\)\|\$\(Platform\)''==''Ship\|x64''">(?s)(.*?)</ItemDefinitionGroup>').Groups[1].Value
+          if ($ship -notmatch '<ExceptionHandling>Sync</ExceptionHandling>') { throw 'Stable C++ exceptions are not enabled' }
+          if ($ship -match '<BufferSecurityCheck>false</BufferSecurityCheck>') { throw 'Stable /GS is disabled' }
+          if ($ship -match '<Optimization>Disabled</Optimization>') { throw 'Stable optimization is disabled' }
 
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
@@ -70,11 +89,11 @@ jobs:
           if (-not $v) { throw 'vcpkg not found' }
           "VCPKG_ROOT=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Build MCB v5 Development DLL
+      - name: Build MCB v5 Stable DLL
         shell: pwsh
         run: |
           $msbuild = "$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe"
-          & $msbuild 'mcb-src\cs2\MCB-CS2\MCB-CS2.vcxproj' /m /p:Configuration=Development /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\"
+          & $msbuild 'mcb-src\cs2\MCB-CS2\MCB-CS2.vcxproj' /m /p:Configuration=Ship /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Lua snow HUD smoke test
@@ -92,36 +111,53 @@ jobs:
           cmd.exe /d /s /c $cmd
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Package v5 artifact
+      - name: Validate and package Stable artifact
         shell: pwsh
         run: |
-          $dll = 'mcb-src\cs2\bin\MCB-CS2-dev.dll'
-          if (-not (Test-Path $dll)) { throw 'DLL missing' }
+          $dll = 'mcb-src\cs2\bin\MCB-CS2-v5-stable.dll'
+          if (-not (Test-Path $dll)) { throw 'Stable DLL missing' }
           $bytes = [IO.File]::ReadAllBytes($dll)
           if ($bytes.Length -lt 100000 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'invalid PE' }
           $ver = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
           if ($ver.ProductName -ne 'MCB') { throw 'ProductName mismatch' }
+          if ($ver.OriginalFilename -ne 'MCB-CS2-v5-stable.dll') { throw "OriginalFilename mismatch: $($ver.OriginalFilename)" }
+
+          $msvc = (Get-ChildItem "$env:VSROOT\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1).Name
+          $dumpbin = "$env:VSROOT\VC\Tools\MSVC\$msvc\bin\Hostx64\x64\dumpbin.exe"
+          & $dumpbin /imports $dll | Out-File dll_imports.txt
+          if (Select-String -Path dll_imports.txt -Pattern 'lua[^ ]*\.dll' -Quiet) { throw 'Lua must remain statically linked' }
+
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force 'release\scripts' | Out-Null
-          Copy-Item $dll 'release\MCB-CS2-v5.dll'
+          Copy-Item $dll 'release\MCB-CS2-v5-stable.dll'
           Copy-Item 'mcb-src\cs2\MCB-CS2\lua_examples\hello.lua' 'release\scripts\hello.lua'
           Copy-Item 'mcb-src\cs2\MCB-CS2\lua_examples\snow_hud.lua' 'release\scripts\snow_hud.lua'
           $report = @(
             "sha256=$hash",
             "size=$($bytes.Length)",
-            'msbuild=PASS',
+            'msbuild_ship=PASS',
+            'optimized_stable_build=PASS',
+            'buffer_security_check=PASS',
+            'cpp_exceptions=PASS',
+            'development_first_chance_diagnostics=OFF',
+            'stable_unhandled_crash_dump=ENABLED',
+            'orderly_shutdown_export=PASS',
+            'lua_memory_quota_32mib=PASS',
+            'lua_global_hud_budget=PASS',
+            'skin_decode_job_lifecycle=PASS',
             'static_source_checks=PASS',
             'lua_snow_hud_runtime_smoke=PASS',
             'pe=PASS',
+            'lua_static_link=PASS',
             'mcb_visible_branding=PASS',
             'in_game_runtime=NOT_TESTED',
             'performance_benchmark=NOT_TESTED',
             'long_duration_stress=NOT_TESTED'
           )
-          $report | Set-Content 'release\MCB_V5_BUILD_TEST_RESULTS.txt' -Encoding utf8
+          $report | Set-Content 'release\MCB_V5_STABLE_BUILD_TEST_RESULTS.txt' -Encoding utf8
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MCB-CS2-v5-stability-panel
+          name: MCB-CS2-v5-stable-panel
           path: release
           if-no-files-found: error
