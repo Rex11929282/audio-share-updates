@@ -1,4 +1,4 @@
-name: MCB-v5-probe
+name: MCB-CS2-v5-build
 
 on:
   push:
@@ -7,10 +7,117 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  probe:
+  build:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Probe workflow
+
+      - name: Fetch upstream source
         shell: pwsh
-        run: Write-Host "MCB v5 workflow is valid"
+        run: |
+          git clone https://github.com/0x12F/velocity-improved.git mcb-src
+          git -C mcb-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
+
+      - name: Apply MCB patch chain
+        shell: pwsh
+        run: |
+          $patches = @(
+            'apply_source_fix.py',
+            'apply_lua.py',
+            'apply_zh_ui.py',
+            'apply_layout_brand.py',
+            'apply_ui_v2.py',
+            'apply_perf_v3.py',
+            'apply_brand_v4.py',
+            'apply_stability_v5.py',
+            'apply_panel_v5.py'
+          )
+          foreach ($patch in $patches) {
+            python "velocity-build/$patch" mcb-src
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Validate v5 source markers
+        shell: pwsh
+        run: |
+          $r = 'mcb-src\cs2\MCB-CS2'
+          if (-not (Test-Path "$r\MCB-CS2.vcxproj")) { throw 'project missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.cpp" -SimpleMatch 'ensure_blur_textures_for_bound_target' -Quiet)) { throw 'blur resize fix missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.cpp" -SimpleMatch 'ComPtr<ID3D11Buffer> replacement' -Quiet)) { throw 'buffer growth fix missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xui\xui.cpp" -SimpleMatch 'snapshot_pending_input' -Quiet)) { throw 'input snapshot fix missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xui\xui.cpp" -SimpleMatch 'parse_numeric_text' -Quiet)) { throw 'numeric parser fix missing' }
+          if (-not (Select-String -LiteralPath "$r\project\core\rendering\rendering.hpp" -SimpleMatch 'IDXGISwapChain* m_swap_chain' -Quiet)) { throw 'swapchain identity fix missing' }
+          if (-not (Select-String -LiteralPath "$r\project\core\scripting\lua_manager.cpp" -SimpleMatch 'max_logs_per_callback' -Quiet)) { throw 'Lua log limiter missing' }
+          if (-not (Select-String -LiteralPath "$r\project\core\scripting\lua_manager.cpp" -SimpleMatch 'mcb.draw_count' -Quiet)) { throw 'MCB Lua registry key missing' }
+          if (-not (Select-String -LiteralPath "$r\project\core\rendering\impl\menu\menu.core.cpp" -SimpleMatch 'CONTROL PANEL' -Quiet)) { throw 'new panel missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'sidebar_w{ 203.0f }' -Quiet)) { throw 'wide sidebar missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'col_accent{ 19, 191, 245, 255 }' -Quiet)) { throw 'cyan panel accent missing' }
+          if (-not (Select-String -LiteralPath "$r\project\core\features\misc\impl\impacts.cpp" -SimpleMatch '[MCB]' -Quiet)) { throw 'MCB visible brand missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'Software\MCB\configs' -Quiet)) { throw 'MCB registry root missing' }
+
+      - name: Locate Visual Studio and vcpkg
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $vs) { throw 'Visual Studio not found' }
+          "VSROOT=$vs" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $v = @("$vs\VC\vcpkg", 'C:\vcpkg') | Where-Object { Test-Path "$_\vcpkg.exe" } | Select-Object -First 1
+          if (-not $v) { throw 'vcpkg not found' }
+          "VCPKG_ROOT=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build MCB v5 Development DLL
+        shell: pwsh
+        run: |
+          $msbuild = "$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe"
+          & $msbuild 'mcb-src\cs2\MCB-CS2\MCB-CS2.vcxproj' /m /p:Configuration=Development /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Lua snow HUD smoke test
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'mcb-src\cs2\MCB-CS2'
+          $lua = Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.lib | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
+          $hpp = Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter lua.hpp | Select-Object -First 1
+          if (-not $lua -or -not $hpp) { throw 'Lua dependency missing' }
+          $inc = $hpp.Directory.FullName
+          $devcmd = "$env:VSROOT\Common7\Tools\VsDevCmd.bat"
+          $src = Resolve-Path 'velocity-build\lua_snow_smoke.cpp'
+          $snow = Resolve-Path 'mcb-src\cs2\MCB-CS2\lua_examples\snow_hud.lua'
+          $cmd = '"' + $devcmd + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /I"' + $inc + '" "' + $src + '" "' + $lua.FullName + '" /Fe:mcb_lua_snow_smoke.exe && mcb_lua_snow_smoke.exe "' + $snow + '"'
+          cmd.exe /d /s /c $cmd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package v5 artifact
+        shell: pwsh
+        run: |
+          $dll = 'mcb-src\cs2\bin\MCB-CS2-dev.dll'
+          if (-not (Test-Path $dll)) { throw 'DLL missing' }
+          $bytes = [IO.File]::ReadAllBytes($dll)
+          if ($bytes.Length -lt 100000 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'invalid PE' }
+          $ver = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
+          if ($ver.ProductName -ne 'MCB') { throw 'ProductName mismatch' }
+          $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+          New-Item -ItemType Directory -Force 'release\scripts' | Out-Null
+          Copy-Item $dll 'release\MCB-CS2-v5.dll'
+          Copy-Item 'mcb-src\cs2\MCB-CS2\lua_examples\hello.lua' 'release\scripts\hello.lua'
+          Copy-Item 'mcb-src\cs2\MCB-CS2\lua_examples\snow_hud.lua' 'release\scripts\snow_hud.lua'
+          $report = @(
+            "sha256=$hash",
+            "size=$($bytes.Length)",
+            'msbuild=PASS',
+            'static_source_checks=PASS',
+            'lua_snow_hud_runtime_smoke=PASS',
+            'pe=PASS',
+            'mcb_visible_branding=PASS',
+            'in_game_runtime=NOT_TESTED',
+            'performance_benchmark=NOT_TESTED',
+            'long_duration_stress=NOT_TESTED'
+          )
+          $report | Set-Content 'release\MCB_V5_BUILD_TEST_RESULTS.txt' -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MCB-CS2-v5-stability-panel
+          path: release
+          if-no-files-found: error
