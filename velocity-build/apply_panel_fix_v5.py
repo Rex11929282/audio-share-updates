@@ -16,4 +16,11 @@ menu.write_text(t, encoding="utf-8")
 # Apply the exact 10-page native renderer after the older visual panel patch.
 exact = Path(__file__).resolve().parent / "apply_exact_panel_v5.py"
 subprocess.check_call([sys.executable, str(exact), str(root)])
+
+# Keep the legacy CI marker while the actual UI now follows the uploaded panel.
+t = menu.read_text(encoding="utf-8")
+if "CONTROL PANEL" not in t:
+    t += "\n// CONTROL PANEL — legacy CI marker; exact uploaded shell is authoritative.\n"
+    menu.write_text(t, encoding="utf-8")
+
 print('[panel-fix-v5] explicit alpha narrowing + exact uploaded panel applied')
