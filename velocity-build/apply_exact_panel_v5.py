@@ -608,6 +608,7 @@ if "MCB exact uploaded topbar" not in t:
 \t\t\txui::text_input( "##exact_search", this->m_search_query, 80, "Search" );
 \t\t}
 \t\treturn;
+\t}
 '''
     t = replace_once(t, top_anchor, exact_top, "exact topbar")
 
