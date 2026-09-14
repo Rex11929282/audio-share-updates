@@ -1,8 +1,8 @@
-name: MCB-CS2-build
+name: MCB-CS2-v5-build
 
 on:
   push:
-    branches: [velocity-lua-build-temp]
+    branches: [mcb-v5-stability-panel]
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
           git clone https://github.com/0x12F/velocity-improved.git mcb-src
           git -C mcb-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
 
-      - name: Apply crash, Lua, Chinese UI, performance and MCB branding patches
+      - name: Apply MCB v5 patches
         shell: pwsh
         run: |
           python velocity-build/apply_source_fix.py mcb-src
@@ -35,8 +35,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/apply_brand_v4.py mcb-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/apply_stability_v5.py mcb-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/apply_panel_v5.py mcb-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Validate MCB v4 source and branding
+      - name: Validate MCB v5 static source invariants
         shell: pwsh
         run: |
           $r='mcb-src\cs2\MCB-CS2'
@@ -48,21 +52,31 @@ jobs:
             @("$r\project\core\scripting\lua_manager.cpp", 'screen_size_fn'),
             @("$r\project\core\scripting\lua_manager.cpp", 'hud_line_fn'),
             @("$r\project\core\scripting\lua_manager.cpp", 'lua_setglobal( L, "mcb" );'),
-            @("$r\project\core\scripting\lua_manager.cpp", '[MCB Lua]'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'mcb.draw_count'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'max_logs_per_callback'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'finite_number'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'is_lua_file'),
             @("$r\project\core\scripting\scripting.hpp", 'script_statuses'),
             @("$r\project\core\rendering\impl\menu\menu.config.cpp", '已開啟的 Lua'),
             @("$r\project\core\rendering\impl\menu\menu.config.cpp", '面板寬度##ui_panel_width'),
-            @("$r\project\core\rendering\impl\widgets.cpp", '"MCB"'),
+            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'CONTROL PANEL'),
+            @("$r\project\core\features\misc\impl\impacts.cpp", '[MCB]'),
+            @("$r\project\external\config.hpp", 'Software\MCB\configs'),
+            @("$r\project\external\xdraw\xdraw.hpp", 'constexpr auto sidebar_w{ 203.0f }'),
+            @("$r\project\external\xdraw\xdraw.hpp", 'col_accent{ 19, 191, 245, 255 }'),
+            @("$r\project\external\xdraw\xdraw.cpp", 'ensure_blur_textures_for_bound_target'),
+            @("$r\project\external\xdraw\xdraw.cpp", 'ComPtr<ID3D11Buffer> replacement'),
+            @("$r\project\external\xdraw\xui\xui.cpp", 'snapshot_pending_input'),
+            @("$r\project\external\xdraw\xui\xui.cpp", 'parse_numeric_text'),
+            @("$r\project\core\rendering\rendering.hpp", 'IDXGISwapChain* m_swap_chain'),
+            @("$r\project\core\rendering\impl\menu\menu.skins.cpp", 'std::from_chars'),
             @("$r\project\utilities\diag.hpp", 'L"MCB_init.log"'),
             @("$r\project\utilities\diag.hpp", 'L"MCB_crash.dmp"'),
             @("$r\project\mcb_version.rc", 'VALUE "ProductName", "MCB'),
             @("$r\MCB-CS2.vcxproj", '<TargetName>MCB-CS2-dev</TargetName>'),
             @("$r\MCB-CS2.vcxproj", '<RootNamespace>mcbcs2</RootNamespace>'),
             @("$r\vcpkg.json", '"name": "mcb-cs2"'),
-            @("$r\lua_examples\snow_hud.lua", 'MCB Lua 雪花 HUD：運行中'),
-            @("$r\project\external\xdraw\xui\xui.cpp", 'const auto drag_zone = rect{'),
-            @("$r\project\external\xdraw\xui\xui.cpp", 'moving_or_resizing'),
-            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'Defer CJK glyph warm-up')
+            @("$r\lua_examples\snow_hud.lua", 'MCB Lua 雪花 HUD：運行中')
           )
           foreach($c in $checks) {
             if(-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker $($c[1])" }
@@ -74,7 +88,9 @@ jobs:
             @("$r\project\utilities\diag.hpp", 'velocity_crash.dmp'),
             @("$r\project\utilities\addresses\impl\functions.cpp", 'velocity_dummy_window'),
             @("$r\project\core\features\world\impl\scene.cpp", 'velocity_skybox_'),
-            @("$r\project\core\scripting\lua_manager.cpp", 'lua_setglobal( L, "velocity" );')
+            @("$r\project\core\scripting\lua_manager.cpp", 'lua_setglobal( L, "velocity" );'),
+            @("$r\project\core\scripting\lua_manager.cpp", 'velocity.draw_count'),
+            @("$r\project\core\features\misc\impl\impacts.cpp", '[velocity]')
           )
           foreach($c in $oldChecks) {
             if(Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet){throw "old brand marker remains: $($c[1])"}
@@ -86,9 +102,15 @@ jobs:
           $end=$ctx.IndexOf('xdraw::end_frame( )')
           if($begin -lt 0 -or $lua -lt $begin -or $end -lt $lua){throw 'Lua HUD callback is outside xdraw frame'}
 
+          $xdraw=Get-Content "$r\project\external\xdraw\xdraw.cpp" -Raw
+          $frameStart=$xdraw.IndexOf('ensure_blur_textures_for_bound_target( );')
+          $oldEndFrame=$xdraw.IndexOf('auto bb_w{ 0 };')
+          if($frameStart -lt 0){throw 'frame-start blur rebuild missing'}
+          if($oldEndFrame -ge 0){throw 'stale end-frame blur resize block remains'}
+
           $scaledX=960.0*1440.0/1920.0
           $scaledY=540.0*1080.0/1080.0
-          if([math]::Abs($scaledX-720.0)-gt0.001 -or [math]::Abs($scaledY-540.0)-gt0.001){throw 'mouse scaling failed'}
+          if([math]::Abs($scaledX-720.0)-gt0.001 -or [math]::Abs($scaledY-540.0)-gt0.001){throw 'mouse scaling formula failed'}
 
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
@@ -100,7 +122,7 @@ jobs:
           if(-not $v){throw 'vcpkg not found'}
           "VCPKG_ROOT=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Build MCB Development DLL
+      - name: Build MCB v5 Development DLL
         shell: pwsh
         run: |
           $msbuild="$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe"
@@ -122,7 +144,7 @@ jobs:
           cmd.exe /d /s /c $cmd
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
 
-      - name: Validate MCB DLL metadata and package
+      - name: Validate MCB v5 DLL metadata and package
         shell: pwsh
         run: |
           $dll='mcb-src\cs2\bin\MCB-CS2-dev.dll'
@@ -135,8 +157,8 @@ jobs:
           foreach($marker in @('Lua 腳本管理','已開啟的 Lua','MCB')) {
             if(-not ($utf.Contains($marker) -or $uni.Contains($marker))){throw "DLL marker absent: $marker"}
           }
-          foreach($old in @('velocity.cat','velocity_init.log','velocity_crash.dmp','velocity_dummy_window','velocity_skybox_')) {
-            if($utf.Contains($old) -or $uni.Contains($old)){throw "old brand marker in DLL: $old"}
+          foreach($old in @('velocity.cat','velocity_init.log','velocity_crash.dmp','velocity_dummy_window','velocity_skybox_','[velocity]')) {
+            if($utf.Contains($old) -or $uni.Contains($old)){throw "old visible brand marker in DLL: $old"}
           }
 
           $ver=[Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
@@ -152,14 +174,31 @@ jobs:
 
           $hash=(Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force release\scripts | Out-Null
-          Copy-Item $dll release\MCB-CS2-v4.dll
+          Copy-Item $dll release\MCB-CS2-v5.dll
           Copy-Item 'mcb-src\cs2\MCB-CS2\lua_examples\hello.lua' release\scripts\hello.lua
           Copy-Item 'mcb-src\cs2\MCB-CS2\lua_examples\snow_hud.lua' release\scripts\snow_hud.lua
-          "sha256=$hash`nsize=$($b.Length)`nproduct_name=MCB`nfile_description=MCB`noriginal_filename=MCB-CS2-dev.dll`nmsbuild=PASS`nmcb_full_branding=PASS`nold_brand_markers_absent=PASS`nlua_public_api_mcb=PASS`nlua_snow_hud_runtime_smoke=PASS`npe=PASS`nlua_static_link=PASS`nlua_visible_status_list=PASS`nui_drag_performance=PASS`nui_resize_performance=PASS`ndeferred_cjk_prewarm=PASS`nmouse_1440x1080_scaling=PASS`nschema_crash_guard=PASS" | Set-Content release\MCB_BUILD_TEST_RESULTS.txt -Encoding utf8
+          @"
+sha256=$hash
+size=$($b.Length)
+product_name=MCB
+file_description=MCB
+original_filename=MCB-CS2-dev.dll
+msbuild=PASS
+static_source_checks=PASS
+lua_snow_hud_runtime_smoke=PASS
+pe=PASS
+lua_static_link=PASS
+mcb_visible_branding=PASS
+schema_crash_guard=PASS
+mouse_1440x1080_formula=PASS
+in_game_runtime=NOT_TESTED
+performance_benchmark=NOT_TESTED
+long_duration_stress=NOT_TESTED
+"@ | Set-Content release\MCB_V5_BUILD_TEST_RESULTS.txt -Encoding utf8
           Copy-Item dll_headers.txt,dll_imports.txt release
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MCB-CS2-v4-tested
+          name: MCB-CS2-v5-stability-panel
           path: release
           if-no-files-found: error
