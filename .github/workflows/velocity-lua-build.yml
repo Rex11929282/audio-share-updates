@@ -35,7 +35,8 @@ jobs:
             'apply_registry_v5.py',
             'apply_panel_fix_v5.py',
             'apply_release_v5.py',
-            'apply_release_thread_crt_v5.py'
+            'apply_release_thread_crt_v5.py',
+            'apply_release_jobs_fix_v5.py'
           )
           foreach ($patch in $patches) {
             python "velocity-build/$patch" mcb-src
