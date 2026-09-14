@@ -16,7 +16,7 @@ local function reset_flake(f, w, h, from_top)
 end
 
 local function init_flakes()
-    local w, h = velocity.screen_size()
+    local w, h = mcb.screen_size()
     flakes = {}
     for i = 1, count do
         local f = {}
@@ -26,13 +26,13 @@ local function init_flakes()
 end
 
 function on_load()
-    math.randomseed(velocity.now_ms() % 2147483647)
+    math.randomseed(mcb.now_ms() % 2147483647)
     init_flakes()
-    velocity.log("雪花 HUD 已啟動")
+    mcb.log("雪花 HUD 已啟動")
 end
 
 function on_frame(dt)
-    local w, h = velocity.screen_size()
+    local w, h = mcb.screen_size()
     if w <= 0 or h <= 0 then return end
 
     t = t + dt
@@ -52,13 +52,13 @@ function on_frame(dt)
             local angle = arm * 1.0471975512
             local dx = math.cos(angle) * r
             local dy = math.sin(angle) * r
-            velocity.hud_line(f.x - dx, f.y - dy, f.x + dx, f.y + dy, 225, 242, 255, a, 1.0)
+            mcb.hud_line(f.x - dx, f.y - dy, f.x + dx, f.y + dy, 225, 242, 255, a, 1.0)
         end
     end
 
-    velocity.hud_text(18, 18, "Lua 雪花 HUD：運行中", 225, 242, 255, 235)
+    mcb.hud_text(18, 18, "MCB Lua 雪花 HUD：運行中", 225, 242, 255, 235)
 end
 
 function on_unload()
-    velocity.log("雪花 HUD 已停止")
+    mcb.log("雪花 HUD 已停止")
 end
