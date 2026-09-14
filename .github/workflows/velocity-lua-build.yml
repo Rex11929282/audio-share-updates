@@ -32,7 +32,8 @@ jobs:
             'apply_brand_v4.py',
             'apply_stability_v5.py',
             'apply_panel_v5.py',
-            'apply_registry_v5.py'
+            'apply_registry_v5.py',
+            'apply_panel_fix_v5.py'
           )
           foreach ($patch in $patches) {
             python "velocity-build/$patch" mcb-src
