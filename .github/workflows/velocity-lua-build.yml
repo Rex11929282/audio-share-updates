@@ -34,7 +34,8 @@ jobs:
             'apply_panel_v5.py',
             'apply_registry_v5.py',
             'apply_panel_fix_v5.py',
-            'apply_release_v5.py'
+            'apply_release_v5.py',
+            'apply_release_thread_crt_v5.py'
           )
           foreach ($patch in $patches) {
             python "velocity-build/$patch" mcb-src
@@ -60,6 +61,7 @@ jobs:
             @("$r\project\core\features\changer\impl\econ_item_system.cpp", 'econ_item_system::shutdown'),
             @("$r\project\entry.cpp", 'MCB_Shutdown'),
             @("$r\project\entry.cpp", 'reserved == nullptr'),
+            @("$r\project\entry.cpp", 'DLL_THREAD_ATTACH || reason == DLL_THREAD_DETACH'),
             @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'CONTROL PANEL'),
             @("$r\project\external\xdraw\xdraw.hpp", 'sidebar_w{ 203.0f }'),
             @("$r\project\external\xdraw\xdraw.hpp", 'col_accent{ 19, 191, 245, 255 }'),
@@ -139,6 +141,7 @@ jobs:
             'optimized_stable_build=PASS',
             'buffer_security_check=PASS',
             'cpp_exceptions=PASS',
+            'crt_thread_notifications=PASS',
             'development_first_chance_diagnostics=OFF',
             'stable_unhandled_crash_dump=ENABLED',
             'orderly_shutdown_export=PASS',
