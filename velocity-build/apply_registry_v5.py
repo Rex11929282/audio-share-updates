@@ -25,9 +25,21 @@ if "k_legacy_root_key" not in t:
         fail("legacy root key anchor not found")
     t = t.replace(root_line, new_root_block, 1)
 
+# Older panel-v5 revisions inserted this helper from a Python raw string, which
+# left literal backslash-t sequences in C++. Normalize only that helper block.
+bad_helper = r'\t\tinline void migrate_legacy_once( )'
+if bad_helper in t:
+    start = t.index(bad_helper)
+    end = t.find('\n\t\tinline bool save( std::wstring_view name )', start)
+    if end < 0:
+        fail("could not delimit malformed migration helper")
+    segment = t[start:end]
+    segment = segment.replace(r'\t', '\t').replace(r'\n', '\n')
+    t = t[:start] + segment + t[end:]
+
 legacy_line = '\t\tinline constexpr wchar_t k_legacy_root_key[ ]{ L"Software\\\\velokitty\\\\configs" };\n'
 
-if "migrate_legacy_once" not in t:
+if "inline void migrate_legacy_once( )" not in t:
     if legacy_line not in t:
         fail("legacy root marker unavailable after rename")
 
@@ -124,6 +136,8 @@ if 'L"Software\\\\velokitty\\\\configs"' not in t:
     fail("legacy root key missing after patch")
 if "inline void migrate_legacy_once( )" not in t:
     fail("migration helper missing")
+if r'\t\tinline void migrate_legacy_once' in t:
+    fail("literal tab escapes remain in migration helper")
 
 config.write_text(t, encoding="utf-8")
 print("[registry-v5] MCB registry root + non-destructive legacy migration applied")
