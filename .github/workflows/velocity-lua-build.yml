@@ -55,7 +55,8 @@ jobs:
           if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'sidebar_w{ 203.0f }' -Quiet)) { throw 'wide sidebar missing' }
           if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'col_accent{ 19, 191, 245, 255 }' -Quiet)) { throw 'cyan panel accent missing' }
           if (-not (Select-String -LiteralPath "$r\project\core\features\misc\impl\impacts.cpp" -SimpleMatch '[MCB]' -Quiet)) { throw 'MCB visible brand missing' }
-          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'Software\MCB\configs' -Quiet)) { throw 'MCB registry root missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'k_root_key' -Quiet)) { throw 'registry root missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'k_legacy_root_key' -Quiet)) { throw 'legacy registry root missing' }
           if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'migrate_legacy_once' -Quiet)) { throw 'legacy registry migration missing' }
 
       - name: Locate Visual Studio and vcpkg
