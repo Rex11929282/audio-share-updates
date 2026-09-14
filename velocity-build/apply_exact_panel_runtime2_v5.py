@@ -61,20 +61,32 @@ hpp.write_text(t, encoding='utf-8')
 
 t = menu.read_text(encoding='utf-8')
 
-# Keep only the newly generated draw_top_bar function. The original body may
-# follow it because the first generator replaces the signature rather than the
-# whole function; remove that tail with brace-aware boundaries.
+# The topbar generator uses a raw Python replacement string. Normalize the
+# literal backslash-t indentation it emits before doing brace-aware parsing.
 top_marker = '// MCB exact uploaded topbar.'
 mp = t.find(top_marker)
 if mp < 0:
     raise SystemExit('[exact-runtime2-v5] exact topbar marker missing')
+raw_start = t.rfind('\\tvoid menu::draw_top_bar', 0, mp)
+if raw_start >= 0:
+    ns = t.rfind('\n} // namespace rendering')
+    if ns <= raw_start:
+        raise SystemExit('[exact-runtime2-v5] menu namespace end missing during normalization')
+    segment = t[raw_start:ns].replace('\\t', '\t')
+    t = t[:raw_start] + segment + t[ns:]
+    mp = t.find(top_marker)
+
+# Keep only the newly generated draw_top_bar function. The original body may
+# follow it because the first generator replaces the signature rather than the
+# whole function; remove that tail with brace-aware boundaries.
 top_start = t.rfind('\tvoid menu::draw_top_bar', 0, mp)
 if top_start < 0:
     raise SystemExit('[exact-runtime2-v5] exact topbar function start missing')
 top_end = function_end(t, top_start)
 ns_end = t.rfind('\n} // namespace rendering')
-if ns_end > top_end:
-    t = t[:top_end] + t[ns_end:]
+if ns_end <= top_end:
+    raise SystemExit('[exact-runtime2-v5] menu namespace end missing after topbar')
+t = t[:top_end] + t[ns_end:]
 
 # Reuse the already reviewed exact runtime C++ body from runtime-v1, but place
 # it using brace-aware function boundaries rather than a fragile source regex.
@@ -87,9 +99,11 @@ for node in tree.body:
             if isinstance(target, ast.Name) and target.id == 'replacement':
                 template = ast.literal_eval(node.value)
                 break
-    if template is not None: break
+    if template is not None:
+        break
 if template is None:
     raise SystemExit('[exact-runtime2-v5] runtime template missing')
+# Let the regex replacement engine expand \t/\n escapes exactly as runtime-v1 did.
 expanded = re.sub('X', template, 'X', count=1)
 needle = '\n\n\tvoid menu::shutdown'
 if needle in expanded:
@@ -102,4 +116,4 @@ draw_end = function_end(t, draw_start)
 t = t[:draw_start] + expanded + t[draw_end:]
 
 menu.write_text(t, encoding='utf-8')
-print('[exact-runtime2-v5] brace-aware exact shell runtime applied')
+print('[exact-runtime2-v5] normalized + brace-aware exact shell runtime applied')
