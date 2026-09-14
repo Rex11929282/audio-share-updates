@@ -87,7 +87,7 @@ p = p.replace('<TargetName>cs2</TargetName>', '<TargetName>MCB-CS2</TargetName>'
 p = p.replace('VelocityImportVcpkg', 'MCBImportVcpkg')
 p = p.replace('VELOCITYCS2_EXPORTS', 'MCBCS2_EXPORTS')
 
-# Add a Windows VERSIONINFO resource so Explorer also reports MCB.
+# Add a Windows VERSIONINFO resource so Explorer reports MCB too.
 rc_include = '    <ResourceCompile Include="project\\mcb_version.rc" />\n'
 if 'project\\mcb_version.rc' not in p:
     marker = '  <ItemGroup>\n    <ClCompile Include="project\\core\\features\\changer\\impl\\agents.cpp" />'
@@ -153,5 +153,23 @@ for path, markers in known_brand_markers.items():
     for marker in markers:
         if marker in text:
             fail(f"old brand marker remains: {marker} in {path}")
+
+
+# ---------------------------------------------------------------------------
+# 5) Rename solution/project/folder so generated PDB/debug paths are MCB too.
+# ---------------------------------------------------------------------------
+solution = root / "cs2" / "velocity-cs2.slnx"
+if solution.exists():
+    s = solution.read_text(encoding="utf-8")
+    s = s.replace('velocity-cs2/velocity-cs2.vcxproj', 'MCB-CS2/MCB-CS2.vcxproj')
+    solution.write_text(s, encoding="utf-8")
+    solution.replace(root / "cs2" / "MCB-CS2.slnx")
+
+renamed_project = v / "MCB-CS2.vcxproj"
+project.replace(renamed_project)
+renamed_dir = root / "cs2" / "MCB-CS2"
+if renamed_dir.exists():
+    fail("target MCB project directory already exists")
+v.replace(renamed_dir)
 
 print("[brand-v4] all user-visible/product branding changed to MCB")
