@@ -31,7 +31,8 @@ jobs:
             'apply_perf_v3.py',
             'apply_brand_v4.py',
             'apply_stability_v5.py',
-            'apply_panel_v5.py'
+            'apply_panel_v5.py',
+            'apply_registry_v5.py'
           )
           foreach ($patch in $patches) {
             python "velocity-build/$patch" mcb-src
@@ -55,6 +56,7 @@ jobs:
           if (-not (Select-String -LiteralPath "$r\project\external\xdraw\xdraw.hpp" -SimpleMatch 'col_accent{ 19, 191, 245, 255 }' -Quiet)) { throw 'cyan panel accent missing' }
           if (-not (Select-String -LiteralPath "$r\project\core\features\misc\impl\impacts.cpp" -SimpleMatch '[MCB]' -Quiet)) { throw 'MCB visible brand missing' }
           if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'Software\MCB\configs' -Quiet)) { throw 'MCB registry root missing' }
+          if (-not (Select-String -LiteralPath "$r\project\external\config.hpp" -SimpleMatch 'migrate_legacy_once' -Quiet)) { throw 'legacy registry migration missing' }
 
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
