@@ -12,10 +12,9 @@ if old not in t:
 t = t.replace(old, new, 1)
 menu.write_text(t, encoding="utf-8")
 
-# The user's uploaded HTML/CSS/JS is the canonical v5 panel specification.
-# Apply the exact 10-page native renderer after the older visual panel patch.
-exact = Path(__file__).resolve().parent / "apply_exact_panel_v5.py"
-subprocess.check_call([sys.executable, str(exact), str(root)])
+patch_dir = Path(__file__).resolve().parent
+subprocess.check_call([sys.executable, str(patch_dir / "apply_exact_panel_v5.py"), str(root)])
+subprocess.check_call([sys.executable, str(patch_dir / "apply_exact_panel_runtime_v5.py"), str(root)])
 
 # Keep the legacy CI marker while the actual UI now follows the uploaded panel.
 t = menu.read_text(encoding="utf-8")
@@ -23,4 +22,4 @@ if "CONTROL PANEL" not in t:
     t += "\n// CONTROL PANEL — legacy CI marker; exact uploaded shell is authoritative.\n"
     menu.write_text(t, encoding="utf-8")
 
-print('[panel-fix-v5] explicit alpha narrowing + exact uploaded panel applied')
+print('[panel-fix-v5] exact uploaded panel + runtime applied')
