@@ -35,7 +35,7 @@ int main(int argc, char** argv)
     lua_pushcfunction(L, draw_fn); lua_setfield(L, -2, "hud_line");
     lua_pushcfunction(L, draw_fn); lua_setfield(L, -2, "hud_circle");
     lua_pushcfunction(L, draw_fn); lua_setfield(L, -2, "hud_text");
-    lua_setglobal(L, "velocity");
+    lua_setglobal(L, "mcb");
 
     if (luaL_loadfilex(L, argv[1], "t") != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK)
     {
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
         return 6;
     }
 
-    std::printf("SNOW_HUD_SMOKE_OK draw_calls=%d\n", g_draw_calls);
+    std::printf("MCB_SNOW_HUD_SMOKE_OK draw_calls=%d\n", g_draw_calls);
     lua_close(L);
     return 0;
 }
