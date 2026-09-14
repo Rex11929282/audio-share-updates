@@ -24,4 +24,17 @@ if "m_image_jobs" not in t:
         "\t\tstd::atomic_bool m_shutting_down{};\n", 1)
 
 hpp.write_text(t, encoding="utf-8")
-print("[release-jobs-fix-v5] tracked skin job declarations applied")
+
+# Lua 5.5 added a third lua_newstate parameter: a string-hash seed. Match
+# luaL_newstate's documented behavior while retaining our custom allocator.
+lua = root / "cs2" / "MCB-CS2" / "project" / "core" / "scripting" / "lua_manager.cpp"
+lua_text = lua.read_text(encoding="utf-8")
+old = "value.state = lua_newstate( limited_lua_allocator, &value.memory );"
+new = "value.state = lua_newstate( limited_lua_allocator, &value.memory, luaL_makeseed( nullptr ) );"
+if old in lua_text:
+    lua_text = lua_text.replace(old, new, 1)
+elif new not in lua_text:
+    raise SystemExit("[release-jobs-fix-v5] Lua 5.5 lua_newstate marker missing")
+lua.write_text(lua_text, encoding="utf-8")
+
+print("[release-jobs-fix-v5] tracked skin jobs + Lua 5.5 state seed applied")
