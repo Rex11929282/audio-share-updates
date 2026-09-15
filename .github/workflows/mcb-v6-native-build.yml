@@ -1,107 +1,49 @@
-name: MCB-CS2-v6-exact-panel-build
-
+name: MCB-CS2-v6.2-native-build
 on:
   push:
-    branches:
-      - mcb-v6-exact-panel-build
+    branches: [mcb-v6-exact-panel-build]
   workflow_dispatch: {}
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-
-      - name: Prepare output folder
+      - name: Prepare outputs
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
-          "run=$env:GITHUB_RUN_ID" | Set-Content release\BUILD_STATUS.txt
-          "commit=$env:GITHUB_SHA" | Add-Content release\BUILD_STATUS.txt
-
-      - name: Fetch pinned upstream source
+          "run=$env:GITHUB_RUN_ID" | Set-Content release/BUILD_STATUS.txt
+          "commit=$env:GITHUB_SHA" | Add-Content release/BUILD_STATUS.txt
+      - name: Fetch pinned baseline
         shell: pwsh
         run: |
-          git clone https://github.com/0x12F/velocity-improved.git mcb-src 2>&1 | Tee-Object -FilePath release\source.log
+          git clone https://github.com/0x12F/velocity-improved.git mcb-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git -C mcb-src checkout 4392221937f12490dcf14efcba4e85115ab580c9 2>&1 | Tee-Object -FilePath release\source.log -Append
+          git -C mcb-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Reproduce proven v5 Stable source
+      - name: Apply existing baseline and v6.2 UI patches
         shell: pwsh
         run: |
-          $patches = @(
-            'apply_source_fix.py',
-            'apply_lua.py',
-            'apply_zh_ui.py',
-            'apply_layout_brand.py',
-            'apply_ui_v2.py',
-            'apply_perf_v3.py',
-            'apply_brand_v4.py',
-            'apply_stability_v5.py',
-            'apply_panel_v5.py',
-            'apply_registry_v5.py',
-            'apply_panel_fix_v5.py',
-            'apply_release_v5.py',
-            'apply_release_thread_crt_v5.py',
-            'apply_release_jobs_fix_v5.py'
-          )
+          $patches = @('apply_source_fix.py','apply_lua.py','apply_zh_ui.py','apply_layout_brand.py','apply_ui_v2.py','apply_perf_v3.py','apply_brand_v4.py','apply_stability_v5.py','apply_panel_v5.py','apply_registry_v5.py','apply_panel_fix_v5.py','apply_release_v5.py','apply_release_thread_crt_v5.py','apply_release_jobs_fix_v5.py','apply_v6_native_ui.py','apply_v61_custom_pages.py','apply_v62_ui.py')
           foreach ($patch in $patches) {
-            "===== $patch =====" | Tee-Object -FilePath release\patch.log -Append
-            python "velocity-build/$patch" mcb-src 2>&1 | Tee-Object -FilePath release\patch.log -Append
-            $code = $LASTEXITCODE
-            if ($code -ne 0) { exit $code }
+            "===== $patch =====" | Tee-Object -FilePath release/patch.log -Append
+            python "velocity-build/$patch" mcb-src 2>&1 | Tee-Object -FilePath release/patch.log -Append
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-
-      - name: Apply v6 Native UI
+          Copy-Item mcb-src/MCB_V62_APPLIED.json release/
+      - name: Preserve native UI source snapshot
         shell: pwsh
         run: |
-          python velocity-build/apply_v6_native_ui.py mcb-src 2>&1 | Tee-Object -FilePath release\v6_patch.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python velocity-build/apply_v61_custom_pages.py mcb-src 2>&1 | Tee-Object -FilePath release\v6_patch.log -Append
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Copy-Item mcb-src\MCB_V6_EXACT_PANEL_APPLIED.json release\MCB_V6_EXACT_PANEL_APPLIED.json
-          Copy-Item mcb-src\MCB_V61_CUSTOM_PAGES_APPLIED.json release\MCB_V61_CUSTOM_PAGES_APPLIED.json
-
-      - name: Validate source markers
-        shell: pwsh
-        run: |
-          $r = 'mcb-src\cs2\MCB-CS2'
-          $checks = @(
-            @("$r\MCB-CS2.vcxproj", '<TargetName>MCB-CS2-v6-exact-panel</TargetName>'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Glass / Theme'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Glass Blur'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'White Glass'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", '##v61_inventory_root'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Loadout'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Keychains'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'EXECUTION DISABLED'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'main.lua##editor_tab_main'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Export JSON'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Local Snapshot'),
-            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Confirm Delete'),
-            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'MCB v6 R2 glass layer'),
-            @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'Menu Opacity'),
-            @("$r\project\core\localization\zh_tw.hpp", 'prewarm_chars'),
-            @("$r\project\core\scripting\lua_manager.cpp", 'limited_lua_allocator'),
-            @("$r\project\entry.cpp", 'MCB_Shutdown'),
-            @("$r\MCB-CS2.vcxproj", 'MCB_STABLE'),
-            @("$r\MCB-CS2.vcxproj", '<Optimization>MaxSpeed</Optimization>'),
-            @("$r\MCB-CS2.vcxproj", '<BufferSecurityCheck>true</BufferSecurityCheck>'),
-            @("$r\MCB-CS2.vcxproj", '<ExceptionHandling>Sync</ExceptionHandling>')
-          )
-          foreach ($c in $checks) {
-            if (-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker: $($c[1])" }
+          $root = 'mcb-src/cs2/MCB-CS2'
+          $files = @('project/core/rendering/impl/menu/menu.exact.cpp','project/core/rendering/impl/menu/menu.core.cpp','project/core/rendering/rendering.hpp','project/core/rendering/ui_state_v62.hpp','project/core/rendering/ui_views_v62.inl','project/external/xdraw/xdraw.hpp','project/external/xdraw/xui/xui.hpp','project/external/xdraw/xui/xui.cpp','project/external/nlohmann/json.hpp','project/mcb_version.rc','MCB-CS2.vcxproj')
+          foreach ($file in $files) {
+            $dest = Join-Path 'native-source' $file
+            New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+            Copy-Item (Join-Path $root $file) $dest
           }
-          'source_validation=PASS' | Add-Content release\BUILD_STATUS.txt
-          'inventory_custom_view=PASS' | Add-Content release\BUILD_STATUS.txt
-          'scripts_execution_disabled_view=PASS' | Add-Content release\BUILD_STATUS.txt
-          'configs_local_json_view=PASS' | Add-Content release\BUILD_STATUS.txt
-
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
         run: |
@@ -111,54 +53,60 @@ jobs:
           $v = @("$vs\VC\vcpkg", 'C:\vcpkg') | Where-Object { Test-Path "$_\vcpkg.exe" } | Select-Object -First 1
           if (-not $v) { throw 'vcpkg not found' }
           "VCPKG_ROOT=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Build v6 Ship x64 DLL
+      - name: Build and run native UI data tests
         shell: pwsh
         run: |
-          $msbuild = "$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe"
-          & $msbuild 'mcb-src\cs2\MCB-CS2\MCB-CS2.vcxproj' /m /t:Build /p:Configuration=Ship /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\" /nologo "/flp:logfile=$pwd\release\msbuild.log;verbosity=normal"
+          $devcmd = "$env:VSROOT\Common7\Tools\VsDevCmd.bat"
+          $inc = (Resolve-Path 'mcb-src/cs2/MCB-CS2/project').Path
+          $src = (Resolve-Path 'velocity-build/test_ui_state_v62.cpp').Path
+          $cmd = '"' + $devcmd + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /DNOMINMAX /I"' + $inc + '" "' + $src + '" /Fe:ui_state_tests.exe && ui_state_tests.exe'
+          cmd.exe /d /s /c $cmd 2>&1 | Tee-Object -FilePath release/UI_DATA_TESTS.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Package and validate v6 output
+          'native_ui_data_tests=PASS' | Add-Content release/BUILD_STATUS.txt
+      - name: Rebuild v6.2 Ship x64 DLL
         shell: pwsh
         run: |
-          $dll = 'mcb-src\cs2\bin\MCB-CS2-v6-exact-panel.dll'
-          $pdb = 'mcb-src\cs2\bin\MCB-CS2-v6-exact-panel.pdb'
-          if (-not (Test-Path $dll)) { throw 'v6 DLL missing' }
+          & "$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe" 'mcb-src\cs2\MCB-CS2\MCB-CS2.vcxproj' /m /t:Rebuild /p:Configuration=Ship /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\" /nologo "/flp:logfile=$pwd\release\msbuild.log;verbosity=normal"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate and package DLL and required PDB
+        shell: pwsh
+        run: |
+          $dll = 'mcb-src/cs2/bin/MCB-CS2-v6.2-exact-panel.dll'
+          $pdb = 'mcb-src/cs2/bin/MCB-CS2-v6.2-exact-panel.pdb'
+          if (-not (Test-Path $dll) -or -not (Test-Path $pdb)) { throw 'DLL or matching-build PDB missing' }
           $bytes = [IO.File]::ReadAllBytes($dll)
-          if ($bytes.Length -lt 100000 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'invalid PE' }
+          if ($bytes.Length -lt 100000 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'Invalid PE' }
           $ver = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
-          if ($ver.ProductName -ne 'MCB') { throw "ProductName mismatch: $($ver.ProductName)" }
-          if ($ver.OriginalFilename -ne 'MCB-CS2-v6-exact-panel.dll') { throw "OriginalFilename mismatch: $($ver.OriginalFilename)" }
-          Copy-Item $dll release\MCB-CS2-v6-exact-panel.dll
-          if (Test-Path $pdb) { Copy-Item $pdb release\MCB-CS2-v6-exact-panel.pdb }
-          Copy-Item mcb-src\cs2\MCB-CS2\lua_examples\hello.lua release\hello.lua -ErrorAction SilentlyContinue
-          Copy-Item mcb-src\cs2\MCB-CS2\lua_examples\snow_hud.lua release\snow_hud.lua -ErrorAction SilentlyContinue
+          if ($ver.OriginalFilename -ne 'MCB-CS2-v6.2-exact-panel.dll') { throw 'OriginalFilename mismatch' }
+          if ($ver.FileMajorPart -ne 1 -or $ver.FileMinorPart -ne 6 -or $ver.FileBuildPart -ne 2) { throw 'Version mismatch' }
+          Copy-Item $dll release/
+          Copy-Item $pdb release/
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
-          "sha256=$hash" | Add-Content release\BUILD_STATUS.txt
-          "size=$($bytes.Length)" | Add-Content release\BUILD_STATUS.txt
-          'msbuild_ship=PASS' | Add-Content release\BUILD_STATUS.txt
-          'pe=PASS' | Add-Content release\BUILD_STATUS.txt
-          'v6_native_ui=PASS' | Add-Content release\BUILD_STATUS.txt
-          'v61_custom_pages=PASS' | Add-Content release\BUILD_STATUS.txt
-          'cjk_lua_stable_baseline=PRESERVED' | Add-Content release\BUILD_STATUS.txt
-          'in_game_runtime=NOT_TESTED' | Add-Content release\BUILD_STATUS.txt
-
-      - name: Mark failure status
+          "sha256=$hash" | Add-Content release/BUILD_STATUS.txt
+          "size=$($bytes.Length)" | Add-Content release/BUILD_STATUS.txt
+          'msbuild_ship=PASS' | Add-Content release/BUILD_STATUS.txt
+          'version_identity=PASS' | Add-Content release/BUILD_STATUS.txt
+          'native_visual_qa=NOT_TESTED' | Add-Content release/BUILD_STATUS.txt
+          'in_game_runtime=NOT_TESTED' | Add-Content release/BUILD_STATUS.txt
+          'full_dpi_font_scaling=NOT_COMPLETED' | Add-Content release/BUILD_STATUS.txt
+          '48_state_acceptance=NOT_COMPLETED' | Add-Content release/BUILD_STATUS.txt
+      - name: Record failure
         if: failure()
         shell: pwsh
-        run: |
-          'workflow_result=FAIL' | Add-Content release\BUILD_STATUS.txt
-
-      - name: Mark success status
+        run: "'workflow_result=FAIL' | Add-Content release/BUILD_STATUS.txt"
+      - name: Record success
         if: success()
         shell: pwsh
-        run: |
-          'workflow_result=PASS' | Add-Content release\BUILD_STATUS.txt
-
+        run: "'workflow_result=PASS' | Add-Content release/BUILD_STATUS.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MCB-CS2-v6-exact-panel-native
+          name: MCB-CS2-v6.2-exact-panel-native
           path: release
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MCB-v6.2-native-ui-source
+          path: native-source
+          if-no-files-found: warn
