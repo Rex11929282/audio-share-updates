@@ -62,7 +62,10 @@ jobs:
         run: |
           python velocity-build/apply_v6_native_ui.py mcb-src 2>&1 | Tee-Object -FilePath release\v6_patch.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/apply_v61_custom_pages.py mcb-src 2>&1 | Tee-Object -FilePath release\v6_patch.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src\MCB_V6_EXACT_PANEL_APPLIED.json release\MCB_V6_EXACT_PANEL_APPLIED.json
+          Copy-Item mcb-src\MCB_V61_CUSTOM_PAGES_APPLIED.json release\MCB_V61_CUSTOM_PAGES_APPLIED.json
 
       - name: Validate source markers
         shell: pwsh
@@ -73,6 +76,14 @@ jobs:
             @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Glass / Theme'),
             @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Glass Blur'),
             @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'White Glass'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", '##v61_inventory_root'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Loadout'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Keychains'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'EXECUTION DISABLED'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'main.lua##editor_tab_main'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Export JSON'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Local Snapshot'),
+            @("$r\project\core\rendering\impl\menu\menu.exact.cpp", 'Confirm Delete'),
             @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'MCB v6 R2 glass layer'),
             @("$r\project\core\rendering\impl\menu\menu.core.cpp", 'Menu Opacity'),
             @("$r\project\core\localization\zh_tw.hpp", 'prewarm_chars'),
@@ -87,6 +98,9 @@ jobs:
             if (-not (Select-String -LiteralPath $c[0] -SimpleMatch $c[1] -Quiet)) { throw "missing marker: $($c[1])" }
           }
           'source_validation=PASS' | Add-Content release\BUILD_STATUS.txt
+          'inventory_custom_view=PASS' | Add-Content release\BUILD_STATUS.txt
+          'scripts_execution_disabled_view=PASS' | Add-Content release\BUILD_STATUS.txt
+          'configs_local_json_view=PASS' | Add-Content release\BUILD_STATUS.txt
 
       - name: Locate Visual Studio and vcpkg
         shell: pwsh
@@ -126,6 +140,7 @@ jobs:
           'msbuild_ship=PASS' | Add-Content release\BUILD_STATUS.txt
           'pe=PASS' | Add-Content release\BUILD_STATUS.txt
           'v6_native_ui=PASS' | Add-Content release\BUILD_STATUS.txt
+          'v61_custom_pages=PASS' | Add-Content release\BUILD_STATUS.txt
           'cjk_lua_stable_baseline=PRESERVED' | Add-Content release\BUILD_STATUS.txt
           'in_game_runtime=NOT_TESTED' | Add-Content release\BUILD_STATUS.txt
 
