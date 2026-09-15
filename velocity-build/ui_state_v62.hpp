@@ -170,7 +170,7 @@ public:
     const std::string& startup_error() const { return startup_error_; }
     bool writable() const { return writable_; }
     std::size_t size() const { return records().size(); }
-    int index(std::string_view id) const { for (int i=0; i<int(size()); ++i) if (records()[i]["id"] == id) return i; return -1; }
+    int index(std::string_view id) const { for (int i=0; i<int(size()); ++i) if (std::string_view(records()[i]["id"].get_ref<const std::string&>()) == id) return i; return -1; }
     int active_index() const { return std::max(0, index(data_["active"].get<std::string>())); }
     std::string name(int i) const { return records().at(i)["name"].get<std::string>(); }
     bool reload(std::string& error) {

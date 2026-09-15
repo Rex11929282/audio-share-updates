@@ -131,7 +131,7 @@ void draw_configs(float w,float h) {
     if(xui::button("Restore Snapshot",124,26)) {
         if(!dirty() || confirm(L"Discard unsaved UI changes and restore the local snapshot?")) {json state;if(r.restore(r.directory()/L"local_snapshot.json",state,e)){apply(state,false);notify("Snapshot restored; not yet saved to config");}else notify(e,true);}
     }
-    xui::layout::separator(); xui::text_input("##v62_config_search",s.search,64,"Search configs...");
+    xui::layout::new_line(); xui::layout::separator(); xui::text_input("##v62_config_search",s.search,64,"Search configs...");
     int visible=0;
     for(int i=0;i<int(r.size());++i) {
         const auto name=r.name(i); if(!exact_panel_detail::search_match(s.search,"",name))continue;
@@ -139,7 +139,7 @@ void draw_configs(float w,float h) {
         if(xui::button(label,std::max(100.0f,xui::layout::avail().first),28))s.selected=i;
     }
     if(!visible)xui::text("No configs match your search",tokens::col_text_dim);
-    xui::layout::separator();xui::text("Selected: "+r.name(s.selected),tokens::col_accent);
+    xui::layout::new_line(); xui::layout::separator();xui::text("Selected: "+r.name(s.selected),tokens::col_accent);
     xui::text("Stable IDs / local UI state only",tokens::col_text_dim);xui::end_child();
 }
 struct editor_view { int selected{},tab{}; std::string search; json draft=mcb_ui_v62::default_drafts(); json saved=draft; bool loaded{}; };
@@ -161,22 +161,22 @@ void draw_scripts(float w,float h){
     xui::layout::same_line();
     if(xui::button("Reload",80,26)){if(s.draft==s.saved||confirm(L"Discard unsaved draft edits and reload saved local drafts?"))reload_editor();}
     xui::layout::same_line();xui::text(s.draft==s.saved?"Saved / Idle":"Unsaved draft / Idle",tokens::col_text_dim);
-    xui::layout::separator();
+    xui::layout::new_line(); xui::layout::separator();
     static const char* names[]{"main.lua","settings.lua","hud_preview.lua","example.lua"};
     int visible=0;
     for(int i=0;i<4;++i){if(!exact_panel_detail::search_match(s.search,"",names[i]))continue;++visible;
         if(xui::button(std::string(s.selected==i?"> ":"")+names[i]+"##v62_script_"+std::to_string(i),std::max(100.0f,xui::layout::avail().first),25))s.selected=i;}
     if(!visible)xui::text("No matching script drafts",tokens::col_text_dim);
-    xui::layout::separator();
+    xui::layout::new_line(); xui::layout::separator();
     if(xui::button(s.tab==0?"[main.lua]##v62_main":"main.lua##v62_main",100,26))s.tab=0;
     xui::layout::same_line();if(xui::button(s.tab==1?"[settings.lua]##v62_set":"settings.lua##v62_set",125,26))s.tab=1;
     auto& lines=s.draft["buffers"][s.selected][s.tab];
-    xui::layout::separator();
+    xui::layout::new_line(); xui::layout::separator();
     for(int i=0;i<int(lines.size());++i){xui::push_id("v62_editor_"+std::to_string(s.selected)+"_"+std::to_string(s.tab)+"_"+std::to_string(i));
         xui::text_input(std::to_string(i+1),lines[i].get_ref<std::string&>(),512,"");xui::pop_id();}
     if(xui::button("Add Line",90,25)){if(lines.size()<64)lines.push_back("");else notify("Maximum 64 lines per draft",true);}
     xui::layout::same_line();if(xui::button("Remove Last Line",130,25)){if(lines.size()>1)lines.erase(lines.end()-1);}
-    xui::layout::separator();xui::text("UTF-8 / Lua text only / "+std::to_string(lines.size())+" lines",tokens::col_text_dim);
+    xui::layout::new_line(); xui::layout::separator();xui::text("UTF-8 / Lua text only / "+std::to_string(lines.size())+" lines",tokens::col_text_dim);
     xui::text("Drafts are separate from the existing Lua runtime.",tokens::col_text_dim);xui::end_child();
 }
 } // namespace exact_panel_v62
@@ -185,10 +185,19 @@ void save_active(){auto& r=exact_panel_v62::repository();exact_panel_v62::save(r
 bool has_unsaved(){return exact_panel_v62::dirty();}
 void config_selector(){
     auto& r=exact_panel_v62::repository();auto& s=exact_panel_v62::view();
-    static int selected{};selected=r.active_index();
+    // Overlay input is applied by XUI at end-of-frame. Preserve its pending
+    // selection until combo() reports it instead of resetting it each frame.
+    static int selected{};
+    static std::string last_active;
+    const auto active=r.records()[r.active_index()]["id"].get<std::string>();
+    if(last_active!=active){selected=r.active_index();last_active=active;}
+    selected=std::clamp(selected,0,int(r.size())-1);
     std::vector<std::string> names;std::vector<const char*> ptrs;
     for(int i=0;i<int(r.size());++i)names.push_back(r.name(i));for(auto& n:names)ptrs.push_back(n.c_str());
-    if(xui::combo("##v62_active_config",selected,ptrs.data(),int(ptrs.size()),148.0f)){s.selected=selected;exact_panel_v62::load(selected);}
+    if(xui::combo("##v62_active_config",selected,ptrs.data(),int(ptrs.size()),148.0f)){
+        s.selected=selected;exact_panel_v62::load(selected);
+        selected=r.active_index();last_active=r.records()[selected]["id"].get<std::string>();
+    }
 }
 void draw_feedback(float x,float y,float w,float h){
     auto& n=exact_panel_v62::notice();if(n.seconds<=0 || n.text.empty())return;
