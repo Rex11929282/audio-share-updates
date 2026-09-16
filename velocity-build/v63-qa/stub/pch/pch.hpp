@@ -4,6 +4,9 @@
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#ifdef near
+#undef near
+#endif
 #include <wrl/client.h>
 #include <d3d11.h>
 #include <dxgi.h>

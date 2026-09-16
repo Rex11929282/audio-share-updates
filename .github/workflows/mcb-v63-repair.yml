@@ -78,22 +78,7 @@ jobs:
           'steam_account_runtime=NOT_TESTED' | Add-Content release/BUILD_STATUS.txt
       - name: Compile and exercise production XDraw and XUI in isolated Windows host
         shell: pwsh
-        run: |
-          $root = (Resolve-Path 'mcb-src/cs2/MCB-CS2').Path
-          $inc = "$root\project"
-          $stub = (Resolve-Path 'velocity-build/v63-qa/stub').Path
-          $test = (Resolve-Path 'velocity-build/v63-qa/test_xui_v63.cpp').Path
-          $ft = Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter freetype.lib | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
-          $hpp = Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter ft2build.h | Select-Object -First 1
-          if (-not $ft -or -not $hpp) { throw 'FreeType dependency missing' }
-          $libdir = $ft.Directory.FullName
-          $alllibs = (Get-ChildItem $libdir -Filter *.lib | ForEach-Object { '"' + $_.FullName + '"' }) -join ' '
-          $depinc = Join-Path (Split-Path $libdir -Parent) 'include'
-          $dev = "$env:VSROOT\Common7\Tools\VsDevCmd.bat"
-          $cmd = '"' + $dev + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /utf-8 /std:c++latest /DNOMINMAX /I"' + $stub + '" /I"' + $inc + '" /I"' + $depinc + '" /I"' + $hpp.Directory.FullName + '" "' + $test + '" "' + $inc + '\external\xdraw\xdraw.cpp" "' + $inc + '\external\xdraw\xui\xui.cpp" /Fe:xui_test.exe /link ' + $alllibs + ' d3d11.lib dxgi.lib windowscodecs.lib ole32.lib user32.lib gdi32.lib && xui_test.exe'
-          cmd.exe /d /s /c $cmd 2>&1 | Tee-Object -FilePath release/PRODUCTION_XUI_TESTS.txt
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          'production_xui_tests=PASS' | Add-Content release/BUILD_STATUS.txt
+        run: ./velocity-build/run_v63_qa.ps1
       - name: Record success
         if: success()
         shell: pwsh
