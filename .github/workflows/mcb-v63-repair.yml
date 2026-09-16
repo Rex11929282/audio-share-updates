@@ -1,0 +1,41 @@
+name: MCB-v63-source-review
+on:
+  push:
+    branches: [mcb-v6.3-ui-repair]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: |
+          git clone https://github.com/0x12F/velocity-improved.git mcb-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C mcb-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
+          $patches = @('apply_source_fix.py','apply_lua.py','apply_zh_ui.py','apply_layout_brand.py','apply_ui_v2.py','apply_perf_v3.py','apply_brand_v4.py','apply_stability_v5.py','apply_panel_v5.py','apply_registry_v5.py','apply_panel_fix_v5.py','apply_release_v5.py','apply_release_thread_crt_v5.py','apply_release_jobs_fix_v5.py','apply_v6_native_ui.py','apply_v61_custom_pages.py','apply_v62_ui.py')
+          foreach ($patch in $patches) {
+            python "velocity-build/$patch" mcb-src
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $root = 'mcb-src/cs2/MCB-CS2'
+          New-Item -ItemType Directory -Force review/project/core,review/project/utilities,review/project/external | Out-Null
+          Copy-Item "$root/project/core/rendering" review/project/core -Recurse
+          Copy-Item "$root/project/core/localization" review/project/core -Recurse
+          Copy-Item "$root/project/core/scripting" review/project/core -Recurse
+          Copy-Item "$root/project/core/settings.hpp" review/project/core
+          Copy-Item "$root/project/utilities/steam" review/project/utilities -Recurse
+          Copy-Item "$root/project/external/xdraw" review/project/external -Recurse
+          Copy-Item "$root/project/external/config.hpp" review/project/external
+          Copy-Item "$root/project/external/nlohmann" review/project/external -Recurse
+          Copy-Item "$root/MCB-CS2.vcxproj" review/
+          Copy-Item "$root/project/mcb_version.rc" review/project/
+          Copy-Item velocity-build review/build-tools -Recurse
+          Get-ChildItem review -Recurse -File | Where-Object { $_.Extension -in '.ttf','.otf','.woff','.woff2','.lib','.pdb','.dll','.exe' -or $_.Name -eq 'fonts.hpp' } | Remove-Item
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MCB-v63-review-sources
+          path: review
+          if-no-files-found: error
