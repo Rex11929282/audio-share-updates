@@ -1,41 +1,116 @@
-name: MCB-v63-source-review
+name: MCB-v6.3-fixed-native-DLL
 on:
   push:
     branches: [mcb-v6.3-ui-repair]
 permissions:
   contents: read
 jobs:
-  prepare:
+  build:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - shell: pwsh
+      - name: Prepare outputs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          "commit=$env:GITHUB_SHA" | Set-Content release/BUILD_STATUS.txt
+          "run=$env:GITHUB_RUN_ID" | Add-Content release/BUILD_STATUS.txt
+      - name: Fetch pinned baseline and apply reviewed source changes
+        shell: pwsh
         run: |
           git clone https://github.com/0x12F/velocity-improved.git mcb-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C mcb-src checkout 4392221937f12490dcf14efcba4e85115ab580c9
-          $patches = @('apply_source_fix.py','apply_lua.py','apply_zh_ui.py','apply_layout_brand.py','apply_ui_v2.py','apply_perf_v3.py','apply_brand_v4.py','apply_stability_v5.py','apply_panel_v5.py','apply_registry_v5.py','apply_panel_fix_v5.py','apply_release_v5.py','apply_release_thread_crt_v5.py','apply_release_jobs_fix_v5.py','apply_v6_native_ui.py','apply_v61_custom_pages.py','apply_v62_ui.py')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $patches = @('apply_source_fix.py','apply_lua.py','apply_zh_ui.py','apply_layout_brand.py','apply_ui_v2.py','apply_perf_v3.py','apply_brand_v4.py','apply_stability_v5.py','apply_panel_v5.py','apply_registry_v5.py','apply_panel_fix_v5.py','apply_release_v5.py','apply_release_thread_crt_v5.py','apply_release_jobs_fix_v5.py','apply_v6_native_ui.py','apply_v61_custom_pages.py','apply_v62_ui.py','apply_v63_fixed.py')
           foreach ($patch in $patches) {
-            python "velocity-build/$patch" mcb-src
+            python "velocity-build/$patch" mcb-src 2>&1 | Tee-Object -FilePath release/patch.log -Append
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          $root = 'mcb-src/cs2/MCB-CS2'
-          New-Item -ItemType Directory -Force review/project/core,review/project/utilities,review/project/external | Out-Null
-          Copy-Item "$root/project/core/rendering" review/project/core -Recurse
-          Copy-Item "$root/project/core/localization" review/project/core -Recurse
-          Copy-Item "$root/project/core/scripting" review/project/core -Recurse
-          Copy-Item "$root/project/core/settings.hpp" review/project/core
-          Copy-Item "$root/project/utilities/steam" review/project/utilities -Recurse
-          Copy-Item "$root/project/external/xdraw" review/project/external -Recurse
-          Copy-Item "$root/project/external/config.hpp" review/project/external
-          Copy-Item "$root/project/external/nlohmann" review/project/external -Recurse
-          Copy-Item "$root/MCB-CS2.vcxproj" review/
-          Copy-Item "$root/project/mcb_version.rc" review/project/
-          Copy-Item velocity-build review/build-tools -Recurse
-          Get-ChildItem review -Recurse -File | Where-Object { $_.Extension -in '.ttf','.otf','.woff','.woff2','.lib','.pdb','.dll','.exe' -or $_.Name -eq 'fonts.hpp' } | Remove-Item
+          Copy-Item mcb-src/MCB_V63_APPLIED.json release/
+          python velocity-build/prepare_v63_data_test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content mcb-src/MCB_V63_APPLIED.json -Raw | ConvertFrom-Json
+          foreach ($file in $manifest.files) {
+            $dest = Join-Path 'native-source' $file.path
+            New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+            Copy-Item (Join-Path 'mcb-src/cs2/MCB-CS2' $file.path) $dest
+          }
+      - name: Locate toolchain
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $vs) { throw 'Visual Studio not found' }
+          "VSROOT=$vs" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $v = @("$vs\VC\vcpkg",'C:\vcpkg') | Where-Object { Test-Path "$_\vcpkg.exe" } | Select-Object -First 1
+          if (-not $v) { throw 'vcpkg not found' }
+          "VCPKG_ROOT=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run Windows data and geometry tests
+        shell: pwsh
+        run: |
+          $inc = (Resolve-Path 'mcb-src/cs2/MCB-CS2/project').Path
+          $dev = "$env:VSROOT\Common7\Tools\VsDevCmd.bat"
+          $src = (Resolve-Path 'velocity-build/test_data_v63.cpp').Path
+          $geo = (Resolve-Path 'velocity-build/v63-qa/test_geometry_v63.cpp').Path
+          $cmd = '"' + $dev + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /utf-8 /std:c++20 /DNOMINMAX /I"' + $inc + '" "' + $src + '" /Fe:data_test.exe && data_test.exe && cl /MT /nologo /EHsc /utf-8 /std:c++20 /DNOMINMAX /I"' + $inc + '" "' + $geo + '" /Fe:geometry_test.exe && geometry_test.exe'
+          cmd.exe /d /s /c $cmd 2>&1 | Tee-Object -FilePath release/DATA_GEOMETRY_TESTS.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          'data_geometry_tests=PASS' | Add-Content release/BUILD_STATUS.txt
+      - name: Rebuild actual v6.3 Ship x64 DLL
+        shell: pwsh
+        run: |
+          & "$env:VSROOT\MSBuild\Current\Bin\MSBuild.exe" 'mcb-src/cs2/MCB-CS2/MCB-CS2.vcxproj' /m /t:Rebuild /p:Configuration=Ship /p:Platform=x64 /p:VcpkgRoot="$env:VCPKG_ROOT\" /nologo "/flp:logfile=$pwd\release\msbuild.log;verbosity=normal"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          'msbuild_ship=PASS' | Add-Content release/BUILD_STATUS.txt
+      - name: Collect compiled DLL and matching PDB candidate
+        shell: pwsh
+        run: |
+          $dll = 'mcb-src/cs2/bin/MCB-CS2-v6.3-fixed-panel.dll'
+          $pdb = 'mcb-src/cs2/bin/MCB-CS2-v6.3-fixed-panel.pdb'
+          if (-not (Test-Path $dll) -or -not (Test-Path $pdb)) { throw 'Compiled DLL/PDB missing' }
+          $ver = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
+          if ($ver.OriginalFilename -ne 'MCB-CS2-v6.3-fixed-panel.dll') { throw 'Wrong binary identity' }
+          Copy-Item $dll release/
+          Copy-Item $pdb release/
+          "sha256=$((Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant())" | Add-Content release/BUILD_STATUS.txt
+          'cs2_runtime=NOT_TESTED' | Add-Content release/BUILD_STATUS.txt
+          'steam_account_runtime=NOT_TESTED' | Add-Content release/BUILD_STATUS.txt
+      - name: Compile and exercise production XDraw and XUI in isolated Windows host
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path 'mcb-src/cs2/MCB-CS2').Path
+          $inc = "$root\project"
+          $stub = (Resolve-Path 'velocity-build/v63-qa/stub').Path
+          $test = (Resolve-Path 'velocity-build/v63-qa/test_xui_v63.cpp').Path
+          $ft = Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter freetype.lib | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
+          $hpp = Get-ChildItem "$root\vcpkg_installed" -Recurse -Filter ft2build.h | Select-Object -First 1
+          if (-not $ft -or -not $hpp) { throw 'FreeType dependency missing' }
+          $libdir = $ft.Directory.FullName
+          $alllibs = (Get-ChildItem $libdir -Filter *.lib | ForEach-Object { '"' + $_.FullName + '"' }) -join ' '
+          $depinc = Join-Path (Split-Path $libdir -Parent) 'include'
+          $dev = "$env:VSROOT\Common7\Tools\VsDevCmd.bat"
+          $cmd = '"' + $dev + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /utf-8 /std:c++latest /DNOMINMAX /I"' + $stub + '" /I"' + $inc + '" /I"' + $depinc + '" /I"' + $hpp.Directory.FullName + '" "' + $test + '" "' + $inc + '\external\xdraw\xdraw.cpp" "' + $inc + '\external\xdraw\xui\xui.cpp" /Fe:xui_test.exe /link ' + $alllibs + ' d3d11.lib dxgi.lib windowscodecs.lib ole32.lib user32.lib gdi32.lib && xui_test.exe'
+          cmd.exe /d /s /c $cmd 2>&1 | Tee-Object -FilePath release/PRODUCTION_XUI_TESTS.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          'production_xui_tests=PASS' | Add-Content release/BUILD_STATUS.txt
+      - name: Record success
+        if: success()
+        shell: pwsh
+        run: "'workflow_result=PASS' | Add-Content release/BUILD_STATUS.txt"
+      - name: Record failure
+        if: failure()
+        shell: pwsh
+        run: "'workflow_result=FAIL' | Add-Content release/BUILD_STATUS.txt"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: MCB-v63-review-sources
-          path: review
+          name: MCB-CS2-v6.3-fixed-panel-native
+          path: release
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MCB-v6.3-reviewed-native-source
+          path: native-source
+          if-no-files-found: warn
