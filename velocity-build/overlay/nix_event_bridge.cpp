@@ -36,6 +36,14 @@ namespace
         std::uint64_t generation{};
     };
 
+    struct active_event
+    {
+        luajit_api* api{};
+        std::uintptr_t event{};
+        std::string name{};
+        std::uint64_t generation{};
+    };
+
     std::mutex g_mutex{};
     std::unordered_map<lua_State*, state_binding> g_states{};
 
@@ -67,14 +75,6 @@ namespace
         return true;
     }
 
-    struct active_event
-    {
-        luajit_api* api{};
-        std::uintptr_t event{};
-        std::string name{};
-        std::uint64_t generation{};
-    };
-
     bool resolve_active(
         lua_State* state,
         event_ref*& ref,
@@ -82,7 +82,7 @@ namespace
     {
         std::scoped_lock lock(g_mutex);
         auto* binding = binding_for(state);
-        if (!binding || !binding->api || !current.event)
+        if (!binding || !binding->api || !binding->active_event)
             return false;
 
         auto* api = binding->api;
@@ -95,7 +95,7 @@ namespace
             return false;
 
         out.api = api;
-        out.event = current.event;
+        out.event = binding->active_event;
         out.name = binding->active_name;
         out.generation = binding->generation;
         return true;
@@ -227,12 +227,12 @@ namespace
 
     int __cdecl event_index(lua_State* state)
     {
-        luajit_api* api{};
-        state_binding* binding{};
         event_ref* ref{};
-        if (!resolve_active(state, api, binding, ref))
+        active_event current{};
+        if (!resolve_active(state, ref, current))
             return 0;
 
+        auto* api = current.api;
         if (api->lua_type(state, 2) != lua_tstring)
             return push_nil(*api, state);
 
@@ -331,7 +331,7 @@ namespace scripting::nix_native
             return false;
         }
 
-        current.event = event;
+        binding->active_event = event;
         binding->active_name = event_name;
         ++binding->generation;
         if (binding->generation == 0)
@@ -342,7 +342,7 @@ namespace scripting::nix_native
                 state, sizeof(event_ref)));
         if (!ref)
         {
-            current.event = 0;
+            binding->active_event = 0;
             binding->active_name.clear();
             api.lua_pushnil(state);
             return false;
@@ -356,7 +356,7 @@ namespace scripting::nix_native
         {
             scripting::nix_native::lua_pop(
                 api, state, 2);
-            current.event = 0;
+            binding->active_event = 0;
             binding->active_name.clear();
             api.lua_pushnil(state);
             return false;
@@ -369,11 +369,12 @@ namespace scripting::nix_native
     void end_event_scope(lua_State* state)
     {
         if (!state) return;
+
         std::scoped_lock lock(g_mutex);
         auto* binding = binding_for(state);
         if (!binding) return;
 
-        current.event = 0;
+        binding->active_event = 0;
         binding->active_name.clear();
     }
 }
