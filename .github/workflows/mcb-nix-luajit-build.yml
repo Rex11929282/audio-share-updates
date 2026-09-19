@@ -107,6 +107,23 @@ jobs:
           'luajit_ffi=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'luajit_bytecode_self_compat=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
 
+      - name: Validate Nix LuaJIT cdata value bootstrap
+        shell: pwsh
+        run: |
+          $header = Get-Content 'velocity-build\overlay\nix_value_bootstrap.hpp' -Raw
+          $match = [regex]::Match($header, '(?s)R"MCB_NIX\((.*?)\)MCB_NIX";')
+          if (-not $match.Success) { throw 'cannot extract Nix value bootstrap' }
+          [System.IO.File]::WriteAllText(
+            (Join-Path $pwd 'nix_value_bootstrap_test.lua'),
+            $match.Groups[1].Value,
+            [System.Text.UTF8Encoding]::new($false))
+          Push-Location .\luajit\src
+          & .\luajit.exe ..\..\nix_value_bootstrap_test.lua 2>&1 | Tee-Object -FilePath ..\..\release\NIX_VALUE_BOOTSTRAP.log
+          $valueExit = $LASTEXITCODE
+          Pop-Location
+          if ($valueExit -ne 0) { throw 'Nix cdata value bootstrap failed' }
+          'nix_cdata_value_bootstrap=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+
       - name: Compile and run independent DLL loader smoke
         shell: pwsh
         run: |
@@ -173,6 +190,7 @@ jobs:
             @("$root\project\core\scripting\nix_runtime.cpp", 'require("ffi")'),
             @("$root\project\core\scripting\nix_runtime.cpp", 'scripts" / L"nixware" / L"enabled'),
             @("$root\project\core\scripting\nix_runtime.cpp", 'LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR'),
+            @("$root\project\core\scripting\nix_value_bootstrap.hpp", 'ffi.metatype("mcb_nix_vec3"'),
             @("$root\project\entry.cpp", 'scripting::g_nix.initialize'),
             @("$root\project\entry.cpp", 'scripting::g_nix.shutdown'),
             @("$root\project\core\rendering\impl\context.cpp", 'scripting::g_nix.on_frame'),
@@ -209,6 +227,7 @@ jobs:
           Copy-Item 'luajit\COPYRIGHT' release\runtime\LuaJIT-COPYRIGHT.txt
           Copy-Item 'velocity-build\overlay\nix_runtime.cpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_runtime.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_value_bootstrap.hpp' release\source\
           Copy-Item 'velocity-build\apply_nix_luajit.py' release\source\
           Copy-Item 'mcb-src\cs2\MCB-CS2\project\core\scripting\nix_luajit_manifest.hpp' release\source\
 
