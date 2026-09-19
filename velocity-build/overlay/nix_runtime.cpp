@@ -446,8 +446,11 @@ end
         if (!is_hex_sha256(expected))
             return false;
 
-        return lowercase(expected) ==
-               lowercase(sha256_file(path));
+        const auto actual = lowercase(sha256_file(path));
+        if (actual == blocked_abusive_original_sha256)
+            return false;
+
+        return lowercase(expected) == actual;
     }
 }
 
