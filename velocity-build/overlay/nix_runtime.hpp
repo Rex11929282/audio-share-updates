@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -29,6 +30,7 @@ namespace scripting
         bool initialize(void* module_handle);
         void shutdown();
         void on_frame();
+        void on_override_view(std::uintptr_t view_setup);
         void reload_all();
 
         [[nodiscard]] bool ready() const;
