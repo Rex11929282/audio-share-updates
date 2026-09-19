@@ -7,6 +7,8 @@
 #include <utilities/memory/memory.hpp>
 
 #include <array>
+#include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -17,6 +19,7 @@
 namespace
 {
     using scripting::nix_native::luajit_api;
+    using scripting::nix_native::nix_lua_cfunction;
     using scripting::nix_native::lua_globals_index;
     using scripting::nix_native::lua_registry_index;
     using scripting::nix_native::lua_tnumber;
