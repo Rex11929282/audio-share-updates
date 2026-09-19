@@ -28,25 +28,29 @@ if proj is None:
 
 t = proj.read_text(encoding="utf-8")
 compile_anchor = '    <ClCompile Include="project\\core\\scripting\\lua_manager.cpp" />'
-if 'project\\core\\scripting\\nix_runtime.cpp' not in t:
-    if compile_anchor not in t:
-        raise SystemExit("[nix-luajit] lua_manager.cpp project marker missing")
-    t = t.replace(
-        compile_anchor,
-        compile_anchor + '\n    <ClCompile Include="project\\core\\scripting\\nix_runtime.cpp" />',
-        1)
+if compile_anchor not in t:
+    raise SystemExit("[nix-luajit] lua_manager.cpp project marker missing")
+compile_entries = [
+    '    <ClCompile Include="project\\core\\scripting\\nix_runtime.cpp" />',
+    '    <ClCompile Include="project\\core\\scripting\\nix_entity_bridge.cpp" />',
+]
+for entry_line in compile_entries:
+    if entry_line not in t:
+        t = t.replace(compile_anchor, compile_anchor + '\n' + entry_line, 1)
 
 header_anchor = '    <ClInclude Include="project\\core\\scripting\\scripting.hpp" />'
-if 'project\\core\\scripting\\nix_runtime.hpp' not in t:
-    if header_anchor not in t:
-        raise SystemExit("[nix-luajit] scripting.hpp project marker missing")
-    t = t.replace(
-        header_anchor,
-        header_anchor +
-        '\n    <ClInclude Include="project\\core\\scripting\\nix_runtime.hpp" />' +
-        '\n    <ClInclude Include="project\\core\\scripting\\nix_luajit_manifest.hpp" />' +
-        '\n    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />\n    <ClInclude Include="project\\core\\scripting\\nix_luajit_api.hpp" />\n    <ClInclude Include="project\\core\\scripting\\nix_entity_bridge.hpp" />',
-        1)
+if header_anchor not in t:
+    raise SystemExit("[nix-luajit] scripting.hpp project marker missing")
+header_entries = [
+    '    <ClInclude Include="project\\core\\scripting\\nix_runtime.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_luajit_manifest.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_luajit_api.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_entity_bridge.hpp" />',
+]
+for entry_line in header_entries:
+    if entry_line not in t:
+        t = t.replace(header_anchor, header_anchor + '\n' + entry_line, 1)
 proj.write_text(t, encoding="utf-8")
 
 entry = v / "project" / "entry.cpp"
