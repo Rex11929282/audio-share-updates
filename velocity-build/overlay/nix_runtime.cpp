@@ -4,6 +4,7 @@
 #include "nix_luajit_manifest.hpp"
 #include "nix_luajit_api.hpp"
 #include "nix_entity_bridge.hpp"
+#include "nix_cvar_bridge.hpp"
 #include "nix_value_bootstrap.hpp"
 
 #include <algorithm>
@@ -209,6 +210,11 @@ assert(health >= 0 and health <= 1000, "implausible local health")
 
 local class_name = pawn:get_class_name()
 assert(type(class_name) == "string" and #class_name > 0, "entity class unavailable")
+
+local sensitivity = cvars.sensitivity
+assert(sensitivity ~= nil, "cvars.sensitivity unavailable")
+local sens_value = sensitivity:get_float()
+assert(type(sens_value) == "number" and sens_value > 0, "invalid sensitivity cvar")
 
 local origin = pawn:get_abs_origin()
 assert(origin ~= nil and type(origin) == "cdata", "absolute origin is not cdata")
@@ -468,6 +474,14 @@ namespace scripting
                 ok = attached;
             }
 
+            bool cvar_attached = false;
+            if (ok)
+            {
+                cvar_attached = scripting::nix_native::install_cvar_api(
+                    api, state, error);
+                ok = cvar_attached;
+            }
+
             if (ok)
             {
                 ok = run_chunk(
@@ -475,6 +489,8 @@ namespace scripting
                     "=MCB_NIX_NATIVE_ENTITY_PROBE", error);
             }
 
+            if (cvar_attached)
+                scripting::nix_native::detach_cvar_api(state);
             if (attached)
                 scripting::nix_native::detach_entity_api(state);
 
@@ -634,6 +650,7 @@ namespace scripting
         {
             if (!value.state) return;
             if (!value.suspended) dispatch(value, "unload");
+            scripting::nix_native::detach_cvar_api(value.state);
             scripting::nix_native::detach_entity_api(value.state);
             runtime->api.lua_close(value.state);
             value.state = nullptr;
@@ -668,6 +685,8 @@ namespace scripting
                     "=MCB_NIX_VALUE_TYPES", error) ||
                 !scripting::nix_native::install_entity_api(
                     api, value.state, error) ||
+                !scripting::nix_native::install_cvar_api(
+                    api, value.state, error) ||
                 !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
@@ -676,6 +695,7 @@ namespace scripting
                     "@" + value.path.filename().string(), error))
             {
                 value.last_error = error;
+                scripting::nix_native::detach_cvar_api(value.state);
                 scripting::nix_native::detach_entity_api(value.state);
                 api.lua_close(value.state);
                 value.state = nullptr;
