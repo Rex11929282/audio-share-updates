@@ -67,25 +67,38 @@ namespace
         return true;
     }
 
+    struct active_event
+    {
+        luajit_api* api{};
+        std::uintptr_t event{};
+        std::string name{};
+        std::uint64_t generation{};
+    };
+
     bool resolve_active(
         lua_State* state,
-        luajit_api*& api,
-        state_binding*& binding,
-        event_ref*& ref)
+        event_ref*& ref,
+        active_event& out)
     {
         std::scoped_lock lock(g_mutex);
-        binding = binding_for(state);
-        if (!binding || !binding->api || !binding->active_event)
+        auto* binding = binding_for(state);
+        if (!binding || !binding->api || !current.event)
             return false;
 
-        api = binding->api;
+        auto* api = binding->api;
         if (api->lua_type(state, 1) != lua_tuserdata)
             return false;
 
         ref = static_cast<event_ref*>(
             api->lua_touserdata(state, 1));
-        return ref &&
-               ref->generation == binding->generation;
+        if (!ref || ref->generation != binding->generation)
+            return false;
+
+        out.api = api;
+        out.event = current.event;
+        out.name = binding->active_name;
+        out.generation = binding->generation;
+        return true;
     }
 
     int push_nil(luajit_api& api, lua_State* state)
@@ -96,27 +109,26 @@ namespace
 
     int __cdecl event_get_name(lua_State* state)
     {
-        luajit_api* api{};
-        state_binding* binding{};
         event_ref* ref{};
-        if (!resolve_active(state, api, binding, ref))
+        active_event current{};
+        if (!resolve_active(state, ref, current))
             return 0;
 
-        api->lua_pushlstring(
+        current.api->lua_pushlstring(
             state,
-            binding->active_name.data(),
-            binding->active_name.size());
+            current.name.data(),
+            current.name.size());
         return 1;
     }
 
     int __cdecl event_get_int(lua_State* state)
     {
-        luajit_api* api{};
-        state_binding* binding{};
         event_ref* ref{};
-        if (!resolve_active(state, api, binding, ref))
+        active_event current{};
+        if (!resolve_active(state, ref, current))
             return 0;
 
+        auto* api = current.api;
         std::string key;
         if (!get_string_arg(*api, state, 2, key))
             return push_nil(*api, state);
@@ -126,7 +138,7 @@ namespace
 
         const auto value = memory::call<int>(
             fn,
-            binding->active_event,
+            current.event,
             key.c_str(),
             false);
         api->lua_pushinteger(state, value);
@@ -135,12 +147,12 @@ namespace
 
     int __cdecl event_get_float(lua_State* state)
     {
-        luajit_api* api{};
-        state_binding* binding{};
         event_ref* ref{};
-        if (!resolve_active(state, api, binding, ref))
+        active_event current{};
+        if (!resolve_active(state, ref, current))
             return 0;
 
+        auto* api = current.api;
         std::string key;
         if (!get_string_arg(*api, state, 2, key))
             return push_nil(*api, state);
@@ -150,7 +162,7 @@ namespace
 
         const auto value = memory::call<float>(
             fn,
-            binding->active_event,
+            current.event,
             key.c_str(),
             0.0f);
         api->lua_pushnumber(state, value);
@@ -159,12 +171,12 @@ namespace
 
     int __cdecl event_get_pawn(lua_State* state)
     {
-        luajit_api* api{};
-        state_binding* binding{};
         event_ref* ref{};
-        if (!resolve_active(state, api, binding, ref))
+        active_event current{};
+        if (!resolve_active(state, ref, current))
             return 0;
 
+        auto* api = current.api;
         std::string key;
         if (!get_string_arg(*api, state, 2, key))
             return push_nil(*api, state);
@@ -177,7 +189,7 @@ namespace
         };
         const auto entity = memory::call<std::uintptr_t>(
             fn,
-            binding->active_event,
+            current.event,
             &event_key);
 
         scripting::nix_native::push_entity_value(
@@ -187,12 +199,12 @@ namespace
 
     int __cdecl event_get_controller(lua_State* state)
     {
-        luajit_api* api{};
-        state_binding* binding{};
         event_ref* ref{};
-        if (!resolve_active(state, api, binding, ref))
+        active_event current{};
+        if (!resolve_active(state, ref, current))
             return 0;
 
+        auto* api = current.api;
         std::string key;
         if (!get_string_arg(*api, state, 2, key))
             return push_nil(*api, state);
@@ -205,7 +217,7 @@ namespace
         };
         const auto entity = memory::call<std::uintptr_t>(
             fn,
-            binding->active_event,
+            current.event,
             &event_key);
 
         scripting::nix_native::push_entity_value(
@@ -319,7 +331,7 @@ namespace scripting::nix_native
             return false;
         }
 
-        binding->active_event = event;
+        current.event = event;
         binding->active_name = event_name;
         ++binding->generation;
         if (binding->generation == 0)
@@ -330,7 +342,7 @@ namespace scripting::nix_native
                 state, sizeof(event_ref)));
         if (!ref)
         {
-            binding->active_event = 0;
+            current.event = 0;
             binding->active_name.clear();
             api.lua_pushnil(state);
             return false;
@@ -344,7 +356,7 @@ namespace scripting::nix_native
         {
             scripting::nix_native::lua_pop(
                 api, state, 2);
-            binding->active_event = 0;
+            current.event = 0;
             binding->active_name.clear();
             api.lua_pushnil(state);
             return false;
@@ -361,7 +373,7 @@ namespace scripting::nix_native
         auto* binding = binding_for(state);
         if (!binding) return;
 
-        binding->active_event = 0;
+        current.event = 0;
         binding->active_name.clear();
     }
 }
