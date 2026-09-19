@@ -3,7 +3,7 @@
 #include "nix_render_bridge.hpp"
 
 #include <core/systems/systems.hpp>
-#include <external/xdraw/xdraw.hpp>
+#include "../../external/xdraw/xdraw.hpp"
 
 #include <algorithm>
 #include <atomic>
