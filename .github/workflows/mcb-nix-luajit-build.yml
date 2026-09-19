@@ -95,8 +95,11 @@ jobs:
           & .\luajit\src\luajit.exe .\nix_exact_probe.lua 2>&1 | Tee-Object -FilePath release/LUAJIT_RUNTIME_PROBE.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          & .\luajit\src\luajit.exe -b .\nix_exact_probe.lua .\nix_exact_probe.luac
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path .\nix_exact_probe.luac)) { throw 'bytecode compile failed' }
+          Push-Location .\luajit\src
+          & .\luajit.exe -b ..\..\nix_exact_probe.lua ..\..\nix_exact_probe.luac
+          $bytecodeExit = $LASTEXITCODE
+          Pop-Location
+          if ($bytecodeExit -ne 0 -or -not (Test-Path .\nix_exact_probe.luac)) { throw 'bytecode compile failed' }
           & .\luajit\src\luajit.exe .\nix_exact_probe.luac
           if ($LASTEXITCODE -ne 0) { throw 'bytecode execution failed' }
 
