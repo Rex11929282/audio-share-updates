@@ -4,6 +4,8 @@
 #include "nix_luajit_manifest.hpp"
 #include "nix_luajit_api.hpp"
 #include "nix_entity_bridge.hpp"
+#include "nix_engine_bridge.hpp"
+#include "nix_event_bridge.hpp"
 #include "nix_cvar_bridge.hpp"
 #include "nix_value_bootstrap.hpp"
 
@@ -246,7 +248,7 @@ return true
 
         return std::string(R"MCB(
 local callbacks = {}
-local supported = { paint = true, unload = true, override_view = true }
+local supported = { paint = true, unload = true, override_view = true, player_death = true, player_hurt = true, bullet_impact = true, round_start = true }
 
 function register_callback(name, fn)
     assert(type(name) == "string", "callback name must be a string")
@@ -267,6 +269,14 @@ function __mcb_nix_dispatch(name)
     if not list then return end
     for i = 1, #list do
         list[i]()
+    end
+end
+
+function __mcb_nix_dispatch_event(name, event)
+    local list = callbacks[name]
+    if not list then return end
+    for i = 1, #list do
+        list[i](event)
     end
 end
 
@@ -645,6 +655,68 @@ namespace scripting
             return true;
         }
 
+        bool dispatch_game_event(
+            script& value,
+            const char* event_name,
+            std::uintptr_t event)
+        {
+            if (!value.state || value.suspended ||
+                !event_name || !*event_name || !event)
+                return false;
+
+            auto& api = runtime->api;
+            const auto top = api.lua_gettop(value.state);
+
+            api.lua_getfield(
+                value.state,
+                lua_globals_index,
+                "__mcb_nix_dispatch_event");
+
+            if (api.lua_type(value.state, -1) != lua_tfunction)
+            {
+                api.lua_settop(value.state, top);
+                value.last_error =
+                    "internal game event dispatcher missing";
+                value.suspended = true;
+                return false;
+            }
+
+            api.lua_pushstring(value.state, event_name);
+            if (!scripting::nix_native::begin_event_scope(
+                    api, value.state, event_name, event))
+            {
+                api.lua_settop(value.state, top);
+                value.last_error =
+                    "failed to create scoped game_event_t";
+                value.suspended = true;
+                return false;
+            }
+
+            const auto result =
+                api.lua_pcall(value.state, 2, 0, 0);
+
+            scripting::nix_native::end_event_scope(
+                value.state);
+
+            if (result != 0)
+            {
+                value.last_error = lua_error(
+                    api, value.state,
+                    std::string("callback '") +
+                        event_name + "' failed");
+                api.lua_settop(value.state, top);
+                value.suspended = true;
+                logging::console::print(
+                    "[NixLua] 已暫停 {}：{}",
+                    value.path.filename().string(),
+                    value.last_error);
+                return false;
+            }
+
+            api.lua_settop(value.state, top);
+            return true;
+        }
+
         bool dispatch(script& value, const char* event)
         {
             if (!value.state || value.suspended) return false;
@@ -683,6 +755,8 @@ namespace scripting
         {
             if (!value.state) return;
             if (!value.suspended) dispatch(value, "unload");
+            scripting::nix_native::detach_event_api(value.state);
+            scripting::nix_native::detach_engine_api(value.state);
             scripting::nix_native::detach_cvar_api(value.state);
             scripting::nix_native::detach_entity_api(value.state);
             runtime->api.lua_close(value.state);
@@ -720,6 +794,10 @@ namespace scripting
                     api, value.state, error) ||
                 !scripting::nix_native::install_cvar_api(
                     api, value.state, error) ||
+                !scripting::nix_native::install_engine_api(
+                    api, value.state, error) ||
+                !scripting::nix_native::install_event_api(
+                    api, value.state, error) ||
                 !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
@@ -728,6 +806,8 @@ namespace scripting
                     "@" + value.path.filename().string(), error))
             {
                 value.last_error = error;
+                scripting::nix_native::detach_event_api(value.state);
+                scripting::nix_native::detach_engine_api(value.state);
                 scripting::nix_native::detach_cvar_api(value.state);
                 scripting::nix_native::detach_entity_api(value.state);
                 api.lua_close(value.state);
@@ -939,6 +1019,27 @@ namespace scripting
             view_setup + origin_offset, *origin);
         memory::write<math::vector3>(
             view_setup + angles_offset, *angles);
+    }
+
+    void nix_runtime::on_game_event(
+        const char* event_name,
+        std::uintptr_t event)
+    {
+        if (!event_name || !*event_name || !event)
+            return;
+
+        std::scoped_lock lock(m_impl->mutex);
+        if (!m_impl->initialized || !m_impl->runtime)
+            return;
+
+        for (auto& value : m_impl->scripts)
+        {
+            if (!value->state || value->suspended)
+                continue;
+
+            m_impl->dispatch_game_event(
+                *value, event_name, event);
+        }
     }
 
     bool nix_runtime::import_script_dialog(void* owner_window)
