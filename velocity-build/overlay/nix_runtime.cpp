@@ -2,6 +2,7 @@
 
 #include "nix_runtime.hpp"
 #include "nix_luajit_manifest.hpp"
+#include "nix_value_bootstrap.hpp"
 
 #include <algorithm>
 #include <array>
@@ -366,8 +367,14 @@ end
             }
 
             api.luaL_openlibs(probe);
-            const bool ok = run_chunk(
+            bool ok = run_chunk(
                 api, probe, runtime_probe, "=MCB_NIX_RUNTIME_PROBE", error);
+            if (ok)
+            {
+                ok = run_chunk(
+                    api, probe, scripting::nix_bootstrap::value_types,
+                    "=MCB_NIX_VALUE_TYPES", error);
+            }
             api.lua_close(probe);
             return ok;
         }
@@ -480,6 +487,9 @@ namespace scripting
             std::string error;
             const auto bootstrap = bootstrap_for(value.path.filename().string());
             if (!run_chunk(
+                    api, value.state, scripting::nix_bootstrap::value_types,
+                    "=MCB_NIX_VALUE_TYPES", error) ||
+                !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
                 !run_chunk(
