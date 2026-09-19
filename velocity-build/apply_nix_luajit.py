@@ -15,7 +15,7 @@ overlay = Path(__file__).resolve().parent / "overlay"
 dst = v / "project" / "core" / "scripting"
 dst.mkdir(parents=True, exist_ok=True)
 
-for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp", "nix_cvar_bridge.hpp", "nix_cvar_bridge.cpp", "nix_engine_bridge.hpp", "nix_engine_bridge.cpp", "nix_event_bridge.hpp", "nix_event_bridge.cpp"):
+for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp", "nix_cvar_bridge.hpp", "nix_cvar_bridge.cpp", "nix_engine_bridge.hpp", "nix_engine_bridge.cpp", "nix_event_bridge.hpp", "nix_event_bridge.cpp", "nix_render_bridge.hpp", "nix_render_bridge.cpp", "nix_render_bootstrap.hpp"):
     source = overlay / name
     if not source.exists():
         raise SystemExit(f"[nix-luajit] missing overlay/{name}")
@@ -36,6 +36,7 @@ compile_entries = [
     '    <ClCompile Include="project\\core\\scripting\\nix_cvar_bridge.cpp" />',
     '    <ClCompile Include="project\\core\\scripting\\nix_engine_bridge.cpp" />',
     '    <ClCompile Include="project\\core\\scripting\\nix_event_bridge.cpp" />',
+    '    <ClCompile Include="project\\core\\scripting\\nix_render_bridge.cpp" />',
 ]
 for entry_line in compile_entries:
     if entry_line not in t:
@@ -53,6 +54,8 @@ header_entries = [
     '    <ClInclude Include="project\\core\\scripting\\nix_cvar_bridge.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_engine_bridge.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_event_bridge.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_render_bridge.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_render_bootstrap.hpp" />',
 ]
 for entry_line in header_entries:
     if entry_line not in t:
