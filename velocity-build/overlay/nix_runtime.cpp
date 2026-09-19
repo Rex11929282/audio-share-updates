@@ -28,6 +28,7 @@ namespace
     using scripting::nix_native::lua_globals_index;
     using scripting::nix_native::lua_tfunction;
     using scripting::nix_native::lua_tstring;
+    constexpr std::size_t max_nix_script = 8u * 1024u * 1024u;
 
     std::string lowercase(std::string value)
     {
