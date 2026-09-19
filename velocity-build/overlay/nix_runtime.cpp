@@ -13,6 +13,7 @@
 #include <array>
 #include <bcrypt.h>
 #include <chrono>
+#include <commdlg.h>
 #include <cmath>
 #include <cctype>
 #include <cstdint>
@@ -25,6 +26,7 @@
 #include <windows.h>
 
 #pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "Comdlg32.lib")
 
 namespace
 {
@@ -33,6 +35,8 @@ namespace
     using scripting::nix_native::lua_tfunction;
     using scripting::nix_native::lua_tstring;
     constexpr std::size_t max_nix_script = 8u * 1024u * 1024u;
+    constexpr std::string_view blocked_abusive_original_sha256 =
+        "cb1088936c2871fa8d8332611fc7c7f409fcbbb4a69c08d77f3ca86f5e095794";
 
     std::string lowercase(std::string value)
     {
@@ -932,6 +936,157 @@ namespace scripting
             view_setup + origin_offset, *origin);
         memory::write<math::vector3>(
             view_setup + angles_offset, *angles);
+    }
+
+    bool nix_runtime::import_script_dialog(void* owner_window)
+    {
+        std::array<wchar_t, 32768> selected{};
+        constexpr wchar_t filter[] =
+            L"Nixware Lua (*.lua;*.luac)\0*.lua;*.luac\0"
+            L"All files (*.*)\0*.*\0\0";
+
+        OPENFILENAMEW dialog{};
+        dialog.lStructSize = sizeof(dialog);
+        dialog.hwndOwner = static_cast<HWND>(owner_window);
+        dialog.lpstrFilter = filter;
+        dialog.lpstrFile = selected.data();
+        dialog.nMaxFile = static_cast<DWORD>(selected.size());
+        dialog.lpstrTitle = L"Import and explicitly approve Nixware Lua";
+        dialog.Flags =
+            OFN_FILEMUSTEXIST |
+            OFN_PATHMUSTEXIST |
+            OFN_EXPLORER |
+            OFN_NOCHANGEDIR;
+
+        if (!GetOpenFileNameW(&dialog))
+            return false;
+
+        const std::filesystem::path source{selected.data()};
+        if (!is_nix_script(source))
+        {
+            logging::console::print(
+                "[NixLua] 导入拒绝：只允许 .lua / .luac");
+            return false;
+        }
+
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(source, ec);
+        if (ec || size == 0 || size > max_nix_script)
+        {
+            logging::console::print(
+                "[NixLua] 导入拒绝：脚本为空、不可读或超过 8 MiB");
+            return false;
+        }
+
+        const auto source_hash = lowercase(sha256_file(source));
+        if (!is_hex_sha256(source_hash))
+        {
+            logging::console::print(
+                "[NixLua] 导入失败：无法计算脚本 SHA-256");
+            return false;
+        }
+
+        if (source_hash == blocked_abusive_original_sha256)
+        {
+            logging::console::print(
+                "[NixLua] 已保持封存：该原稿禁止进入可执行目录");
+            return false;
+        }
+
+        std::filesystem::path directory;
+        {
+            std::scoped_lock lock(m_impl->mutex);
+            if (!m_impl->initialized)
+                return false;
+            directory = m_impl->enabled_directory;
+        }
+
+        const auto destination =
+            directory / source.filename();
+        auto temporary = destination;
+        temporary += L".mcb-import.tmp";
+
+        std::filesystem::remove(temporary, ec);
+        ec.clear();
+        std::filesystem::copy_file(
+            source, temporary,
+            std::filesystem::copy_options::overwrite_existing,
+            ec);
+
+        if (ec ||
+            lowercase(sha256_file(temporary)) != source_hash)
+        {
+            std::filesystem::remove(temporary, ec);
+            logging::console::print(
+                "[NixLua] 导入失败：复制后 SHA-256 核验不一致");
+            return false;
+        }
+
+        if (!MoveFileExW(
+                temporary.c_str(),
+                destination.c_str(),
+                MOVEFILE_REPLACE_EXISTING |
+                MOVEFILE_WRITE_THROUGH))
+        {
+            std::filesystem::remove(temporary, ec);
+            logging::console::print(
+                "[NixLua] 导入失败：替换目标文件失败，Win32={}",
+                GetLastError());
+            return false;
+        }
+
+        auto sidecar = destination;
+        sidecar += L".approved.sha256";
+        auto sidecar_tmp = sidecar;
+        sidecar_tmp += L".tmp";
+
+        {
+            std::ofstream output(
+                sidecar_tmp,
+                std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                logging::console::print(
+                    "[NixLua] 导入失败：无法写入批准侧档");
+                return false;
+            }
+
+            output.write(
+                source_hash.data(),
+                static_cast<std::streamsize>(source_hash.size()));
+            output.put('\n');
+            output.flush();
+            if (!output)
+            {
+                logging::console::print(
+                    "[NixLua] 导入失败：批准侧档写入不完整");
+                return false;
+            }
+        }
+
+        if (!MoveFileExW(
+                sidecar_tmp.c_str(),
+                sidecar.c_str(),
+                MOVEFILE_REPLACE_EXISTING |
+                MOVEFILE_WRITE_THROUGH))
+        {
+            std::filesystem::remove(sidecar_tmp, ec);
+            logging::console::print(
+                "[NixLua] 导入失败：批准侧档替换失败，Win32={}",
+                GetLastError());
+            return false;
+        }
+
+        {
+            std::scoped_lock lock(m_impl->mutex);
+            m_impl->last_scan =
+                std::chrono::steady_clock::time_point{};
+        }
+
+        logging::console::print(
+            "[NixLua] 已明确批准：{} sha256={}",
+            destination.filename().string(), source_hash);
+        return true;
     }
 
     void nix_runtime::reload_all()
