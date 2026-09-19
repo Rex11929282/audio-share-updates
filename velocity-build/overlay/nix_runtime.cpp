@@ -974,8 +974,16 @@ namespace scripting
         }
 
         for (auto& value : m_impl->scripts)
-            if (value->state && !value->suspended)
-                m_impl->dispatch(*value, "paint");
+        {
+            if (!value->state || value->suspended)
+                continue;
+
+            scripting::nix_native::begin_render_scope(
+                value->state);
+            m_impl->dispatch(*value, "paint");
+            scripting::nix_native::end_render_scope(
+                value->state);
+        }
     }
 
     void nix_runtime::on_override_view(std::uintptr_t view_setup)
