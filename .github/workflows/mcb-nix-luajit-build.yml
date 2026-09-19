@@ -191,6 +191,9 @@ jobs:
             @("$root\project\core\scripting\nix_runtime.cpp", 'scripts" / L"nixware" / L"enabled'),
             @("$root\project\core\scripting\nix_runtime.cpp", 'LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR'),
             @("$root\project\core\scripting\nix_value_bootstrap.hpp", 'ffi.metatype("mcb_nix_vec3"'),
+            @("$root\project\core\scripting\nix_entity_bridge.cpp", 'get_local_player_pawn'),
+            @("$root\project\core\scripting\nix_entity_bridge.cpp", 'lua_pushlightuserdata'),
+            @("$root\project\core\scripting\nix_entity_bridge.cpp", 'systems::schemas::try_lookup'),
             @("$root\project\entry.cpp", 'scripting::g_nix.initialize'),
             @("$root\project\entry.cpp", 'scripting::g_nix.shutdown'),
             @("$root\project\core\rendering\impl\context.cpp", 'scripting::g_nix.on_frame'),
@@ -228,12 +231,17 @@ jobs:
           Copy-Item 'velocity-build\overlay\nix_runtime.cpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_runtime.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_value_bootstrap.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_luajit_api.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_entity_bridge.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_entity_bridge.cpp' release\source\
           Copy-Item 'velocity-build\apply_nix_luajit.py' release\source\
           Copy-Item 'mcb-src\cs2\MCB-CS2\project\core\scripting\nix_luajit_manifest.hpp' release\source\
 
           $mcbHash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           "mcb_dll_sha256=$mcbHash" | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_a_exact_luajit_ffi=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_b_entity_bridge_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_b_entity_pointer_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_entity_api=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_render_api=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_mutating_events=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
