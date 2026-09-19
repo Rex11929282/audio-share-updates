@@ -419,6 +419,32 @@ end
         return _wcsicmp(ext.c_str(), L".lua") == 0 ||
                _wcsicmp(ext.c_str(), L".luac") == 0;
     }
+
+    bool is_approved_script(const std::filesystem::path& path)
+    {
+        auto sidecar = path;
+        sidecar += L".approved.sha256";
+
+        std::ifstream input(sidecar, std::ios::binary);
+        if (!input) return false;
+
+        std::string expected(
+            std::istreambuf_iterator<char>(input), {});
+        expected.erase(
+            std::remove_if(
+                expected.begin(), expected.end(),
+                [](unsigned char ch)
+                {
+                    return std::isspace(ch) != 0;
+                }),
+            expected.end());
+
+        if (!is_hex_sha256(expected))
+            return false;
+
+        return lowercase(expected) ==
+               lowercase(sha256_file(path));
+    }
 }
 
 namespace scripting
@@ -718,7 +744,9 @@ namespace scripting
                  std::filesystem::directory_iterator(enabled_directory, ec))
             {
                 if (ec) break;
-                if (entry.is_regular_file(ec) && is_nix_script(entry.path()))
+                if (entry.is_regular_file(ec) &&
+                    is_nix_script(entry.path()) &&
+                    is_approved_script(entry.path()))
                     files.push_back(entry.path());
                 ec.clear();
             }
@@ -817,7 +845,7 @@ namespace scripting
         m_impl->initialized = true;
 
         logging::console::print(
-            "[NixLua] 真 LuaJIT Runtime 已啟用；revision={}；只自動載入 scripts/nixware/enabled",
+            "[NixLua] 真 LuaJIT Runtime 已啟用；revision={}；僅載入具匹配 .approved.sha256 的腳本",
             MCB_NIX_LUAJIT_REVISION);
         return true;
     }
