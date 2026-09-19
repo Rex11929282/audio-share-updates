@@ -15,7 +15,7 @@ overlay = Path(__file__).resolve().parent / "overlay"
 dst = v / "project" / "core" / "scripting"
 dst.mkdir(parents=True, exist_ok=True)
 
-for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp", "nix_cvar_bridge.hpp", "nix_cvar_bridge.cpp"):
+for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp", "nix_cvar_bridge.hpp", "nix_cvar_bridge.cpp", "nix_engine_bridge.hpp", "nix_engine_bridge.cpp", "nix_event_bridge.hpp", "nix_event_bridge.cpp"):
     source = overlay / name
     if not source.exists():
         raise SystemExit(f"[nix-luajit] missing overlay/{name}")
@@ -34,6 +34,8 @@ compile_entries = [
     '    <ClCompile Include="project\\core\\scripting\\nix_runtime.cpp" />',
     '    <ClCompile Include="project\\core\\scripting\\nix_entity_bridge.cpp" />',
     '    <ClCompile Include="project\\core\\scripting\\nix_cvar_bridge.cpp" />',
+    '    <ClCompile Include="project\\core\\scripting\\nix_engine_bridge.cpp" />',
+    '    <ClCompile Include="project\\core\\scripting\\nix_event_bridge.cpp" />',
 ]
 for entry_line in compile_entries:
     if entry_line not in t:
@@ -49,6 +51,8 @@ header_entries = [
     '    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_entity_bridge.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_cvar_bridge.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_engine_bridge.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_event_bridge.hpp" />',
 ]
 for entry_line in header_entries:
     if entry_line not in t:
@@ -194,3 +198,32 @@ if scripts_anchor not in t:
     raise SystemExit("[nix-luajit] v6.2 script view marker missing")
 t = t.replace(scripts_anchor, scripts_replacement, 1)
 views.write_text(t, encoding="utf-8")
+
+
+events_cpp = v / "project" / "core" / "systems" / "impl" / "events.cpp"
+t = events_cpp.read_text(encoding="utf-8")
+events_include_anchor = "#include <core/features/features.hpp>"
+if "#include <core/scripting/nix_runtime.hpp>" not in t:
+    if events_include_anchor not in t:
+        raise SystemExit("[nix-luajit] events include marker missing")
+    t = t.replace(
+        events_include_anchor,
+        events_include_anchor + '\n#include <core/scripting/nix_runtime.hpp>',
+        1)
+
+event_replacements = {
+    '[ ]( void* event ) { features::misc::g_impacts.on_bullet_impact( reinterpret_cast< std::uintptr_t >( event ) ); }':
+        '[ ]( void* event ) { scripting::g_nix.on_game_event( "bullet_impact", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_impacts.on_bullet_impact( reinterpret_cast< std::uintptr_t >( event ) ); }',
+    '[ ]( void* event ) { features::misc::g_impacts.on_player_hurt( reinterpret_cast< std::uintptr_t >( event ) ); }':
+        '[ ]( void* event ) { scripting::g_nix.on_game_event( "player_hurt", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_impacts.on_player_hurt( reinterpret_cast< std::uintptr_t >( event ) ); }',
+    '[ ]( void* event ) { features::misc::g_other.on_round_start( ); }':
+        '[ ]( void* event ) { scripting::g_nix.on_game_event( "round_start", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_other.on_round_start( ); }',
+    '[ ]( void* event ) { features::misc::g_other.on_player_death( reinterpret_cast< std::uintptr_t >( event ) ); }':
+        '[ ]( void* event ) { scripting::g_nix.on_game_event( "player_death", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_other.on_player_death( reinterpret_cast< std::uintptr_t >( event ) ); }',
+}
+for old, new in event_replacements.items():
+    if new not in t:
+        if old not in t:
+            raise SystemExit("[nix-luajit] Source2 event listener marker missing: " + old[:60])
+        t = t.replace(old, new, 1)
+events_cpp.write_text(t, encoding="utf-8")
