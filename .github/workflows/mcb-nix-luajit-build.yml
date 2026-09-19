@@ -128,6 +128,70 @@ jobs:
           if ($valueExit -ne 0) { throw 'Nix cdata value bootstrap failed' }
           'nix_cdata_value_bootstrap=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
 
+      - name: Validate Nix render Lua bootstrap
+        shell: pwsh
+        run: |
+          $values = Get-Content 'velocity-build\overlay\nix_value_bootstrap.hpp' -Raw
+          $v = [regex]::Match($values, '(?s)R"MCB_NIX\((.*?)\)MCB_NIX";')
+          if (-not $v.Success) { throw 'cannot extract value bootstrap' }
+
+          $render = Get-Content 'velocity-build\overlay\nix_render_bootstrap.hpp' -Raw
+          $r = [regex]::Match($render, '(?s)R"MCB_NIX_RENDER\((.*?)\)MCB_NIX_RENDER";')
+          if (-not $r.Success) { throw 'cannot extract render bootstrap' }
+
+          $stub = @'
+          local calls = {}
+          function __mcb_render_screen_size() return 1920,1080 end
+          function __mcb_render_frame_count() return 77 end
+          function __mcb_render_frame_time() return 0.015625 end
+          function __mcb_render_world_to_screen(x,y,z)
+            if z < 0 then return nil end
+            return x+10,y+20
+          end
+          function __mcb_render_line(...) calls.line={...} end
+          function __mcb_render_rect(...) calls.rect={...} end
+          function __mcb_render_rect_filled(...) calls.rect_filled={...} end
+          function __mcb_render_rect_filled_fade(...) calls.fade={...} end
+          function __mcb_render_circle(...) calls.circle={...} end
+          function __mcb_render_circle_filled(...) calls.circle_filled={...} end
+          function __mcb_render_push_clip(...) calls.push_clip={...} end
+          function __mcb_render_pop_clip(...) calls.pop_clip=true end
+          '@
+
+          $assertions = @'
+          local s=render.screen_size()
+          assert(type(s)=="cdata" and s.x==1920 and s.y==1080)
+          assert(render.frame_count()==77)
+          assert(math.abs(render.frame_time()-0.015625)<1e-9)
+          local p=render.world_to_screen(vec3_t(1,2,3))
+          assert(type(p)=="cdata" and p.x==11 and p.y==22)
+          assert(render.world_to_screen(vec3_t(1,2,-1))==nil)
+          render.line(vec2_t(1,2),vec2_t(3,4),color_t(1,.5,0,1),2)
+          assert(calls.line and calls.line[1]==1 and calls.line[9]==2)
+          render.rect_filled(vec2_t(10,20),vec2_t(30,40),color_t(1,1,1,.5),4)
+          assert(calls.rect_filled and calls.rect_filled[9]==4)
+          render.circle(vec2_t(50,60),10,24,color_t(1,0,0,1),3)
+          assert(calls.circle and calls.circle[4]==24 and calls.circle[9]==3)
+          render.push_clip_rect(vec2_t(0,0),vec2_t(100,100),false)
+          assert(calls.push_clip and calls.push_clip[5]==false)
+          render.pop_clip_rect()
+          assert(calls.pop_clip==true)
+          print("MCB_NIX_RENDER_BOOTSTRAP=PASS")
+          '@
+
+          $nl = [Environment]::NewLine
+          [System.IO.File]::WriteAllText(
+            (Join-Path $pwd 'nix_render_bootstrap_test.lua'),
+            $v.Groups[1].Value + $nl + $stub + $nl + $r.Groups[1].Value + $nl + $assertions,
+            [System.Text.UTF8Encoding]::new($false))
+
+          Push-Location .\luajit\src
+          & .\luajit.exe ..\..\nix_render_bootstrap_test.lua 2>&1 | Tee-Object -FilePath ..\..\release\NIX_RENDER_BOOTSTRAP.log
+          $renderExit = $LASTEXITCODE
+          Pop-Location
+          if ($renderExit -ne 0) { throw 'Nix render Lua bootstrap failed' }
+          'nix_render_lua_bootstrap=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+
       - name: Compile and run independent DLL loader smoke
         shell: pwsh
         run: |
