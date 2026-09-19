@@ -6,6 +6,8 @@
 #include "nix_entity_bridge.hpp"
 #include "nix_engine_bridge.hpp"
 #include "nix_event_bridge.hpp"
+#include "nix_render_bridge.hpp"
+#include "nix_render_bootstrap.hpp"
 #include "nix_cvar_bridge.hpp"
 #include "nix_value_bootstrap.hpp"
 
@@ -755,6 +757,7 @@ namespace scripting
         {
             if (!value.state) return;
             if (!value.suspended) dispatch(value, "unload");
+            scripting::nix_native::detach_render_api(value.state);
             scripting::nix_native::detach_event_api(value.state);
             scripting::nix_native::detach_engine_api(value.state);
             scripting::nix_native::detach_cvar_api(value.state);
@@ -798,6 +801,11 @@ namespace scripting
                     api, value.state, error) ||
                 !scripting::nix_native::install_event_api(
                     api, value.state, error) ||
+                !scripting::nix_native::install_render_api(
+                    api, value.state, error) ||
+                !run_chunk(
+                    api, value.state, scripting::nix_bootstrap::render_api,
+                    "=MCB_NIX_RENDER_API", error) ||
                 !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
@@ -806,7 +814,8 @@ namespace scripting
                     "@" + value.path.filename().string(), error))
             {
                 value.last_error = error;
-                scripting::nix_native::detach_event_api(value.state);
+                scripting::nix_native::detach_render_api(value.state);
+            scripting::nix_native::detach_event_api(value.state);
                 scripting::nix_native::detach_engine_api(value.state);
                 scripting::nix_native::detach_cvar_api(value.state);
                 scripting::nix_native::detach_entity_api(value.state);
@@ -953,6 +962,7 @@ namespace scripting
         std::scoped_lock lock(m_impl->mutex);
         if (!m_impl->initialized || !m_impl->runtime) return;
 
+        scripting::nix_native::advance_render_frame();
         m_impl->run_native_probe_once();
 
         const auto now = std::chrono::steady_clock::now();
