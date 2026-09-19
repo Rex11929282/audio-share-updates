@@ -246,7 +246,8 @@ jobs:
           Copy-Item 'velocity-build\overlay\nix_entity_bridge.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_entity_bridge.cpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_cvar_bridge.hpp' release\source\
-          Copy-Item 'velocity-build\overlay\nix_cvar_bridge.cpp' release\source\          Copy-Item 'velocity-build\overlay\nix_engine_bridge.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_cvar_bridge.cpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_engine_bridge.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_engine_bridge.cpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_event_bridge.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_event_bridge.cpp' release\source\
