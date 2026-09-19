@@ -2,6 +2,8 @@
 
 #include "nix_runtime.hpp"
 #include "nix_luajit_manifest.hpp"
+#include "nix_luajit_api.hpp"
+#include "nix_entity_bridge.hpp"
 #include "nix_value_bootstrap.hpp"
 
 #include <algorithm>
@@ -22,52 +24,10 @@
 
 namespace
 {
-    struct lua_State;
-
-    constexpr int lua_globals_index = -10002;
-    constexpr int lua_tfunction = 6;
-    constexpr int lua_tstring = 4;
-    constexpr std::size_t max_nix_script = 8u * 1024u * 1024u;
-
-    struct luajit_api
-    {
-        lua_State* (__cdecl* luaL_newstate)(){};
-        void (__cdecl* lua_close)(lua_State*){};
-        void (__cdecl* luaL_openlibs)(lua_State*){};
-        int (__cdecl* luaL_loadbuffer)(lua_State*, const char*, std::size_t, const char*){};
-        int (__cdecl* lua_pcall)(lua_State*, int, int, int){};
-        void (__cdecl* lua_getfield)(lua_State*, int, const char*){};
-        void (__cdecl* lua_pushstring)(lua_State*, const char*){};
-        void (__cdecl* lua_pushnumber)(lua_State*, double){};
-        int (__cdecl* lua_type)(lua_State*, int){};
-        const char* (__cdecl* lua_tolstring)(lua_State*, int, std::size_t*){};
-        int (__cdecl* lua_gettop)(lua_State*){};
-        void (__cdecl* lua_settop)(lua_State*, int){};
-
-        template <typename T>
-        static bool bind_one(HMODULE module, T& out, const char* name)
-        {
-            out = reinterpret_cast<T>(GetProcAddress(module, name));
-            return out != nullptr;
-        }
-
-        bool bind(HMODULE module)
-        {
-            return
-                bind_one(module, luaL_newstate, "luaL_newstate") &&
-                bind_one(module, lua_close, "lua_close") &&
-                bind_one(module, luaL_openlibs, "luaL_openlibs") &&
-                bind_one(module, luaL_loadbuffer, "luaL_loadbuffer") &&
-                bind_one(module, lua_pcall, "lua_pcall") &&
-                bind_one(module, lua_getfield, "lua_getfield") &&
-                bind_one(module, lua_pushstring, "lua_pushstring") &&
-                bind_one(module, lua_pushnumber, "lua_pushnumber") &&
-                bind_one(module, lua_type, "lua_type") &&
-                bind_one(module, lua_tolstring, "lua_tolstring") &&
-                bind_one(module, lua_gettop, "lua_gettop") &&
-                bind_one(module, lua_settop, "lua_settop");
-        }
-    };
+    using scripting::nix_native::luajit_api;
+    using scripting::nix_native::lua_globals_index;
+    using scripting::nix_native::lua_tfunction;
+    using scripting::nix_native::lua_tstring;
 
     std::string lowercase(std::string value)
     {
@@ -458,6 +418,7 @@ namespace scripting
         {
             if (!value.state) return;
             if (!value.suspended) dispatch(value, "unload");
+            scripting::nix_native::detach_entity_api(value.state);
             runtime->api.lua_close(value.state);
             value.state = nullptr;
         }
@@ -489,6 +450,8 @@ namespace scripting
             if (!run_chunk(
                     api, value.state, scripting::nix_bootstrap::value_types,
                     "=MCB_NIX_VALUE_TYPES", error) ||
+                !scripting::nix_native::install_entity_api(
+                    api, value.state, error) ||
                 !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
@@ -497,6 +460,7 @@ namespace scripting
                     "@" + value.path.filename().string(), error))
             {
                 value.last_error = error;
+                scripting::nix_native::detach_entity_api(value.state);
                 api.lua_close(value.state);
                 value.state = nullptr;
                 logging::console::print(
