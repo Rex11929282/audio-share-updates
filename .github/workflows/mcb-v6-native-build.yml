@@ -2,7 +2,7 @@ name: MCB-CS2 Nix LuaJIT Runtime Slice A
 
 on:
   push:
-    branches: [mcb-nix-luajit-runtime]
+    branches: [mcb-v6-exact-panel-build]
   workflow_dispatch: {}
 
 permissions:
