@@ -8,9 +8,11 @@
 
 #include <algorithm>
 #include <core/systems/systems.hpp>
+#include <utilities/memory/memory.hpp>
 #include <array>
 #include <bcrypt.h>
 #include <chrono>
+#include <cmath>
 #include <cctype>
 #include <cstdint>
 #include <fstream>
@@ -234,7 +236,7 @@ return true
 
         return std::string(R"MCB(
 local callbacks = {}
-local supported = { paint = true, unload = true }
+local supported = { paint = true, unload = true, override_view = true }
 
 function register_callback(name, fn)
     assert(type(name) == "string", "callback name must be a string")
@@ -256,6 +258,31 @@ function __mcb_nix_dispatch(name)
     for i = 1, #list do
         list[i]()
     end
+end
+
+function __mcb_nix_override_view(fov, fov_viewmodel, ox, oy, oz, pitch, yaw, roll)
+    local view = {
+        fov = fov,
+        fov_viewmodel = fov_viewmodel,
+        origin = vec3_t(ox, oy, oz),
+        angles = angle_t(pitch, yaw, roll)
+    }
+
+    local list = callbacks.override_view
+    if list then
+        for i = 1, #list do
+            list[i](view)
+        end
+    end
+
+    assert(type(view.fov) == "number", "view.fov must remain numeric")
+    assert(type(view.fov_viewmodel) == "number", "view.fov_viewmodel must remain numeric")
+    assert(type(view.origin) == "cdata", "view.origin must remain vec3_t cdata")
+    assert(type(view.angles) == "cdata", "view.angles must remain angle_t cdata")
+
+    return view.fov, view.fov_viewmodel,
+           view.origin.x, view.origin.y, view.origin.z,
+           view.angles.pitch, view.angles.yaw, view.angles.roll
 end
 
 function get_script_name()
@@ -466,6 +493,107 @@ namespace scripting
                 logging::console::print(
                     "[NixLua] 游戏内实体 FFI 自检失败：{}", error);
             }
+        }
+
+        bool dispatch_override_view(
+            script& value,
+            float& fov,
+            float& fov_viewmodel,
+            math::vector3& origin,
+            math::vector3& angles)
+        {
+            if (!value.state || value.suspended) return false;
+
+            auto& api = runtime->api;
+            const auto top = api.lua_gettop(value.state);
+            api.lua_getfield(
+                value.state, lua_globals_index,
+                "__mcb_nix_override_view");
+
+            if (api.lua_type(value.state, -1) != lua_tfunction)
+            {
+                api.lua_settop(value.state, top);
+                value.last_error = "internal override_view dispatcher missing";
+                value.suspended = true;
+                return false;
+            }
+
+            api.lua_pushnumber(value.state, fov);
+            api.lua_pushnumber(value.state, fov_viewmodel);
+            api.lua_pushnumber(value.state, origin.x);
+            api.lua_pushnumber(value.state, origin.y);
+            api.lua_pushnumber(value.state, origin.z);
+            api.lua_pushnumber(value.state, angles.x);
+            api.lua_pushnumber(value.state, angles.y);
+            api.lua_pushnumber(value.state, angles.z);
+
+            const auto result = api.lua_pcall(value.state, 8, 8, 0);
+            if (result != 0)
+            {
+                value.last_error = lua_error(
+                    api, value.state,
+                    "callback 'override_view' failed");
+                api.lua_settop(value.state, top);
+                value.suspended = true;
+                logging::console::print(
+                    "[NixLua] 已暫停 {}：{}",
+                    value.path.filename().string(), value.last_error);
+                return false;
+            }
+
+            for (int i = -8; i <= -1; ++i)
+            {
+                if (api.lua_type(value.state, i) !=
+                    scripting::nix_native::lua_tnumber)
+                {
+                    value.last_error =
+                        "override_view returned non-numeric native fields";
+                    api.lua_settop(value.state, top);
+                    value.suspended = true;
+                    return false;
+                }
+            }
+
+            const auto next_fov =
+                static_cast<float>(api.lua_tonumber(value.state, -8));
+            const auto next_fov_viewmodel =
+                static_cast<float>(api.lua_tonumber(value.state, -7));
+            const math::vector3 next_origin{
+                static_cast<float>(api.lua_tonumber(value.state, -6)),
+                static_cast<float>(api.lua_tonumber(value.state, -5)),
+                static_cast<float>(api.lua_tonumber(value.state, -4))
+            };
+            const math::vector3 next_angles{
+                static_cast<float>(api.lua_tonumber(value.state, -3)),
+                static_cast<float>(api.lua_tonumber(value.state, -2)),
+                static_cast<float>(api.lua_tonumber(value.state, -1))
+            };
+
+            api.lua_settop(value.state, top);
+
+            const bool finite =
+                std::isfinite(next_fov) &&
+                std::isfinite(next_fov_viewmodel) &&
+                std::isfinite(next_origin.x) &&
+                std::isfinite(next_origin.y) &&
+                std::isfinite(next_origin.z) &&
+                std::isfinite(next_angles.x) &&
+                std::isfinite(next_angles.y) &&
+                std::isfinite(next_angles.z);
+
+            if (!finite)
+            {
+                value.last_error =
+                    "override_view produced a non-finite field";
+                value.suspended = true;
+                return false;
+            }
+
+            fov = next_fov;
+            fov_viewmodel = next_fov_viewmodel;
+            origin = next_origin;
+            angles = next_angles;
+            return true;
         }
 
         bool dispatch(script& value, const char* event)
@@ -703,6 +831,59 @@ namespace scripting
         for (auto& value : m_impl->scripts)
             if (value->state && !value->suspended)
                 m_impl->dispatch(*value, "paint");
+    }
+
+    void nix_runtime::on_override_view(std::uintptr_t view_setup)
+    {
+        if (!view_setup) return;
+
+        std::scoped_lock lock(m_impl->mutex);
+        if (!m_impl->initialized || !m_impl->runtime) return;
+
+        constexpr std::ptrdiff_t fov_offset = 0x498;
+        constexpr std::ptrdiff_t viewmodel_fov_offset = 0x49c;
+        constexpr std::ptrdiff_t origin_offset = 0x4a0;
+        constexpr std::ptrdiff_t angles_offset = 0x4b8;
+
+        auto fov = memory::safe_read<float>(
+            view_setup + fov_offset);
+        auto fov_viewmodel = memory::safe_read<float>(
+            view_setup + viewmodel_fov_offset);
+        auto origin = memory::safe_read<math::vector3>(
+            view_setup + origin_offset);
+        auto angles = memory::safe_read<math::vector3>(
+            view_setup + angles_offset);
+
+        if (!fov || !fov_viewmodel || !origin || !angles)
+            return;
+
+        for (auto& value : m_impl->scripts)
+        {
+            if (!value->state || value->suspended)
+                continue;
+
+            m_impl->dispatch_override_view(
+                *value, *fov, *fov_viewmodel, *origin, *angles);
+        }
+
+        if (!std::isfinite(*fov) ||
+            !std::isfinite(*fov_viewmodel) ||
+            !std::isfinite(origin->x) ||
+            !std::isfinite(origin->y) ||
+            !std::isfinite(origin->z) ||
+            !std::isfinite(angles->x) ||
+            !std::isfinite(angles->y) ||
+            !std::isfinite(angles->z))
+            return;
+
+        memory::write<float>(
+            view_setup + fov_offset, *fov);
+        memory::write<float>(
+            view_setup + viewmodel_fov_offset, *fov_viewmodel);
+        memory::write<math::vector3>(
+            view_setup + origin_offset, *origin);
+        memory::write<math::vector3>(
+            view_setup + angles_offset, *angles);
     }
 
     void nix_runtime::reload_all()
