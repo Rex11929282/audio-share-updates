@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mcb-nix-luajit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -194,6 +198,8 @@ jobs:
             @("$root\project\core\scripting\nix_entity_bridge.cpp", 'get_local_player_pawn'),
             @("$root\project\core\scripting\nix_entity_bridge.cpp", 'lua_pushlightuserdata'),
             @("$root\project\core\scripting\nix_entity_bridge.cpp", 'systems::schemas::try_lookup'),
+            @("$root\project\core\scripting\nix_cvar_bridge.cpp", 'addresses::globals::cvar->find'),
+            @("$root\project\core\hooks\impl\cheat.cpp", 'scripting::g_nix.on_override_view'),
             @("$root\project\entry.cpp", 'scripting::g_nix.initialize'),
             @("$root\project\entry.cpp", 'scripting::g_nix.shutdown'),
             @("$root\project\core\rendering\impl\context.cpp", 'scripting::g_nix.on_frame'),
@@ -234,6 +240,8 @@ jobs:
           Copy-Item 'velocity-build\overlay\nix_luajit_api.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_entity_bridge.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_entity_bridge.cpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_cvar_bridge.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_cvar_bridge.cpp' release\source\
           Copy-Item 'velocity-build\apply_nix_luajit.py' release\source\
           Copy-Item 'mcb-src\cs2\MCB-CS2\project\core\scripting\nix_luajit_manifest.hpp' release\source\
 
@@ -241,6 +249,10 @@ jobs:
           "mcb_dll_sha256=$mcbHash" | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_a_exact_luajit_ffi=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_b_entity_bridge_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_b_cvar_bridge_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_c_override_view_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_b_entity_pointer_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_c_override_view_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_b_entity_pointer_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_entity_api=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_render_api=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
