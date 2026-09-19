@@ -7,6 +7,7 @@
 #include <array>
 #include <bcrypt.h>
 #include <chrono>
+#include <cctype>
 #include <cstdint>
 #include <fstream>
 #include <iterator>
@@ -277,12 +278,13 @@ end
     struct runtime_image
     {
         HMODULE module{};
+        bool owns_module{};
         luajit_api api{};
         std::filesystem::path path{};
 
         ~runtime_image()
         {
-            if (module) FreeLibrary(module);
+            if (module && owns_module) FreeLibrary(module);
         }
 
         bool open(const std::filesystem::path& runtime_path, std::string& error)
@@ -333,20 +335,21 @@ end
                     error = "a different lua51.dll is already loaded";
                     return false;
                 }
-                module = existing;
             }
-            else
+
+            // Always acquire our own loader reference. GetModuleHandleW() does not
+            // increment the module refcount, so using it directly would make
+            // shutdown capable of unloading a runtime owned by another component.
+            module = LoadLibraryExW(
+                canonical.c_str(), nullptr,
+                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!module)
             {
-                module = LoadLibraryExW(
-                    canonical.c_str(), nullptr,
-                    LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-                if (!module)
-                {
-                    error = "LoadLibraryExW(lua51.dll) failed: " +
-                        std::to_string(GetLastError());
-                    return false;
-                }
+                error = "LoadLibraryExW(lua51.dll) failed: " +
+                    std::to_string(GetLastError());
+                return false;
             }
+            owns_module = true;
 
             path = canonical;
             if (!api.bind(module))
