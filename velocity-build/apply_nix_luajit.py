@@ -33,6 +33,7 @@ if compile_anchor not in t:
 compile_entries = [
     '    <ClCompile Include="project\\core\\scripting\\nix_runtime.cpp" />',
     '    <ClCompile Include="project\\core\\scripting\\nix_entity_bridge.cpp" />',
+    '    <ClCompile Include="project\\core\\scripting\\nix_cvar_bridge.cpp" />',
 ]
 for entry_line in compile_entries:
     if entry_line not in t:
@@ -47,6 +48,7 @@ header_entries = [
     '    <ClInclude Include="project\\core\\scripting\\nix_luajit_api.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_entity_bridge.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_cvar_bridge.hpp" />',
 ]
 for entry_line in header_entries:
     if entry_line not in t:
