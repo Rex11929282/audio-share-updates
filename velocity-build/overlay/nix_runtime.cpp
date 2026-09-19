@@ -7,6 +7,7 @@
 #include "nix_value_bootstrap.hpp"
 
 #include <algorithm>
+#include <core/systems/systems.hpp>
 #include <array>
 #include <bcrypt.h>
 #include <chrono>
@@ -186,6 +187,32 @@ local callback = ffi.cast("int(*)(int)", function(x) return x + 1 end)
 assert(callback(41) == 42, "FFI callback failed")
 callback:free()
 )MCB";
+
+    constexpr std::string_view native_entity_probe = R"MCB(
+local ffi = require("ffi")
+local pawn = entitylist.get_local_player_pawn()
+assert(pawn ~= nil, "local pawn unavailable")
+
+local offset = engine.get_netvar_offset(
+    "client.dll", "C_BaseEntity", "m_iHealth")
+assert(type(offset) == "number", "m_iHealth offset unavailable")
+
+local address = pawn[offset]
+assert(address ~= nil, "pawn[offset] did not return an address")
+
+local health = ffi.cast("int*", address)[0]
+assert(type(health) == "number", "FFI health read did not return a number")
+assert(health >= 0 and health <= 1000, "implausible local health")
+
+local class_name = pawn:get_class_name()
+assert(type(class_name) == "string" and #class_name > 0, "entity class unavailable")
+
+local origin = pawn:get_abs_origin()
+assert(origin ~= nil and type(origin) == "cdata", "absolute origin is not cdata")
+
+return true
+)MCB";
+
 
     std::string bootstrap_for(const std::string& filename)
     {
@@ -379,6 +406,66 @@ namespace scripting
         std::vector<std::unique_ptr<script>> scripts{};
         std::chrono::steady_clock::time_point last_scan{};
         bool initialized{};
+        bool native_probe_completed{};
+        bool native_probe_failed{};
+
+        void run_native_probe_once()
+        {
+            if (native_probe_completed || native_probe_failed ||
+                !runtime || !systems::g_local.get().pawn)
+                return;
+
+            auto& api = runtime->api;
+            auto* state = api.luaL_newstate();
+            if (!state)
+            {
+                native_probe_failed = true;
+                logging::console::print(
+                    "[NixLua] 游戏内实体 FFI 自检失败：luaL_newstate");
+                return;
+            }
+
+            api.luaL_openlibs(state);
+            std::string error;
+            bool attached = false;
+
+            bool ok = run_chunk(
+                api, state, scripting::nix_bootstrap::value_types,
+                "=MCB_NIX_VALUE_TYPES", error);
+
+            if (ok)
+            {
+                attached = scripting::nix_native::install_entity_api(
+                    api, state, error);
+                ok = attached;
+            }
+
+            if (ok)
+            {
+                ok = run_chunk(
+                    api, state, native_entity_probe,
+                    "=MCB_NIX_NATIVE_ENTITY_PROBE", error);
+            }
+
+            if (attached)
+                scripting::nix_native::detach_entity_api(state);
+
+            api.lua_close(state);
+
+            if (ok)
+            {
+                native_probe_completed = true;
+                logging::console::print(
+                    "[NixLua] 游戏内实体 FFI 自检通过："
+                    "local pawn -> schema -> lightuserdata -> ffi.cast");
+            }
+            else
+            {
+                native_probe_failed = true;
+                logging::console::print(
+                    "[NixLua] 游戏内实体 FFI 自检失败：{}", error);
+            }
+        }
 
         bool dispatch(script& value, const char* event)
         {
@@ -601,6 +688,8 @@ namespace scripting
     {
         std::scoped_lock lock(m_impl->mutex);
         if (!m_impl->initialized || !m_impl->runtime) return;
+
+        m_impl->run_native_probe_once();
 
         const auto now = std::chrono::steady_clock::now();
         if (m_impl->last_scan.time_since_epoch().count() == 0 ||
