@@ -60,12 +60,14 @@ namespace
         return std::isfinite(out);
     }
 
-    std::uint8_t channel(double value)
+    std::uint8_t channel(double value, bool direct_255)
     {
-        const auto clamped =
-            std::clamp(value, 0.0, 1.0);
+        const auto scaled = direct_255
+            ? std::clamp(value, 0.0, 255.0)
+            : std::clamp(value, 0.0, 1.0) * 255.0;
+
         return static_cast<std::uint8_t>(
-            std::lround(clamped * 255.0));
+            std::lround(scaled));
     }
 
     bool color_from(
@@ -81,11 +83,21 @@ namespace
             !number(api, state, first + 3, a))
             return false;
 
+        // Nixware examples commonly use normalized 0..1 colors, while
+        // several real user scripts use 0..255 channels. Preserve both:
+        // RGB selects direct mode if any RGB channel exceeds 1; alpha is
+        // independently accepted as either 0..1 or 0..255.
+        const bool rgb_255 =
+            std::abs(r) > 1.0 ||
+            std::abs(g) > 1.0 ||
+            std::abs(b) > 1.0;
+        const bool alpha_255 = std::abs(a) > 1.0;
+
         out = xdraw::color{
-            channel(r),
-            channel(g),
-            channel(b),
-            channel(a)
+            channel(r, rgb_255),
+            channel(g, rgb_255),
+            channel(b, rgb_255),
+            channel(a, alpha_255)
         };
         return true;
     }
