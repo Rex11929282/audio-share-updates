@@ -4,12 +4,16 @@
 #include "nix_luajit_manifest.hpp"
 #include "nix_luajit_api.hpp"
 #include "nix_entity_bridge.hpp"
+#include "nix_cvar_bridge.hpp"
 #include "nix_value_bootstrap.hpp"
 
 #include <algorithm>
+#include <core/systems/systems.hpp>
+#include <utilities/memory/memory.hpp>
 #include <array>
 #include <bcrypt.h>
 #include <chrono>
+#include <cmath>
 #include <cctype>
 #include <cstdint>
 #include <fstream>
@@ -188,6 +192,37 @@ assert(callback(41) == 42, "FFI callback failed")
 callback:free()
 )MCB";
 
+    constexpr std::string_view native_entity_probe = R"MCB(
+local ffi = require("ffi")
+local pawn = entitylist.get_local_player_pawn()
+assert(pawn ~= nil, "local pawn unavailable")
+
+local offset = engine.get_netvar_offset(
+    "client.dll", "C_BaseEntity", "m_iHealth")
+assert(type(offset) == "number", "m_iHealth offset unavailable")
+
+local address = pawn[offset]
+assert(address ~= nil, "pawn[offset] did not return an address")
+
+local health = ffi.cast("int*", address)[0]
+assert(type(health) == "number", "FFI health read did not return a number")
+assert(health >= 0 and health <= 1000, "implausible local health")
+
+local class_name = pawn:get_class_name()
+assert(type(class_name) == "string" and #class_name > 0, "entity class unavailable")
+
+local sensitivity = cvars.sensitivity
+assert(sensitivity ~= nil, "cvars.sensitivity unavailable")
+local sens_value = sensitivity:get_float()
+assert(type(sens_value) == "number" and sens_value > 0, "invalid sensitivity cvar")
+
+local origin = pawn:get_abs_origin()
+assert(origin ~= nil and type(origin) == "cdata", "absolute origin is not cdata")
+
+return true
+)MCB";
+
+
     std::string bootstrap_for(const std::string& filename)
     {
         std::string quoted;
@@ -207,7 +242,7 @@ callback:free()
 
         return std::string(R"MCB(
 local callbacks = {}
-local supported = { paint = true, unload = true }
+local supported = { paint = true, unload = true, override_view = true }
 
 function register_callback(name, fn)
     assert(type(name) == "string", "callback name must be a string")
@@ -229,6 +264,31 @@ function __mcb_nix_dispatch(name)
     for i = 1, #list do
         list[i]()
     end
+end
+
+function __mcb_nix_override_view(fov, fov_viewmodel, ox, oy, oz, pitch, yaw, roll)
+    local view = {
+        fov = fov,
+        fov_viewmodel = fov_viewmodel,
+        origin = vec3_t(ox, oy, oz),
+        angles = angle_t(pitch, yaw, roll)
+    }
+
+    local list = callbacks.override_view
+    if list then
+        for i = 1, #list do
+            list[i](view)
+        end
+    end
+
+    assert(type(view.fov) == "number", "view.fov must remain numeric")
+    assert(type(view.fov_viewmodel) == "number", "view.fov_viewmodel must remain numeric")
+    assert(type(view.origin) == "cdata", "view.origin must remain vec3_t cdata")
+    assert(type(view.angles) == "cdata", "view.angles must remain angle_t cdata")
+
+    return view.fov, view.fov_viewmodel,
+           view.origin.x, view.origin.y, view.origin.z,
+           view.angles.pitch, view.angles.yaw, view.angles.roll
 end
 
 function get_script_name()
@@ -359,6 +419,32 @@ end
         return _wcsicmp(ext.c_str(), L".lua") == 0 ||
                _wcsicmp(ext.c_str(), L".luac") == 0;
     }
+
+    bool is_approved_script(const std::filesystem::path& path)
+    {
+        auto sidecar = path;
+        sidecar += L".approved.sha256";
+
+        std::ifstream input(sidecar, std::ios::binary);
+        if (!input) return false;
+
+        std::string expected(
+            std::istreambuf_iterator<char>(input), {});
+        expected.erase(
+            std::remove_if(
+                expected.begin(), expected.end(),
+                [](unsigned char ch)
+                {
+                    return std::isspace(ch) != 0;
+                }),
+            expected.end());
+
+        if (!is_hex_sha256(expected))
+            return false;
+
+        return lowercase(expected) ==
+               lowercase(sha256_file(path));
+    }
 }
 
 namespace scripting
@@ -380,6 +466,177 @@ namespace scripting
         std::vector<std::unique_ptr<script>> scripts{};
         std::chrono::steady_clock::time_point last_scan{};
         bool initialized{};
+        bool native_probe_completed{};
+        bool native_probe_failed{};
+
+        void run_native_probe_once()
+        {
+            if (native_probe_completed || native_probe_failed ||
+                !runtime || !systems::g_local.get().pawn)
+                return;
+
+            auto& api = runtime->api;
+            auto* state = api.luaL_newstate();
+            if (!state)
+            {
+                native_probe_failed = true;
+                logging::console::print(
+                    "[NixLua] 游戏内实体 FFI 自检失败：luaL_newstate");
+                return;
+            }
+
+            api.luaL_openlibs(state);
+            std::string error;
+            bool attached = false;
+
+            bool ok = run_chunk(
+                api, state, scripting::nix_bootstrap::value_types,
+                "=MCB_NIX_VALUE_TYPES", error);
+
+            if (ok)
+            {
+                attached = scripting::nix_native::install_entity_api(
+                    api, state, error);
+                ok = attached;
+            }
+
+            bool cvar_attached = false;
+            if (ok)
+            {
+                cvar_attached = scripting::nix_native::install_cvar_api(
+                    api, state, error);
+                ok = cvar_attached;
+            }
+
+            if (ok)
+            {
+                ok = run_chunk(
+                    api, state, native_entity_probe,
+                    "=MCB_NIX_NATIVE_ENTITY_PROBE", error);
+            }
+
+            if (cvar_attached)
+                scripting::nix_native::detach_cvar_api(state);
+            if (attached)
+                scripting::nix_native::detach_entity_api(state);
+
+            api.lua_close(state);
+
+            if (ok)
+            {
+                native_probe_completed = true;
+                logging::console::print(
+                    "[NixLua] 游戏内实体 FFI 自检通过："
+                    "local pawn -> schema -> lightuserdata -> ffi.cast");
+            }
+            else
+            {
+                native_probe_failed = true;
+                logging::console::print(
+                    "[NixLua] 游戏内实体 FFI 自检失败：{}", error);
+            }
+        }
+
+        bool dispatch_override_view(
+            script& value,
+            float& fov,
+            float& fov_viewmodel,
+            math::vector3& origin,
+            math::vector3& angles)
+        {
+            if (!value.state || value.suspended) return false;
+
+            auto& api = runtime->api;
+            const auto top = api.lua_gettop(value.state);
+            api.lua_getfield(
+                value.state, lua_globals_index,
+                "__mcb_nix_override_view");
+
+            if (api.lua_type(value.state, -1) != lua_tfunction)
+            {
+                api.lua_settop(value.state, top);
+                value.last_error = "internal override_view dispatcher missing";
+                value.suspended = true;
+                return false;
+            }
+
+            api.lua_pushnumber(value.state, fov);
+            api.lua_pushnumber(value.state, fov_viewmodel);
+            api.lua_pushnumber(value.state, origin.x);
+            api.lua_pushnumber(value.state, origin.y);
+            api.lua_pushnumber(value.state, origin.z);
+            api.lua_pushnumber(value.state, angles.x);
+            api.lua_pushnumber(value.state, angles.y);
+            api.lua_pushnumber(value.state, angles.z);
+
+            const auto result = api.lua_pcall(value.state, 8, 8, 0);
+            if (result != 0)
+            {
+                value.last_error = lua_error(
+                    api, value.state,
+                    "callback 'override_view' failed");
+                api.lua_settop(value.state, top);
+                value.suspended = true;
+                logging::console::print(
+                    "[NixLua] 已暫停 {}：{}",
+                    value.path.filename().string(), value.last_error);
+                return false;
+            }
+
+            for (int i = -8; i <= -1; ++i)
+            {
+                if (api.lua_type(value.state, i) !=
+                    scripting::nix_native::lua_tnumber)
+                {
+                    value.last_error =
+                        "override_view returned non-numeric native fields";
+                    api.lua_settop(value.state, top);
+                    value.suspended = true;
+                    return false;
+                }
+            }
+
+            const auto next_fov =
+                static_cast<float>(api.lua_tonumber(value.state, -8));
+            const auto next_fov_viewmodel =
+                static_cast<float>(api.lua_tonumber(value.state, -7));
+            const math::vector3 next_origin{
+                static_cast<float>(api.lua_tonumber(value.state, -6)),
+                static_cast<float>(api.lua_tonumber(value.state, -5)),
+                static_cast<float>(api.lua_tonumber(value.state, -4))
+            };
+            const math::vector3 next_angles{
+                static_cast<float>(api.lua_tonumber(value.state, -3)),
+                static_cast<float>(api.lua_tonumber(value.state, -2)),
+                static_cast<float>(api.lua_tonumber(value.state, -1))
+            };
+
+            api.lua_settop(value.state, top);
+
+            const bool finite =
+                std::isfinite(next_fov) &&
+                std::isfinite(next_fov_viewmodel) &&
+                std::isfinite(next_origin.x) &&
+                std::isfinite(next_origin.y) &&
+                std::isfinite(next_origin.z) &&
+                std::isfinite(next_angles.x) &&
+                std::isfinite(next_angles.y) &&
+                std::isfinite(next_angles.z);
+
+            if (!finite)
+            {
+                value.last_error =
+                    "override_view produced a non-finite field";
+                value.suspended = true;
+                return false;
+            }
+
+            fov = next_fov;
+            fov_viewmodel = next_fov_viewmodel;
+            origin = next_origin;
+            angles = next_angles;
+            return true;
+        }
 
         bool dispatch(script& value, const char* event)
         {
@@ -419,6 +676,7 @@ namespace scripting
         {
             if (!value.state) return;
             if (!value.suspended) dispatch(value, "unload");
+            scripting::nix_native::detach_cvar_api(value.state);
             scripting::nix_native::detach_entity_api(value.state);
             runtime->api.lua_close(value.state);
             value.state = nullptr;
@@ -453,6 +711,8 @@ namespace scripting
                     "=MCB_NIX_VALUE_TYPES", error) ||
                 !scripting::nix_native::install_entity_api(
                     api, value.state, error) ||
+                !scripting::nix_native::install_cvar_api(
+                    api, value.state, error) ||
                 !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
@@ -461,6 +721,7 @@ namespace scripting
                     "@" + value.path.filename().string(), error))
             {
                 value.last_error = error;
+                scripting::nix_native::detach_cvar_api(value.state);
                 scripting::nix_native::detach_entity_api(value.state);
                 api.lua_close(value.state);
                 value.state = nullptr;
@@ -483,7 +744,9 @@ namespace scripting
                  std::filesystem::directory_iterator(enabled_directory, ec))
             {
                 if (ec) break;
-                if (entry.is_regular_file(ec) && is_nix_script(entry.path()))
+                if (entry.is_regular_file(ec) &&
+                    is_nix_script(entry.path()) &&
+                    is_approved_script(entry.path()))
                     files.push_back(entry.path());
                 ec.clear();
             }
@@ -582,7 +845,7 @@ namespace scripting
         m_impl->initialized = true;
 
         logging::console::print(
-            "[NixLua] 真 LuaJIT Runtime 已啟用；revision={}；只自動載入 scripts/nixware/enabled",
+            "[NixLua] 真 LuaJIT Runtime 已啟用；revision={}；僅載入具匹配 .approved.sha256 的腳本",
             MCB_NIX_LUAJIT_REVISION);
         return true;
     }
@@ -603,6 +866,8 @@ namespace scripting
         std::scoped_lock lock(m_impl->mutex);
         if (!m_impl->initialized || !m_impl->runtime) return;
 
+        m_impl->run_native_probe_once();
+
         const auto now = std::chrono::steady_clock::now();
         if (m_impl->last_scan.time_since_epoch().count() == 0 ||
             now - m_impl->last_scan >= std::chrono::milliseconds(750))
@@ -614,6 +879,59 @@ namespace scripting
         for (auto& value : m_impl->scripts)
             if (value->state && !value->suspended)
                 m_impl->dispatch(*value, "paint");
+    }
+
+    void nix_runtime::on_override_view(std::uintptr_t view_setup)
+    {
+        if (!view_setup) return;
+
+        std::scoped_lock lock(m_impl->mutex);
+        if (!m_impl->initialized || !m_impl->runtime) return;
+
+        constexpr std::ptrdiff_t fov_offset = 0x498;
+        constexpr std::ptrdiff_t viewmodel_fov_offset = 0x49c;
+        constexpr std::ptrdiff_t origin_offset = 0x4a0;
+        constexpr std::ptrdiff_t angles_offset = 0x4b8;
+
+        auto fov = memory::safe_read<float>(
+            view_setup + fov_offset);
+        auto fov_viewmodel = memory::safe_read<float>(
+            view_setup + viewmodel_fov_offset);
+        auto origin = memory::safe_read<math::vector3>(
+            view_setup + origin_offset);
+        auto angles = memory::safe_read<math::vector3>(
+            view_setup + angles_offset);
+
+        if (!fov || !fov_viewmodel || !origin || !angles)
+            return;
+
+        for (auto& value : m_impl->scripts)
+        {
+            if (!value->state || value->suspended)
+                continue;
+
+            m_impl->dispatch_override_view(
+                *value, *fov, *fov_viewmodel, *origin, *angles);
+        }
+
+        if (!std::isfinite(*fov) ||
+            !std::isfinite(*fov_viewmodel) ||
+            !std::isfinite(origin->x) ||
+            !std::isfinite(origin->y) ||
+            !std::isfinite(origin->z) ||
+            !std::isfinite(angles->x) ||
+            !std::isfinite(angles->y) ||
+            !std::isfinite(angles->z))
+            return;
+
+        memory::write<float>(
+            view_setup + fov_offset, *fov);
+        memory::write<float>(
+            view_setup + viewmodel_fov_offset, *fov_viewmodel);
+        memory::write<math::vector3>(
+            view_setup + origin_offset, *origin);
+        memory::write<math::vector3>(
+            view_setup + angles_offset, *angles);
     }
 
     void nix_runtime::reload_all()

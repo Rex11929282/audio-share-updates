@@ -15,7 +15,7 @@ overlay = Path(__file__).resolve().parent / "overlay"
 dst = v / "project" / "core" / "scripting"
 dst.mkdir(parents=True, exist_ok=True)
 
-for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp"):
+for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp", "nix_cvar_bridge.hpp", "nix_cvar_bridge.cpp"):
     source = overlay / name
     if not source.exists():
         raise SystemExit(f"[nix-luajit] missing overlay/{name}")
@@ -33,6 +33,7 @@ if compile_anchor not in t:
 compile_entries = [
     '    <ClCompile Include="project\\core\\scripting\\nix_runtime.cpp" />',
     '    <ClCompile Include="project\\core\\scripting\\nix_entity_bridge.cpp" />',
+    '    <ClCompile Include="project\\core\\scripting\\nix_cvar_bridge.cpp" />',
 ]
 for entry_line in compile_entries:
     if entry_line not in t:
@@ -47,6 +48,7 @@ header_entries = [
     '    <ClInclude Include="project\\core\\scripting\\nix_luajit_api.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />',
     '    <ClInclude Include="project\\core\\scripting\\nix_entity_bridge.hpp" />',
+    '    <ClInclude Include="project\\core\\scripting\\nix_cvar_bridge.hpp" />',
 ]
 for entry_line in header_entries:
     if entry_line not in t:
@@ -111,3 +113,25 @@ if "scripting::g_nix.on_frame( );" not in t:
 context.write_text(t, encoding="utf-8")
 
 print(f"[nix-luajit] dual runtime integrated into {v}")
+
+
+cheat = v / "project" / "core" / "hooks" / "impl" / "cheat.cpp"
+t = cheat.read_text(encoding="utf-8")
+cheat_include_anchor = "#include <core/rendering/rendering.hpp>"
+if "#include <core/scripting/nix_runtime.hpp>" not in t:
+    if cheat_include_anchor not in t:
+        raise SystemExit("[nix-luajit] cheat include marker missing")
+    t = t.replace(
+        cheat_include_anchor,
+        cheat_include_anchor + '\n#include <core/scripting/nix_runtime.hpp>',
+        1)
+
+override_anchor = "\t\tfeatures::combat::g_misc.duckpeek( ).on_override_view( view_setup );"
+if "scripting::g_nix.on_override_view( view_setup );" not in t:
+    if override_anchor not in t:
+        raise SystemExit("[nix-luajit] override_view hook marker missing")
+    t = t.replace(
+        override_anchor,
+        override_anchor + '\n\t\tscripting::g_nix.on_override_view( view_setup );',
+        1)
+cheat.write_text(t, encoding="utf-8")
