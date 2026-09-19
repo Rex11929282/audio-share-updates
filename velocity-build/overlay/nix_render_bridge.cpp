@@ -23,6 +23,8 @@ namespace
     struct state_binding
     {
         luajit_api* api{};
+        bool draw_allowed{};
+        int clip_depth{};
     };
 
     std::mutex g_mutex{};
@@ -34,6 +36,15 @@ namespace
         std::scoped_lock lock(g_mutex);
         const auto it = g_states.find(state);
         return it == g_states.end() ? nullptr : it->second.api;
+    }
+
+    luajit_api* api_for_draw(lua_State* state)
+    {
+        std::scoped_lock lock(g_mutex);
+        const auto it = g_states.find(state);
+        if (it == g_states.end() || !it->second.draw_allowed)
+            return nullptr;
+        return it->second.api;
     }
 
     bool number(
@@ -151,7 +162,7 @@ namespace
 
     int __cdecl line(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x1{}, y1{}, x2{}, y2{}, thickness{};
@@ -179,7 +190,7 @@ namespace
 
     int __cdecl rect(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x1{}, y1{}, x2{}, y2{};
@@ -219,7 +230,7 @@ namespace
 
     int __cdecl rect_filled(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x1{}, y1{}, x2{}, y2{}, rounding{};
@@ -254,7 +265,7 @@ namespace
 
     int __cdecl rect_filled_fade(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x1{}, y1{}, x2{}, y2{};
@@ -286,7 +297,7 @@ namespace
 
     int __cdecl circle(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x{}, y{}, radius{}, segments{}, thickness{};
@@ -318,7 +329,7 @@ namespace
 
     int __cdecl circle_filled(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x{}, y{}, radius{}, segments{};
@@ -346,7 +357,7 @@ namespace
 
     int __cdecl push_clip(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
         double x1{}, y1{}, x2{}, y2{};
@@ -375,16 +386,37 @@ namespace
             draw.push_clip(x, y, w, h);
         else
             draw.push_clip_absolute(x, y, w, h);
+
+        {
+            std::scoped_lock lock(g_mutex);
+            const auto it = g_states.find(state);
+            if (it != g_states.end() && it->second.draw_allowed)
+                ++it->second.clip_depth;
+        }
         return 0;
     }
 
     int __cdecl pop_clip(lua_State* state)
     {
-        auto* api = api_for(state);
+        auto* api = api_for_draw(state);
         if (!api) return 0;
 
-        xdraw::get(
-            xdraw::layer::top).pop_clip();
+        bool may_pop{};
+        {
+            std::scoped_lock lock(g_mutex);
+            const auto it = g_states.find(state);
+            if (it != g_states.end() &&
+                it->second.draw_allowed &&
+                it->second.clip_depth > 0)
+            {
+                --it->second.clip_depth;
+                may_pop = true;
+            }
+        }
+
+        if (may_pop)
+            xdraw::get(
+                xdraw::layer::top).pop_clip();
         return 0;
     }
 
@@ -473,5 +505,34 @@ namespace scripting::nix_native
     {
         g_frame_count.fetch_add(
             1, std::memory_order_relaxed);
+    }
+
+    void begin_render_scope(lua_State* state)
+    {
+        if (!state) return;
+        std::scoped_lock lock(g_mutex);
+        const auto it = g_states.find(state);
+        if (it == g_states.end()) return;
+        it->second.draw_allowed = true;
+        it->second.clip_depth = 0;
+    }
+
+    void end_render_scope(lua_State* state)
+    {
+        if (!state) return;
+
+        int clips{};
+        {
+            std::scoped_lock lock(g_mutex);
+            const auto it = g_states.find(state);
+            if (it == g_states.end()) return;
+            clips = std::max(0, it->second.clip_depth);
+            it->second.clip_depth = 0;
+            it->second.draw_allowed = false;
+        }
+
+        auto& draw = xdraw::get(xdraw::layer::top);
+        while (clips-- > 0)
+            draw.pop_clip();
     }
 }
