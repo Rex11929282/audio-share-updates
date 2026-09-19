@@ -32,7 +32,8 @@ namespace
     {
         local_pawn,
         local_controller,
-        handle
+        handle,
+        direct
     };
 
     struct entity_ref
@@ -72,6 +73,16 @@ namespace
         case entity_source::handle:
             return ref.handle != 0 &&
                    systems::g_entities.lookup(ref.handle) == ref.ptr;
+
+        case entity_source::direct:
+        {
+            const auto local = systems::g_local.get();
+            return systems::g_entities.exists(ref.ptr) ||
+                   local.pawn == ref.ptr ||
+                   local.controller == ref.ptr ||
+                   local.observer_pawn == ref.ptr ||
+                   local.observer_controller == ref.ptr;
+        }
         }
 
         return false;
@@ -561,5 +572,14 @@ namespace scripting::nix_native
         if (!state) return;
         std::scoped_lock lock(g_binding_mutex);
         g_bindings.erase(state);
+    }
+
+    bool push_entity_value(
+        luajit_api& api,
+        lua_State* state,
+        std::uintptr_t entity)
+    {
+        return push_entity(
+            api, state, entity, entity_source::direct);
     }
 }

@@ -1,4 +1,4 @@
-name: MCB Nix LuaJIT Runtime Slice A
+name: MCB Nix LuaJIT Runtime Compatibility Build
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
           @(
-            "workflow=MCB Nix LuaJIT Runtime Slice A"
+            "workflow=MCB Nix LuaJIT Runtime Compatibility Build"
             "run=$env:GITHUB_RUN_ID"
             "commit=$env:GITHUB_SHA"
             "full_nixware_api=NOT_COMPLETED"
@@ -199,6 +199,11 @@ jobs:
             @("$root\project\core\scripting\nix_entity_bridge.cpp", 'lua_pushlightuserdata'),
             @("$root\project\core\scripting\nix_entity_bridge.cpp", 'systems::schemas::try_lookup'),
             @("$root\project\core\scripting\nix_cvar_bridge.cpp", 'addresses::globals::cvar->find'),
+            @("$root\project\core\scripting\nix_engine_bridge.cpp", 'engine_client_cmd'),
+            @("$root\project\core\scripting\nix_event_bridge.cpp", 'game_event_get_pawn'),
+            @("$root\project\core\systems\impl\events.cpp", 'scripting::g_nix.on_game_event'),
+            @("$root\project\core\rendering\ui_views_v62.inl", 'Import / Approve Nixware Lua'),
+            @("$root\project\core\scripting\nix_runtime.cpp", 'cb1088936c2871fa8d8332611fc7c7f409fcbbb4a69c08d77f3ca86f5e095794'),
             @("$root\project\core\hooks\impl\cheat.cpp", 'scripting::g_nix.on_override_view'),
             @("$root\project\entry.cpp", 'scripting::g_nix.initialize'),
             @("$root\project\entry.cpp", 'scripting::g_nix.shutdown'),
@@ -241,7 +246,11 @@ jobs:
           Copy-Item 'velocity-build\overlay\nix_entity_bridge.hpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_entity_bridge.cpp' release\source\
           Copy-Item 'velocity-build\overlay\nix_cvar_bridge.hpp' release\source\
-          Copy-Item 'velocity-build\overlay\nix_cvar_bridge.cpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_cvar_bridge.cpp' release\source\          Copy-Item 'velocity-build\overlay\nix_engine_bridge.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_engine_bridge.cpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_event_bridge.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\nix_event_bridge.cpp' release\source\
+
           Copy-Item 'velocity-build\apply_nix_luajit.py' release\source\
           Copy-Item 'mcb-src\cs2\MCB-CS2\project\core\scripting\nix_luajit_manifest.hpp' release\source\
 
@@ -253,7 +262,10 @@ jobs:
           'slice_c_override_view_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_b_entity_pointer_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_c_override_view_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
-          'slice_b_entity_pointer_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_d_engine_execute_client_cmd_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'slice_d_scoped_game_events_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'script_explicit_approval_ui_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'archived_abusive_hash_block_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_entity_api=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_render_api=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'nixware_mutating_events=NOT_COMPLETED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
@@ -269,6 +281,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MCB-Nix-LuaJIT-SliceA
+          name: MCB-Nix-LuaJIT-Compatibility
           path: release
           if-no-files-found: error

@@ -4,6 +4,8 @@
 #include "nix_luajit_manifest.hpp"
 #include "nix_luajit_api.hpp"
 #include "nix_entity_bridge.hpp"
+#include "nix_engine_bridge.hpp"
+#include "nix_event_bridge.hpp"
 #include "nix_cvar_bridge.hpp"
 #include "nix_value_bootstrap.hpp"
 
@@ -13,6 +15,7 @@
 #include <array>
 #include <bcrypt.h>
 #include <chrono>
+#include <commdlg.h>
 #include <cmath>
 #include <cctype>
 #include <cstdint>
@@ -25,6 +28,7 @@
 #include <windows.h>
 
 #pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "Comdlg32.lib")
 
 namespace
 {
@@ -33,6 +37,8 @@ namespace
     using scripting::nix_native::lua_tfunction;
     using scripting::nix_native::lua_tstring;
     constexpr std::size_t max_nix_script = 8u * 1024u * 1024u;
+    constexpr std::string_view blocked_abusive_original_sha256 =
+        "cb1088936c2871fa8d8332611fc7c7f409fcbbb4a69c08d77f3ca86f5e095794";
 
     std::string lowercase(std::string value)
     {
@@ -242,7 +248,7 @@ return true
 
         return std::string(R"MCB(
 local callbacks = {}
-local supported = { paint = true, unload = true, override_view = true }
+local supported = { paint = true, unload = true, override_view = true, player_death = true, player_hurt = true, bullet_impact = true, round_start = true }
 
 function register_callback(name, fn)
     assert(type(name) == "string", "callback name must be a string")
@@ -263,6 +269,14 @@ function __mcb_nix_dispatch(name)
     if not list then return end
     for i = 1, #list do
         list[i]()
+    end
+end
+
+function __mcb_nix_dispatch_event(name, event)
+    local list = callbacks[name]
+    if not list then return end
+    for i = 1, #list do
+        list[i](event)
     end
 end
 
@@ -442,8 +456,11 @@ end
         if (!is_hex_sha256(expected))
             return false;
 
-        return lowercase(expected) ==
-               lowercase(sha256_file(path));
+        const auto actual = lowercase(sha256_file(path));
+        if (actual == blocked_abusive_original_sha256)
+            return false;
+
+        return lowercase(expected) == actual;
     }
 }
 
@@ -638,6 +655,68 @@ namespace scripting
             return true;
         }
 
+        bool dispatch_game_event(
+            script& value,
+            const char* event_name,
+            std::uintptr_t event)
+        {
+            if (!value.state || value.suspended ||
+                !event_name || !*event_name || !event)
+                return false;
+
+            auto& api = runtime->api;
+            const auto top = api.lua_gettop(value.state);
+
+            api.lua_getfield(
+                value.state,
+                lua_globals_index,
+                "__mcb_nix_dispatch_event");
+
+            if (api.lua_type(value.state, -1) != lua_tfunction)
+            {
+                api.lua_settop(value.state, top);
+                value.last_error =
+                    "internal game event dispatcher missing";
+                value.suspended = true;
+                return false;
+            }
+
+            api.lua_pushstring(value.state, event_name);
+            if (!scripting::nix_native::begin_event_scope(
+                    api, value.state, event_name, event))
+            {
+                api.lua_settop(value.state, top);
+                value.last_error =
+                    "failed to create scoped game_event_t";
+                value.suspended = true;
+                return false;
+            }
+
+            const auto result =
+                api.lua_pcall(value.state, 2, 0, 0);
+
+            scripting::nix_native::end_event_scope(
+                value.state);
+
+            if (result != 0)
+            {
+                value.last_error = lua_error(
+                    api, value.state,
+                    std::string("callback '") +
+                        event_name + "' failed");
+                api.lua_settop(value.state, top);
+                value.suspended = true;
+                logging::console::print(
+                    "[NixLua] 已暫停 {}：{}",
+                    value.path.filename().string(),
+                    value.last_error);
+                return false;
+            }
+
+            api.lua_settop(value.state, top);
+            return true;
+        }
+
         bool dispatch(script& value, const char* event)
         {
             if (!value.state || value.suspended) return false;
@@ -676,6 +755,8 @@ namespace scripting
         {
             if (!value.state) return;
             if (!value.suspended) dispatch(value, "unload");
+            scripting::nix_native::detach_event_api(value.state);
+            scripting::nix_native::detach_engine_api(value.state);
             scripting::nix_native::detach_cvar_api(value.state);
             scripting::nix_native::detach_entity_api(value.state);
             runtime->api.lua_close(value.state);
@@ -713,6 +794,10 @@ namespace scripting
                     api, value.state, error) ||
                 !scripting::nix_native::install_cvar_api(
                     api, value.state, error) ||
+                !scripting::nix_native::install_engine_api(
+                    api, value.state, error) ||
+                !scripting::nix_native::install_event_api(
+                    api, value.state, error) ||
                 !run_chunk(
                     api, value.state, bootstrap,
                     "=MCB_NIX_INTERNAL_BOOTSTRAP", error) ||
@@ -721,6 +806,8 @@ namespace scripting
                     "@" + value.path.filename().string(), error))
             {
                 value.last_error = error;
+                scripting::nix_native::detach_event_api(value.state);
+                scripting::nix_native::detach_engine_api(value.state);
                 scripting::nix_native::detach_cvar_api(value.state);
                 scripting::nix_native::detach_entity_api(value.state);
                 api.lua_close(value.state);
@@ -932,6 +1019,178 @@ namespace scripting
             view_setup + origin_offset, *origin);
         memory::write<math::vector3>(
             view_setup + angles_offset, *angles);
+    }
+
+    void nix_runtime::on_game_event(
+        const char* event_name,
+        std::uintptr_t event)
+    {
+        if (!event_name || !*event_name || !event)
+            return;
+
+        std::scoped_lock lock(m_impl->mutex);
+        if (!m_impl->initialized || !m_impl->runtime)
+            return;
+
+        for (auto& value : m_impl->scripts)
+        {
+            if (!value->state || value->suspended)
+                continue;
+
+            m_impl->dispatch_game_event(
+                *value, event_name, event);
+        }
+    }
+
+    bool nix_runtime::import_script_dialog(void* owner_window)
+    {
+        std::array<wchar_t, 32768> selected{};
+        constexpr wchar_t filter[] =
+            L"Nixware Lua (*.lua;*.luac)\0*.lua;*.luac\0"
+            L"All files (*.*)\0*.*\0\0";
+
+        OPENFILENAMEW dialog{};
+        dialog.lStructSize = sizeof(dialog);
+        dialog.hwndOwner = static_cast<HWND>(owner_window);
+        dialog.lpstrFilter = filter;
+        dialog.lpstrFile = selected.data();
+        dialog.nMaxFile = static_cast<DWORD>(selected.size());
+        dialog.lpstrTitle = L"Import and explicitly approve Nixware Lua";
+        dialog.Flags =
+            OFN_FILEMUSTEXIST |
+            OFN_PATHMUSTEXIST |
+            OFN_EXPLORER |
+            OFN_NOCHANGEDIR;
+
+        if (!GetOpenFileNameW(&dialog))
+            return false;
+
+        const std::filesystem::path source{selected.data()};
+        if (!is_nix_script(source))
+        {
+            logging::console::print(
+                "[NixLua] 导入拒绝：只允许 .lua / .luac");
+            return false;
+        }
+
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(source, ec);
+        if (ec || size == 0 || size > max_nix_script)
+        {
+            logging::console::print(
+                "[NixLua] 导入拒绝：脚本为空、不可读或超过 8 MiB");
+            return false;
+        }
+
+        const auto source_hash = lowercase(sha256_file(source));
+        if (!is_hex_sha256(source_hash))
+        {
+            logging::console::print(
+                "[NixLua] 导入失败：无法计算脚本 SHA-256");
+            return false;
+        }
+
+        if (source_hash == blocked_abusive_original_sha256)
+        {
+            logging::console::print(
+                "[NixLua] 已保持封存：该原稿禁止进入可执行目录");
+            return false;
+        }
+
+        std::filesystem::path directory;
+        {
+            std::scoped_lock lock(m_impl->mutex);
+            if (!m_impl->initialized)
+                return false;
+            directory = m_impl->enabled_directory;
+        }
+
+        const auto destination =
+            directory / source.filename();
+        auto temporary = destination;
+        temporary += L".mcb-import.tmp";
+
+        std::filesystem::remove(temporary, ec);
+        ec.clear();
+        std::filesystem::copy_file(
+            source, temporary,
+            std::filesystem::copy_options::overwrite_existing,
+            ec);
+
+        if (ec ||
+            lowercase(sha256_file(temporary)) != source_hash)
+        {
+            std::filesystem::remove(temporary, ec);
+            logging::console::print(
+                "[NixLua] 导入失败：复制后 SHA-256 核验不一致");
+            return false;
+        }
+
+        if (!MoveFileExW(
+                temporary.c_str(),
+                destination.c_str(),
+                MOVEFILE_REPLACE_EXISTING |
+                MOVEFILE_WRITE_THROUGH))
+        {
+            std::filesystem::remove(temporary, ec);
+            logging::console::print(
+                "[NixLua] 导入失败：替换目标文件失败，Win32={}",
+                GetLastError());
+            return false;
+        }
+
+        auto sidecar = destination;
+        sidecar += L".approved.sha256";
+        auto sidecar_tmp = sidecar;
+        sidecar_tmp += L".tmp";
+
+        {
+            std::ofstream output(
+                sidecar_tmp,
+                std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                logging::console::print(
+                    "[NixLua] 导入失败：无法写入批准侧档");
+                return false;
+            }
+
+            output.write(
+                source_hash.data(),
+                static_cast<std::streamsize>(source_hash.size()));
+            output.put('\n');
+            output.flush();
+            if (!output)
+            {
+                logging::console::print(
+                    "[NixLua] 导入失败：批准侧档写入不完整");
+                return false;
+            }
+        }
+
+        if (!MoveFileExW(
+                sidecar_tmp.c_str(),
+                sidecar.c_str(),
+                MOVEFILE_REPLACE_EXISTING |
+                MOVEFILE_WRITE_THROUGH))
+        {
+            std::filesystem::remove(sidecar_tmp, ec);
+            logging::console::print(
+                "[NixLua] 导入失败：批准侧档替换失败，Win32={}",
+                GetLastError());
+            return false;
+        }
+
+        {
+            std::scoped_lock lock(m_impl->mutex);
+            m_impl->last_scan =
+                std::chrono::steady_clock::time_point{};
+        }
+
+        logging::console::print(
+            "[NixLua] 已明确批准：{} sha256={}",
+            destination.filename().string(), source_hash);
+        return true;
     }
 
     void nix_runtime::reload_all()
