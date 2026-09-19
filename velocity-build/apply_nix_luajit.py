@@ -111,3 +111,25 @@ if "scripting::g_nix.on_frame( );" not in t:
 context.write_text(t, encoding="utf-8")
 
 print(f"[nix-luajit] dual runtime integrated into {v}")
+
+
+cheat = v / "project" / "core" / "hooks" / "impl" / "cheat.cpp"
+t = cheat.read_text(encoding="utf-8")
+cheat_include_anchor = "#include <core/rendering/rendering.hpp>"
+if "#include <core/scripting/nix_runtime.hpp>" not in t:
+    if cheat_include_anchor not in t:
+        raise SystemExit("[nix-luajit] cheat include marker missing")
+    t = t.replace(
+        cheat_include_anchor,
+        cheat_include_anchor + '\n#include <core/scripting/nix_runtime.hpp>',
+        1)
+
+override_anchor = "\t\tfeatures::combat::g_misc.duckpeek( ).on_override_view( view_setup );"
+if "scripting::g_nix.on_override_view( view_setup );" not in t:
+    if override_anchor not in t:
+        raise SystemExit("[nix-luajit] override_view hook marker missing")
+    t = t.replace(
+        override_anchor,
+        override_anchor + '\n\t\tscripting::g_nix.on_override_view( view_setup );',
+        1)
+cheat.write_text(t, encoding="utf-8")
