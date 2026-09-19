@@ -31,6 +31,9 @@ namespace scripting
         void shutdown();
         void on_frame();
         void on_override_view(std::uintptr_t view_setup);
+        void on_game_event(
+            const char* event_name,
+            std::uintptr_t event);
         void reload_all();
         bool import_script_dialog(void* owner_window);
 
