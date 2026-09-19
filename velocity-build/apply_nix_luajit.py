@@ -15,7 +15,7 @@ overlay = Path(__file__).resolve().parent / "overlay"
 dst = v / "project" / "core" / "scripting"
 dst.mkdir(parents=True, exist_ok=True)
 
-for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_value_bootstrap.hpp"):
+for name in ("nix_runtime.hpp", "nix_runtime.cpp", "nix_luajit_manifest.hpp", "nix_luajit_api.hpp", "nix_value_bootstrap.hpp", "nix_entity_bridge.hpp", "nix_entity_bridge.cpp"):
     source = overlay / name
     if not source.exists():
         raise SystemExit(f"[nix-luajit] missing overlay/{name}")
@@ -45,7 +45,7 @@ if 'project\\core\\scripting\\nix_runtime.hpp' not in t:
         header_anchor +
         '\n    <ClInclude Include="project\\core\\scripting\\nix_runtime.hpp" />' +
         '\n    <ClInclude Include="project\\core\\scripting\\nix_luajit_manifest.hpp" />' +
-        '\n    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />',
+        '\n    <ClInclude Include="project\\core\\scripting\\nix_value_bootstrap.hpp" />\n    <ClInclude Include="project\\core\\scripting\\nix_luajit_api.hpp" />\n    <ClInclude Include="project\\core\\scripting\\nix_entity_bridge.hpp" />',
         1)
 proj.write_text(t, encoding="utf-8")
 
