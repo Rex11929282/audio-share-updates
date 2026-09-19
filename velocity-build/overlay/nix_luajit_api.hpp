@@ -37,6 +37,7 @@ namespace scripting::nix_native
         double (__cdecl* lua_tonumber)(lua_State*, int){};
         int (__cdecl* lua_toboolean)(lua_State*, int){};
         void* (__cdecl* lua_touserdata)(lua_State*, int){};
+        std::size_t (__cdecl* lua_objlen)(lua_State*, int){};
 
         void (__cdecl* lua_getfield)(lua_State*, int, const char*){};
         void (__cdecl* lua_setfield)(lua_State*, int, const char*){};
@@ -80,6 +81,7 @@ namespace scripting::nix_native
                 MCB_NIX_BIND(lua_tonumber) &&
                 MCB_NIX_BIND(lua_toboolean) &&
                 MCB_NIX_BIND(lua_touserdata) &&
+                MCB_NIX_BIND(lua_objlen) &&
                 MCB_NIX_BIND(lua_getfield) &&
                 MCB_NIX_BIND(lua_setfield) &&
                 MCB_NIX_BIND(lua_createtable) &&
