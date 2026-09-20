@@ -9,8 +9,12 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -18,6 +22,8 @@ namespace
     using scripting::nix_native::lua_globals_index;
     using scripting::nix_native::lua_tboolean;
     using scripting::nix_native::lua_tnumber;
+    using scripting::nix_native::lua_tstring;
+    using scripting::nix_native::lua_tuserdata;
     using ::nix_lua_cfunction;
 
     struct state_binding
@@ -27,9 +33,43 @@ namespace
         int clip_depth{};
     };
 
+    struct font_resource
+    {
+        std::vector<std::byte> bytes{};
+        float base_size{12.0f};
+        std::unordered_map<int, xdraw::font*> variants{};
+    };
+
+    struct font_ref
+    {
+        std::uint64_t magic{};
+        font_resource* resource{};
+    };
+
+    constexpr std::uint64_t font_magic{
+        0x4D43424E49584654ull // "MCBNIXFT"
+    };
+    constexpr std::size_t max_font_bytes{
+        64ull * 1024ull * 1024ull
+    };
+    constexpr std::size_t max_font_resources{128};
+
     std::mutex g_mutex{};
     std::unordered_map<lua_State*, state_binding> g_states{};
     std::atomic<std::uint64_t> g_frame_count{};
+    std::mutex g_font_mutex{};
+
+    // Intentionally process-lifetime storage. xdraw::load_font creates a
+    // FreeType memory face that points into the supplied byte buffer, so
+    // those bytes must outlive every xdraw::font using them. A leaked
+    // process-lifetime pool also avoids cross-TU static destruction order
+    // hazards during DLL/process teardown.
+    auto& font_resources()
+    {
+        static auto* pool =
+            new std::vector<std::unique_ptr<font_resource>>();
+        return *pool;
+    }
 
     luajit_api* api_for(lua_State* state)
     {
@@ -100,6 +140,240 @@ namespace
             channel(a, alpha_255)
         };
         return true;
+    }
+
+    bool string_arg(
+        luajit_api& api,
+        lua_State* state,
+        int index,
+        std::string& out,
+        std::size_t max_length = 32768)
+    {
+        if (api.lua_type(state, index) != lua_tstring)
+            return false;
+
+        std::size_t length{};
+        const auto* raw =
+            api.lua_tolstring(state, index, &length);
+        if (!raw || length == 0 || length > max_length)
+            return false;
+
+        const std::string_view view(raw, length);
+        if (view.find('\0') != std::string_view::npos)
+            return false;
+
+        out.assign(view);
+        return true;
+    }
+
+    font_ref* get_font_ref(
+        luajit_api& api,
+        lua_State* state,
+        int index)
+    {
+        if (api.lua_type(state, index) != lua_tuserdata)
+            return nullptr;
+
+        auto* ref = static_cast<font_ref*>(
+            api.lua_touserdata(state, index));
+        if (!ref || ref->magic != font_magic || !ref->resource)
+            return nullptr;
+        return ref;
+    }
+
+    xdraw::font* resolve_font(
+        font_resource& resource,
+        float requested_size)
+    {
+        const auto px = std::clamp(
+            std::isfinite(requested_size) && requested_size > 0.0f
+                ? requested_size
+                : resource.base_size,
+            4.0f, 256.0f);
+        const auto key = static_cast<int>(
+            std::lround(px * 64.0f));
+
+        std::scoped_lock lock(g_font_mutex);
+        if (const auto it = resource.variants.find(key);
+            it != resource.variants.end())
+            return it->second;
+
+        if (!xdraw::device())
+            return nullptr;
+
+        auto* font = xdraw::load_font(
+            std::span<const std::byte>{
+                resource.bytes.data(),
+                resource.bytes.size()},
+            px,
+            2048,
+            2048);
+        if (!font)
+            return nullptr;
+
+        resource.variants.emplace(key, font);
+        return font;
+    }
+
+    int __cdecl setup_font(lua_State* state)
+    {
+        auto* api = api_for(state);
+        if (!api) return 0;
+
+        std::string filename;
+        double size{};
+        if (!string_arg(*api, state, 1, filename, 32768) ||
+            !number(*api, state, 2, size) ||
+            size < 4.0 || size > 256.0)
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        std::error_code ec;
+        const auto path =
+            std::filesystem::u8path(filename);
+        const auto file_size =
+            std::filesystem::file_size(path, ec);
+        if (ec || file_size == 0 ||
+            file_size > max_font_bytes)
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        std::ifstream file(
+            path, std::ios::binary);
+        if (!file)
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        auto resource =
+            std::make_unique<font_resource>();
+        resource->base_size =
+            static_cast<float>(size);
+        resource->bytes.resize(
+            static_cast<std::size_t>(file_size));
+        if (!file.read(
+                reinterpret_cast<char*>(
+                    resource->bytes.data()),
+                static_cast<std::streamsize>(
+                    resource->bytes.size())))
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        font_resource* raw_resource{};
+        {
+            std::scoped_lock lock(g_font_mutex);
+            auto& pool = font_resources();
+            if (pool.size() >= max_font_resources)
+            {
+                api->lua_pushnil(state);
+                return 1;
+            }
+            raw_resource = resource.get();
+            pool.push_back(std::move(resource));
+        }
+
+        auto* ref = static_cast<font_ref*>(
+            api->lua_newuserdata(
+                state, sizeof(font_ref)));
+        if (!ref)
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        *ref = font_ref{
+            font_magic,
+            raw_resource
+        };
+        return 1;
+    }
+
+    int __cdecl calc_text_size(lua_State* state)
+    {
+        auto* api = api_for(state);
+        if (!api) return 0;
+
+        std::string value;
+        if (!string_arg(*api, state, 1, value, 1 << 20))
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        auto* ref = get_font_ref(*api, state, 2);
+        if (!ref)
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        double requested{};
+        if (api->lua_type(state, 3) == lua_tnumber)
+            requested = api->lua_tonumber(state, 3);
+        else
+            requested = ref->resource->base_size;
+
+        auto* font = resolve_font(
+            *ref->resource,
+            static_cast<float>(requested));
+        if (!font)
+        {
+            api->lua_pushnil(state);
+            return 1;
+        }
+
+        const auto [w, h] =
+            xdraw::measure_text(value, font);
+        api->lua_pushnumber(state, w);
+        api->lua_pushnumber(state, h);
+        return 2;
+    }
+
+    int __cdecl draw_text(lua_State* state)
+    {
+        auto* api = api_for_draw(state);
+        if (!api) return 0;
+
+        std::string value;
+        if (!string_arg(*api, state, 1, value, 1 << 20))
+            return 0;
+
+        auto* ref = get_font_ref(*api, state, 2);
+        if (!ref)
+            return 0;
+
+        double x{}, y{}, requested{};
+        xdraw::color color{};
+        if (!number(*api, state, 3, x) ||
+            !number(*api, state, 4, y) ||
+            !color_from(*api, state, 5, color))
+            return 0;
+
+        if (api->lua_type(state, 9) == lua_tnumber)
+            requested = api->lua_tonumber(state, 9);
+        else
+            requested = ref->resource->base_size;
+
+        auto* font = resolve_font(
+            *ref->resource,
+            static_cast<float>(requested));
+        if (!font)
+            return 0;
+
+        xdraw::get(xdraw::layer::top).text(
+            static_cast<float>(x),
+            static_cast<float>(y),
+            value,
+            color,
+            font);
+        return 0;
     }
 
     int __cdecl screen_size(lua_State* state)
@@ -479,6 +753,15 @@ namespace scripting::nix_native
         set_global(
             api, state,
             "__mcb_render_world_to_screen", &world_to_screen);
+        set_global(
+            api, state,
+            "__mcb_render_setup_font", &setup_font);
+        set_global(
+            api, state,
+            "__mcb_render_calc_text_size", &calc_text_size);
+        set_global(
+            api, state,
+            "__mcb_render_text", &draw_text);
         set_global(
             api, state,
             "__mcb_render_line", &line);
