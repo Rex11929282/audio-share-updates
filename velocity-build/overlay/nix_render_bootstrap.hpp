@@ -9,6 +9,9 @@ local host_screen_size = __mcb_render_screen_size
 local host_frame_count = __mcb_render_frame_count
 local host_frame_time = __mcb_render_frame_time
 local host_world_to_screen = __mcb_render_world_to_screen
+local host_setup_font = __mcb_render_setup_font
+local host_calc_text_size = __mcb_render_calc_text_size
+local host_text = __mcb_render_text
 local host_line = __mcb_render_line
 local host_rect = __mcb_render_rect
 local host_rect_filled = __mcb_render_rect_filled
@@ -22,6 +25,9 @@ __mcb_render_screen_size = nil
 __mcb_render_frame_count = nil
 __mcb_render_frame_time = nil
 __mcb_render_world_to_screen = nil
+__mcb_render_setup_font = nil
+__mcb_render_calc_text_size = nil
+__mcb_render_text = nil
 __mcb_render_line = nil
 __mcb_render_rect = nil
 __mcb_render_rect_filled = nil
@@ -57,6 +63,31 @@ function render.world_to_screen(pos)
     local x, y = host_world_to_screen(pos.x, pos.y, pos.z)
     if x == nil then return nil end
     return vec2_t(x, y)
+end
+
+function render.setup_font(filename, size, flags)
+    assert(type(filename) == "string", "font filename string expected")
+    assert(type(size) == "number", "font size number expected")
+    return host_setup_font(filename, size, flags or 0)
+end
+
+function render.calc_text_size(text, font, size)
+    assert(type(text) == "string", "text string expected")
+    assert(type(font) == "userdata", "font_t userdata expected")
+    local w, h = host_calc_text_size(text, font, size)
+    if w == nil then return nil end
+    return vec2_t(w, h)
+end
+
+function render.text(text, font, pos, color, size)
+    assert(type(text) == "string", "text string expected")
+    assert(type(font) == "userdata", "font_t userdata expected")
+    assert(type(pos) == "cdata", "vec2_t expected")
+    local r, g, b, a = rgba(color)
+    host_text(
+        text, font, pos.x, pos.y,
+        r, g, b, a,
+        size)
 end
 
 function render.line(from, to, color, thickness)
