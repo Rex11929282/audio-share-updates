@@ -2,7 +2,7 @@ name: MCB Nix LuaJIT Runtime Compatibility Build
 
 on:
   push:
-    branches: [mcb-nix-luajit-runtime]
+    branches: [mcb-nix-luajit-runtime, mcb-nix-luajit-full-compat]
   workflow_dispatch: {}
 
 permissions:
@@ -148,6 +148,19 @@ jobs:
             if z < 0 then return nil end
             return x+10,y+20
           end
+          local font_proxy = newproxy(true)
+          function __mcb_render_setup_font(filename,size,flags)
+            calls.setup_font={filename,size,flags}
+            return font_proxy
+          end
+          function __mcb_render_calc_text_size(text,font,size)
+            assert(font==font_proxy)
+            calls.calc_text={text,font,size}
+            return 42,12
+          end
+          function __mcb_render_text(...)
+            calls.text={...}
+          end
           function __mcb_render_line(...) calls.line={...} end
           function __mcb_render_rect(...) calls.rect={...} end
           function __mcb_render_rect_filled(...) calls.rect_filled={...} end
@@ -166,6 +179,13 @@ jobs:
           local p=render.world_to_screen(vec3_t(1,2,3))
           assert(type(p)=="cdata" and p.x==11 and p.y==22)
           assert(render.world_to_screen(vec3_t(1,2,-1))==nil)
+          local font=render.setup_font("C:/Windows/Fonts/msyh.ttc",12,400)
+          assert(type(font)=="userdata")
+          assert(calls.setup_font and calls.setup_font[1]=="C:/Windows/Fonts/msyh.ttc" and calls.setup_font[2]==12 and calls.setup_font[3]==400)
+          local ts=render.calc_text_size("测试",font,12)
+          assert(type(ts)=="cdata" and ts.x==42 and ts.y==12)
+          render.text("测试",font,vec2_t(7,8),color_t(1,.5,0,1),12)
+          assert(calls.text and calls.text[1]=="测试" and calls.text[3]==7 and calls.text[4]==8 and calls.text[9]==12)
           render.line(vec2_t(1,2),vec2_t(3,4),color_t(1,.5,0,1),2)
           assert(calls.line and calls.line[1]==1 and calls.line[9]==2)
           render.rect_filled(vec2_t(10,20),vec2_t(30,40),color_t(1,1,1,.5),4)
@@ -266,6 +286,10 @@ jobs:
             @("$root\project\core\scripting\nix_engine_bridge.cpp", 'engine_client_cmd'),
             @("$root\project\core\scripting\nix_event_bridge.cpp", 'game_event_get_pawn'),
             @("$root\project\core\scripting\nix_render_bridge.cpp", 'xdraw::get(xdraw::layer::top)'),
+            @("$root\project\core\scripting\nix_render_bridge.cpp", '__mcb_render_setup_font'),
+            @("$root\project\core\scripting\nix_render_bridge.cpp", 'xdraw::measure_text'),
+            @("$root\project\core\scripting\nix_engine_bridge.cpp", 'CCSGO_HudVoiceStatus'),
+            @("$root\project\core\scripting\nix_event_bridge.cpp", 'game_event_get_string_fn'),
             @("$root\project\core\scripting\nix_render_bootstrap.hpp", 'function render.world_to_screen'),
             @("$root\project\core\systems\impl\events.cpp", 'scripting::g_nix.on_game_event'),
             @("$root\project\core\rendering\ui_views_v62.inl", 'Import / Approve Nixware Lua'),
@@ -335,6 +359,10 @@ jobs:
           'slice_d_engine_execute_client_cmd_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_d_scoped_game_events_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_e_render_primitives_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'nixware_font_text_bridge_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'nixware_chat_print_bridge_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'nixware_game_event_get_string_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'nixware_color_print_color_fidelity=PARTIAL_TEXT_ONLY' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'slice_e_render_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'script_explicit_approval_ui_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'archived_abusive_hash_block_compiled=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
