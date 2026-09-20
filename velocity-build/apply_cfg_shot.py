@@ -466,17 +466,14 @@ imp.write_text(it,encoding="utf-8")
 events=v/"project"/"core"/"systems"/"impl"/"events.cpp"
 et=events.read_text(encoding="utf-8")
 if 'm_events[ "weapon_fire" ]' not in et:
-    bullet_anchor='''		m_events[ "bullet_impact" ] = [ ]( void* event ) { scripting::g_nix.on_game_event( "bullet_impact", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_impacts.on_bullet_impact( reinterpret_cast< std::uintptr_t >( event ) ); };
-'''
-    if bullet_anchor not in et:
-        # Fallback for legacy/non-LuaJIT source shape.
-        bullet_anchor='''		m_events[ "bullet_impact" ] = [ ]( void* event ) { features::misc::g_impacts.on_bullet_impact( reinterpret_cast< std::uintptr_t >( event ) ); };
-'''
-    if bullet_anchor not in et:
-        raise SystemExit("[cfg-shot] bullet_impact event anchor missing")
+    needle='m_events[ "bullet_impact" ]'
+    pos=et.find(needle)
+    if pos < 0:
+        raise SystemExit("[cfg-shot] bullet_impact event map entry missing")
+    line_start=et.rfind("\\n",0,pos)+1
     weapon='''		m_events[ "weapon_fire" ] = [ ]( void* event ) { scripting::g_nix.on_game_event( "weapon_fire", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_impacts.on_weapon_fire( reinterpret_cast< std::uintptr_t >( event ) ); };
 '''
-    et=et.replace(bullet_anchor,weapon+bullet_anchor,1)
+    et=et[:line_start]+weapon+et[line_start:]
 events.write_text(et,encoding="utf-8")
 
 report=root/"MCB_CFG_SHOT_APPLIED.txt"
