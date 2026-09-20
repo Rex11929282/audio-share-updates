@@ -405,6 +405,46 @@ namespace
         if (!get_lua_string(*api, state, 2, key))
             return push_nil(*api, state);
 
+        // Real native-backed subset of Nixware dynamic netvars.
+        // The current Velocity schema service exposes offsets but not safe
+        // field type metadata, so do not guess arbitrary field widths.
+        // Add only fields whose exact native representation is corroborated
+        // by the pinned Velocity source.
+        if (key == "m_sSanitizedPlayerName")
+        {
+            const auto offset = systems::schemas::try_lookup(
+                "CCSPlayerController",
+                fnv1a::runtime_hash("m_sSanitizedPlayerName"));
+            if (!offset)
+                return push_nil(*api, state);
+
+            const auto ptr = memory::safe_read<std::uintptr_t>(
+                ref->ptr + *offset).value_or(0);
+            if (!ptr)
+                return push_nil(*api, state);
+
+            api->lua_pushlightuserdata(
+                state, reinterpret_cast<void*>(ptr));
+            return 1;
+        }
+
+        if (key == "m_nTickBase")
+        {
+            const auto offset = systems::schemas::try_lookup(
+                "CBasePlayerController",
+                fnv1a::runtime_hash("m_nTickBase"));
+            if (!offset)
+                return push_nil(*api, state);
+
+            const auto value = memory::safe_read<std::int32_t>(
+                ref->ptr + *offset);
+            if (!value)
+                return push_nil(*api, state);
+
+            api->lua_pushinteger(state, *value);
+            return 1;
+        }
+
         nix_lua_cfunction function{};
         if (key == "get_abs_origin")
             function = &entity_get_abs_origin;
