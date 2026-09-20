@@ -465,14 +465,14 @@ imp.write_text(it,encoding="utf-8")
 # integrated. This is a normal game-event listener, not a new gameplay hook.
 events=v/"project"/"core"/"systems"/"impl"/"events.cpp"
 et=events.read_text(encoding="utf-8")
-if 'm_events[ "weapon_fire" ]' not in et:
-    needle='m_events[ "bullet_impact" ]'
-    pos=et.find(needle)
-    if pos < 0:
+import re
+if not re.search(r'm_events\s*\[\s*"weapon_fire"\s*\]', et):
+    match=re.search(r'm_events\s*\[\s*"bullet_impact"\s*\]', et)
+    if not match:
         raise SystemExit("[cfg-shot] bullet_impact event map entry missing")
-    line_start=et.rfind("\\n",0,pos)+1
-    weapon='''		m_events[ "weapon_fire" ] = [ ]( void* event ) { scripting::g_nix.on_game_event( "weapon_fire", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_impacts.on_weapon_fire( reinterpret_cast< std::uintptr_t >( event ) ); };
-'''
+    line_start=et.rfind("\\n",0,match.start())+1
+    indent=et[line_start:match.start()]
+    weapon=indent + 'm_events[ "weapon_fire" ] = [ ]( void* event ) { scripting::g_nix.on_game_event( "weapon_fire", reinterpret_cast< std::uintptr_t >( event ) ); features::misc::g_impacts.on_weapon_fire( reinterpret_cast< std::uintptr_t >( event ) ); };\\n'
     et=et[:line_start]+weapon+et[line_start:]
 events.write_text(et,encoding="utf-8")
 
