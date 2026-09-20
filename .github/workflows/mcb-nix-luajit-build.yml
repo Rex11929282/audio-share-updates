@@ -2,7 +2,7 @@ name: MCB Nix LuaJIT Runtime Compatibility Build
 
 on:
   push:
-    branches: [mcb-nix-luajit-runtime, mcb-nix-luajit-full-compat]
+    branches: [mcb-nix-luajit-runtime, mcb-nix-luajit-full-compat, mcb-nix-integrated-ui-cfg-shot]
   workflow_dispatch: {}
 
 permissions:
@@ -246,13 +246,76 @@ jobs:
             'apply_v6_native_ui.py',
             'apply_v61_custom_pages.py',
             'apply_v62_ui.py',
-            'apply_nix_luajit.py'
+            'apply_nix_luajit.py',
+            'apply_ui_input_map.py'
           )
           foreach ($patch in $patches) {
             "===== $patch =====" | Tee-Object -FilePath release/PATCH.log -Append
             python "velocity-build/$patch" mcb-src 2>&1 | Tee-Object -FilePath release/PATCH.log -Append
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+      - name: Validate responsive UI input mapping
+        shell: pwsh
+        run: |
+          @'
+          #include <cassert>
+          #include <cmath>
+          #include "velocity-build/overlay/ui_coordinate_map.hpp"
+
+          static bool near(float a,float b){ return std::fabs(a-b)<0.001f; }
+
+          int main()
+          {
+              using xui::coord::client_to_viewport;
+
+              auto p=client_to_viewport(960,540,1920,1080,1440,1080);
+              assert(near(p.x,720) && near(p.y,540));
+
+              p=client_to_viewport(720,540,1440,1080,1440,1080);
+              assert(near(p.x,720) && near(p.y,540));
+
+              p=client_to_viewport(1280,720,2560,1440,1920,1080);
+              assert(near(p.x,960) && near(p.y,540));
+
+              p=client_to_viewport(640,360,1280,720,1920,1080);
+              assert(near(p.x,960) && near(p.y,540));
+
+              p=client_to_viewport(100,200,0,0,1440,1080);
+              assert(near(p.x,100) && near(p.y,200));
+
+              return 0;
+          }
+          '@ | Set-Content ui_coordinate_map_test.cpp -Encoding ascii
+
+          $devcmd = "$env:VSROOT\Common7\Tools\VsDevCmd.bat"
+          $cmd = '"' + $devcmd + '" -arch=x64 -host_arch=x64 && cl /MT /nologo /EHsc /std:c++20 /I. ui_coordinate_map_test.cpp /Fe:ui_coordinate_map_test.exe'
+          cmd.exe /d /s /c $cmd 2>&1 | Tee-Object -FilePath release/UI_COORDINATE_TEST_BUILD.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\ui_coordinate_map_test.exe
+          if ($LASTEXITCODE -ne 0) { throw 'UI coordinate test failed' }
+
+          $xui='mcb-src\cs2\MCB-CS2\project\external\xdraw\xui\xui.cpp'
+          foreach($marker in @(
+            'ui_coordinate_map.hpp',
+            'update_mouse_position',
+            'GetClientRect',
+            'xdraw::viewport_size',
+            'WM_KILLFOCUS',
+            'slider_interaction',
+            'interaction = extended.expand',
+            'swatch_interaction'
+          )){
+            if(-not (Select-String -LiteralPath $xui -SimpleMatch $marker -Quiet)){
+              throw "missing UI integration marker: $marker"
+            }
+          }
+
+          'ui_client_to_viewport_map=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'ui_1440_math_regression=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'ui_larger_hit_targets=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'ui_focus_loss_cleanup=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'ui_1440_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
 
       - name: Pin built LuaJIT hash into runtime manifest
         shell: pwsh
@@ -346,6 +409,9 @@ jobs:
           Copy-Item 'velocity-build\overlay\nix_render_bootstrap.hpp' release\source\
 
           Copy-Item 'velocity-build\apply_nix_luajit.py' release\source\
+          Copy-Item 'velocity-build\apply_ui_input_map.py' release\source\
+          Copy-Item 'velocity-build\overlay\ui_coordinate_map.hpp' release\source\
+          Copy-Item 'mcb-src\MCB_UI_INPUT_MAP_APPLIED.txt' release\
           Copy-Item 'mcb-src\cs2\MCB-CS2\project\core\scripting\nix_luajit_manifest.hpp' release\source\
 
           $mcbHash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
