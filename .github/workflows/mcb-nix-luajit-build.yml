@@ -2,7 +2,7 @@ name: MCB Nix LuaJIT Runtime Compatibility Build
 
 on:
   push:
-    branches: [mcb-nix-luajit-runtime, mcb-nix-luajit-full-compat, mcb-nix-integrated-ui-cfg-shot]
+    branches: [mcb-nix-luajit-runtime, mcb-nix-luajit-full-compat, mcb-nix-integrated-ui-cfg-shot, mcb-cfg-shot-work]
   workflow_dispatch: {}
 
 permissions:
@@ -247,7 +247,8 @@ jobs:
             'apply_v61_custom_pages.py',
             'apply_v62_ui.py',
             'apply_nix_luajit.py',
-            'apply_ui_input_map.py'
+            'apply_ui_input_map.py',
+            'apply_cfg_shot.py'
           )
           foreach ($patch in $patches) {
             "===== $patch =====" | Tee-Object -FilePath release/PATCH.log -Append
@@ -316,6 +317,49 @@ jobs:
           'ui_larger_hit_targets=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'ui_focus_loss_cleanup=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
           'ui_1440_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+
+      - name: Validate CFG preset and shot evidence integration
+        shell: pwsh
+        run: |
+          $root='mcb-src\cs2\MCB-CS2'
+          $checks=@(
+            @("$root\project\core\mcb\mcb_presets.cpp",'verify_untouched'),
+            @("$root\project\core\mcb\mcb_presets.cpp",'config::registry::save'),
+            @("$root\project\core\mcb\mcb_presets.cpp",'config::registry::load'),
+            @("$root\project\core\mcb\mcb_shot_evidence.cpp",'shot_evidence.jsonl'),
+            @("$root\project\core\features\misc\impl\impacts.cpp",'::mcb::shot_evidence::request'),
+            @("$root\project\core\features\misc\impl\impacts.cpp",'::mcb::shot_evidence::weapon_fire'),
+            @("$root\project\core\features\misc\impl\impacts.cpp",'::mcb::shot_evidence::impact'),
+            @("$root\project\core\features\misc\impl\impacts.cpp",'::mcb::shot_evidence::hurt'),
+            @("$root\project\core\features\misc\impl\impacts.cpp",'::mcb::shot_evidence::miss'),
+            @("$root\project\core\systems\impl\events.cpp",'m_events[ "weapon_fire" ]'),
+            @("$root\project\core\rendering\ui_views_v62.inl",'Native gameplay presets'),
+            @("$root\project\core\rendering\ui_views_v62.inl",'PARTIAL preset -> FULL native registry CFG')
+          )
+          foreach($item in $checks){
+            if(-not (Select-String -LiteralPath $item[0] -SimpleMatch $item[1] -Quiet)){
+              throw "missing cfg/shot integration marker: $($item[1])"
+            }
+          }
+
+          $report=Get-Content 'mcb-src\MCB_CFG_SHOT_APPLIED.txt' -Raw
+          foreach($marker in @(
+            'preset_semantics=PARTIAL',
+            'saved_cfg_semantics=FULL_NATIVE_REGISTRY',
+            'cfg_full_snapshot=ENABLED',
+            'cfg_failure_rollback=ENABLED',
+            'rage_algorithm_changed=NO',
+            'hitchance_changed_by_diagnostics=NO',
+            'in_game_verification=NOT_TESTED'
+          )){
+            if(-not $report.Contains($marker)){ throw "missing report marker: $marker" }
+          }
+
+          'native_cfg_presets_compiled_source=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'shot_evidence_source_integration=PASS' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'shot_evidence_changes_rage_logic=NO' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'native_cfg_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
+          'shot_evidence_in_game=NOT_TESTED' | Add-Content release/NIX_RUNTIME_BUILD_STATUS.txt
 
       - name: Pin built LuaJIT hash into runtime manifest
         shell: pwsh
@@ -412,6 +456,12 @@ jobs:
           Copy-Item 'velocity-build\apply_ui_input_map.py' release\source\
           Copy-Item 'velocity-build\overlay\ui_coordinate_map.hpp' release\source\
           Copy-Item 'mcb-src\MCB_UI_INPUT_MAP_APPLIED.txt' release\
+          Copy-Item 'velocity-build\apply_cfg_shot.py' release\source\
+          Copy-Item 'velocity-build\overlay\mcb_presets.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\mcb_presets.cpp' release\source\
+          Copy-Item 'velocity-build\overlay\mcb_shot_evidence.hpp' release\source\
+          Copy-Item 'velocity-build\overlay\mcb_shot_evidence.cpp' release\source\
+          Copy-Item 'mcb-src\MCB_CFG_SHOT_APPLIED.txt' release\
           Copy-Item 'mcb-src\cs2\MCB-CS2\project\core\scripting\nix_luajit_manifest.hpp' release\source\
 
           $mcbHash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
