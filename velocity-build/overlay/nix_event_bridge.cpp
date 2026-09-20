@@ -169,6 +169,56 @@ namespace
         return 1;
     }
 
+    std::uintptr_t game_event_get_string_fn()
+    {
+        // Do not use Velocity's patterns::game_event_get_string here:
+        // that symbol is used elsewhere with a non-event signature.
+        // This raw IGameEvent::GetString signature is independently
+        // corroborated by current public CS2 signature databases.
+        static const auto fn = memory::resolve_pattern(
+            "client.dll:"
+            "4883EC388B024883C158894424208B420489442424"
+            "488B4208488D5424204889442428E8????????"
+            "4883C438C3CCCCCC33C9");
+        return fn;
+    }
+
+    int __cdecl event_get_string(lua_State* state)
+    {
+        event_ref* ref{};
+        active_event current{};
+        if (!resolve_active(state, ref, current))
+            return 0;
+
+        auto* api = current.api;
+        std::string key;
+        if (!get_string_arg(*api, state, 2, key))
+            return push_nil(*api, state);
+
+        const auto fn = game_event_get_string_fn();
+        if (!fn)
+            return push_nil(*api, state);
+
+        const cstypes::event_hash event_key{
+            0, key.c_str()
+        };
+        const auto* value =
+            memory::call<const char*>(
+                fn,
+                current.event,
+                &event_key,
+                static_cast<void*>(nullptr));
+        if (!value)
+            return push_nil(*api, state);
+
+        const auto safe = memory::read_string(
+            reinterpret_cast<std::uintptr_t>(value),
+            4096);
+        api->lua_pushlstring(
+            state, safe.data(), safe.size());
+        return 1;
+    }
+
     int __cdecl event_get_pawn(lua_State* state)
     {
         event_ref* ref{};
@@ -250,6 +300,8 @@ namespace
             fn = &event_get_int;
         else if (key == "get_float")
             fn = &event_get_float;
+        else if (key == "get_string")
+            fn = &event_get_string;
         else if (key == "get_pawn")
             fn = &event_get_pawn;
         else if (key == "get_controller")
