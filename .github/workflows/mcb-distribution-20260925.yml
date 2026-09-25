@@ -1,0 +1,47 @@
+name: MCB Verified Candidate Distribution
+
+on:
+  push:
+    branches: [mcb-distribution-20260925]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mcb-distribution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify immutable build and prepare single candidate package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python velocity-build/package_verified_20260925.py 2>&1 | Tee-Object distribution-verification.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MCB-CS2-25515854-Candidate-20260925
+          path: package
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve packaging failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCB-distribution-failure-${{ github.run_id }}
+          path: distribution-verification.log
+          if-no-files-found: warn
+          retention-days: 30
