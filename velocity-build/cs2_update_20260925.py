@@ -56,6 +56,8 @@ def add_weapon_listener(text: str) -> str:
             raise ValueError('inconsistent existing weapon-fire integration')
         if src.count('g_nix.on_game_event("weapon_fire"') != 1:
             raise ValueError('existing weapon-fire Lua dispatch missing/duplicated')
+        if 'this->shutdown( );' in src:
+            raise ValueError('invalid instance access inside static event initializer')
         return text
     if existing:
         raise ValueError('unrecognized weapon-fire listener; manual reconciliation required')
@@ -74,7 +76,7 @@ def add_weapon_listener(text: str) -> str:
         i + '    features::misc::g_impacts.on_weapon_fire(reinterpret_cast<std::uintptr_t>(event));',
         i + '} ) )',
         i + '{',
-        i + '    this->shutdown( );',
+        i + '    events::shutdown( );',
         i + '    return false;',
         i + '}', '',
     ))
@@ -171,8 +173,6 @@ def prepare() -> None:
     proj.write_text(text, encoding='utf-8')
     for ext in ('cpp', 'hpp'):
         (project / ('project/utilities/discord_webhook.' + ext)).unlink()
-
-    # Correct the historical patch script while retaining its other operations.
     patch = PATCH_DIR / 'apply_cfg_shot.py'
     text = patch.read_text(encoding='utf-8')
     start = text.index('# Register local weapon_fire')
@@ -184,7 +184,6 @@ events.write_text(add_weapon_listener(events.read_text(encoding="utf-8")), encod
 
 '''
     text = text[:start] + replacement + text[end:]
-    # The old report used literal backslash-n, not actual line endings.
     start = text.index('report=root/')
     text = text[:start] + text[start:].replace('\\\\n', '\\n')
     compile(text, str(patch), 'exec')
@@ -202,6 +201,96 @@ events.write_text(add_weapon_listener(events.read_text(encoding="utf-8")), encod
     }, indent=2), encoding='utf-8')
 
 
+def native_listener_test() -> None:
+    """Compile generated listener code with a STATIC class declaration.
+
+    Registration/event services below are explicitly mocks. This catches C++
+    signature errors and tests failure propagation, not a game ABI assertion.
+    """
+    src = r'''#include <cassert>
+#include <cstdint>
+#include <string>
+#include <vector>
+#define xs(x) x
+static bool fail_weapon = false;
+static int shutdown_calls = 0;
+static int lua_calls = 0;
+static int impact_calls = 0;
+static std::vector<std::string> registrations;
+static void (*weapon_handler)(void*) = nullptr;
+namespace scripting {
+struct Host { void on_game_event(const char* n, std::uintptr_t p) {
+    assert(std::string(n) == "weapon_fire" && p != 0); ++lua_calls;
+} }; inline Host g_nix;
+}
+namespace features::misc {
+struct Impacts { void on_weapon_fire(std::uintptr_t p) {
+    assert(p != 0); ++impact_calls;
+} }; inline Impacts g_impacts;
+}
+static void old_handler(void*) {}
+class events {
+public:
+    static bool initialize();
+    static void shutdown() { ++shutdown_calls; }
+    static bool register_listener(const char* n, void (*handler)(void*)) {
+        registrations.emplace_back(n);
+        if (std::string(n) == "weapon_fire") {
+            if (fail_weapon) return false;
+            weapon_handler = handler;
+        }
+        return true;
+    }
+};
+'''
+    src += add_weapon_listener(PatchTests.BASE)
+    src += r'''
+int main() {
+    assert(events::initialize());
+    assert(registrations.size() == 2);
+    assert(registrations[0] == "weapon_fire");
+    assert(registrations[1] == "bullet_impact");
+    assert(weapon_handler != nullptr && shutdown_calls == 0);
+    int dummy = 1;
+    weapon_handler(&dummy);
+    assert(lua_calls == 1 && impact_calls == 1);
+    registrations.clear(); weapon_handler = nullptr; fail_weapon = true;
+    assert(!events::initialize());
+    assert(shutdown_calls == 1);
+    assert(registrations.size() == 1 && weapon_handler == nullptr);
+    assert(lua_calls == 1 && impact_calls == 1);
+    return 0;
+}
+'''
+    release = Path('release').resolve()
+    testdir = release / 'listener-test'
+    testdir.mkdir(exist_ok=True)
+    file = testdir / 'listener_static_test.cpp'
+    file.write_text(src, encoding='utf-8')
+    vsroot = os.environ.get('VSROOT')
+    if not vsroot:
+        raise ValueError('VSROOT missing; native listener test must not be skipped')
+    devcmd = Path(vsroot) / 'Common7/Tools/VsDevCmd.bat'
+    batch = testdir / 'run_test.cmd'
+    batch.write_text(
+        '@echo off\ncall "' + str(devcmd) + '" -arch=x64 -host_arch=x64\n'
+        'if errorlevel 1 exit /b %errorlevel%\n'
+        'cd /d "' + str(testdir) + '"\n'
+        'cl /nologo /EHsc /std:c++20 /W4 /WX listener_static_test.cpp /Fe:listener_static_test.exe\n'
+        'if errorlevel 1 exit /b %errorlevel%\n'
+        'listener_static_test.exe\nexit /b %errorlevel%\n', encoding='utf-8')
+    result = subprocess.run(['cmd.exe', '/d', '/c', str(batch)],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, encoding='utf-8', errors='replace')
+    (release / 'LISTENER_NATIVE_REGRESSION.log').write_text(result.stdout, encoding='utf-8')
+    print(result.stdout)
+    if result.returncode:
+        raise RuntimeError('generated static-listener C++ regression failed')
+    (release / 'LISTENER_NATIVE_REGRESSION_STATUS.txt').write_text(
+        'compiled_generated_cpp=PASS\nregistration_failure_propagation=PASS\n'
+        'single_callback_delivery=PASS\nnative_services=MOCKS\nin_game=NOT_TESTED\n', encoding='utf-8')
+
+
 def audit() -> None:
     root = Path('mcb-src/cs2/MCB-CS2/project')
     events = (root / 'core/systems/impl/events.cpp').read_text(encoding='utf-8')
@@ -211,9 +300,14 @@ def audit() -> None:
         if file.is_file() and file.suffix in ('.cpp', '.hpp', '.h'):
             if 'discord_webhook::send_test_message' in file.read_text(encoding='utf-8', errors='replace'):
                 raise ValueError('upstream webhook call remains: ' + str(file))
+    native_listener_test()
     Path('release/UPDATE_SOURCE_AUDIT.txt').write_text(
         'checked_listener_source=PASS\nwebhook_call_source_absent=PASS\n'
         'source_inspection_only=YES\nin_game_runtime=NOT_TESTED\n', encoding='utf-8')
+    Path('release/FAILURE_HISTORY.txt').write_text(
+        'Run 36151463502 failed compiling events.cpp: instance this used in static initialize.\n'
+        'Repair: qualify events::shutdown(); add compiled C++ static-class mock regression.\n'
+        'The prior 10 Python tests did not establish C++ correctness. They remain as parser tests.\n', encoding='utf-8')
 
 
 def package() -> None:
@@ -250,6 +344,9 @@ def package() -> None:
                 if file.name in ('hello.lua', 'snow_hud.lua'):
                     continue
                 z.write(file, str(Path(prefix) / file.relative_to(base)))
+    with zipfile.ZipFile(release / 'SOURCE_SNAPSHOT.zip') as z:
+        if z.testzip() is not None:
+            raise ValueError('source snapshot CRC mismatch')
     manifest = {}
     for file in sorted(release.rglob('*')):
         if file.is_file():
@@ -268,7 +365,8 @@ class PatchTests(unittest.TestCase):
         out = add_weapon_listener(self.BASE)
         self.assertIn('old_handler(event);', out)
         self.assertEqual(out.count('"weapon_fire"'), 2)
-        self.assertIn('this->shutdown( );', out)
+        self.assertIn('events::shutdown( );', out)
+        self.assertNotIn('this->', out)
         self.assertNotIn('m_events[', out)
 
     def test_idempotent(self):
@@ -315,6 +413,11 @@ class PatchTests(unittest.TestCase):
             extract_step(fixture.replace('shell: pwsh', 'shell: bash'), 'Probe')
         with self.assertRaises(ValueError):
             extract_step(fixture, 'Unknown')
+
+    def test_rejects_old_instance_shutdown(self):
+        out = add_weapon_listener(self.BASE).replace('events::shutdown( );', 'this->shutdown( );')
+        with self.assertRaises(ValueError):
+            add_weapon_listener(out)
 
 
 if __name__ == '__main__':
