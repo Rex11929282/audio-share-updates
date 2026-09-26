@@ -33,21 +33,18 @@ jobs:
           import pathlib,hashlib,base64,zlib,json,zipfile
           root=pathlib.Path('mcb-unified-20260927');out=pathlib.Path('review-output');out.mkdir(exist_ok=True)
           chunks=[(root/f'delta.{i}.b64').read_text().strip() for i in range(3)]
-          # Transport-only correction, checked against both observed and intended hashes.
           sha=lambda data:hashlib.sha256(data).hexdigest()
           if sha(chunks[1].encode())=='f92a97702411809b022e1062ba733dc90615ac5b64ff82944e0e03f9c26d5e03':
             s=chunks[1];s=s[:8839]+s[8840:];s=s[:3774]+'Z'+s[3775:];chunks[1]=s
           assert sha(chunks[1].encode())=='406b3fc915d492254dda9c2640a5972ac47661714ac92aba6d86ea55b1277a90'
           data=base64.b64decode(''.join(chunks),validate=True)
           assert sha(data)=='bdb6a55d066080d2b447c24457b7afb08176dc2cbfac0e34005a60adc9ef0484','Source transport mismatch'
-          delta=json.loads(zlib.decompress(data))
-          snapshot=pathlib.Path('seed/SOURCE_SNAPSHOT.zip')
+          delta=json.loads(zlib.decompress(data));snapshot=pathlib.Path('seed/SOURCE_SNAPSHOT.zip')
           assert sha(snapshot.read_bytes())=='baaf7d339f7037dfb1cbb655729b29400ec7d8d7dc961668cbba98dfc96bb11e'
           checked=pathlib.Path('checked');checked.mkdir(exist_ok=True)
           with zipfile.ZipFile(snapshot) as archive:
             for entry in archive.infolist():
-              target=(checked/entry.filename).resolve()
-              assert target.is_relative_to(checked.resolve())
+              assert (checked/entry.filename).resolve().is_relative_to(checked.resolve())
               archive.extract(entry,checked)
           source=checked/'native-source';manifest=[]
           for record in delta['files']:
@@ -64,30 +61,16 @@ jobs:
           (out/'source_manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
           (out/'STATUS.json').write_text(json.dumps({'route':'source_rebuild','in_game_tested':False,'exact_donor_source_match':False,'source_delta_sha256':sha(data)},indent=2),encoding='utf-8')
           print('Verified source delta files:',len(manifest))
-      - name: Locate compiler and test real portable policy on Windows
+      - name: Test real portable policy on Windows
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -property installationPath
           if (-not $vs) { throw 'Visual Studio unavailable' }
-          "VS_ROOT=$vs" | Out-File $env:GITHUB_ENV -Append
-          $vcpkg = Join-Path $vs 'VC\vcpkg'
-          if (-not (Test-Path "$vcpkg\vcpkg.exe")) { $vcpkg = $env:VCPKG_INSTALLATION_ROOT }
-          if (-not (Test-Path "$vcpkg\vcpkg.exe")) { throw 'vcpkg unavailable' }
-          "VCPKG_ROOT=$vcpkg" | Out-File $env:GITHUB_ENV -Append
           $cmd = "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" && cl /nologo /std:c++20 /EHsc /utf-8 checked\tests\test_policy.cpp /Fe:review-output\policy_test.exe && review-output\policy_test.exe"
           cmd /d /c $cmd 2>&1 | Tee-Object review-output/POLICY_TEST.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build full native Windows DLL
-        run: |
-          $msbuild = Join-Path $env:VS_ROOT 'MSBuild\Current\Bin\MSBuild.exe'
-          & $msbuild checked/native-source/MCB-CS2.vcxproj /m /p:Configuration=Ship /p:Platform=x64 "/p:VcpkgRoot=$env:VCPKG_ROOT\" /p:VcpkgTriplet=x64-windows-static /v:minimal 2>&1 | Tee-Object review-output/BUILD.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $dll='checked/bin/MCB_UNIFIED_SOURCE.dll'
-          if (-not (Test-Path $dll)) { throw 'Expected new DLL missing' }
-          New-Item -ItemType Directory -Force review-output/internal-candidate | Out-Null
-          Copy-Item $dll review-output/internal-candidate/
-          Get-ChildItem checked/bin/*.pdb | Copy-Item -Destination review-output/internal-candidate/
-          Get-FileHash $dll -Algorithm SHA256 | Format-List | Out-File review-output/DLL_SHA256.txt
+        run: python mcb-unified-20260927/build.py
       - name: Preserve reviewed source, never claim game acceptance
         if: always()
         shell: python
