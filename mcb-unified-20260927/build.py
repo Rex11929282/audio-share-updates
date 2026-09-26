@@ -13,6 +13,7 @@ def run(args,log):
   code=process.wait()
   if code:raise SystemExit(code)
 run([sys.executable,str(root/'mcb-unified-20260927/review_fixes.py'),str(project)],'SOURCE_FIXES.log')
+run([sys.executable,str(root/'mcb-unified-20260927/compile_fixes.py'),str(project)],'COMPILE_FIXES.log')
 deps=root/'checked/deps'
 run([str(vcpkg),'install','--triplet=x64-windows-static','--x-manifest-root='+str(project),'--x-install-root='+str(deps)],'DEPENDENCIES.log')
 from xml.sax.saxutils import escape
