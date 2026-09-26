@@ -1,0 +1,47 @@
+name: MCB Unified Source Review
+on:
+  push:
+    branches: [mcb-unified-source-review-20260927]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mcb-unified-source-review
+  cancel-in-progress: true
+jobs:
+  verify-input:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify transport before interpreting source
+        shell: python
+        run: |
+          import pathlib,hashlib,base64,zlib,json
+          root=pathlib.Path('mcb-unified-20260927')
+          out=pathlib.Path('review-output');out.mkdir(exist_ok=True)
+          chunks=[(root/f'delta.{i}.b64').read_text().strip() for i in range(3)]
+          report={'stage':'transport','new_dll_built':False,'in_game_tested':False}
+          report['chunks']=[{'index':i,'length':len(s),'sha256':hashlib.sha256(s.encode()).hexdigest()} for i,s in enumerate(chunks)]
+          try:
+            data=base64.b64decode(''.join(chunks),validate=True)
+            report['compressed_sha256']=hashlib.sha256(data).hexdigest()
+            assert report['compressed_sha256']=='bdb6a55d066080d2b447c24457b7afb08176dc2cbfac0e34005a60adc9ef0484','Transport hash mismatch: do not build'
+            decoded=json.loads(zlib.decompress(data));report['file_count']=len(decoded['files']);report['transport_valid']=True
+          except Exception as error:
+            report['transport_valid']=False;report['error']=str(error)
+            (out/'transport.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+            raise
+          (out/'transport.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MCB-Unified-Transport-${{ github.run_id }}
+          path: |
+            review-output
+            mcb-unified-20260927
+          retention-days: 7
+          if-no-files-found: error
