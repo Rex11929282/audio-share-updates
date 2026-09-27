@@ -48,6 +48,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/mcb-native-postfix.py mcb-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/mcb-native-finalize.py mcb-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile and run native contract regressions on Windows
         run: python velocity-build/mcb-native-ci.py tests
       - name: Rebuild full native Windows x64 DLL
@@ -60,6 +62,7 @@ jobs:
           New-Item -ItemType Directory -Force release/build-inputs | Out-Null
           Copy-Item velocity-build/mcb-native-ci.py release/build-inputs/
           Copy-Item velocity-build/mcb-native-postfix.py release/build-inputs/
+          Copy-Item velocity-build/mcb-native-finalize.py release/build-inputs/
           Copy-Item .github/workflows/mcb-source-integration-20260927.yml release/build-inputs/
           if (Test-Path mcb-src/cs2/MCB-CS2/MCB_INTEGRATION_MANIFEST.json) { Copy-Item mcb-src/cs2/MCB-CS2/MCB_INTEGRATION_MANIFEST.json release/ }
       - uses: actions/upload-artifact@v4
