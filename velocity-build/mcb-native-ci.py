@@ -7,8 +7,10 @@ PROJECT = Path('mcb-src/cs2/MCB-CS2')
 RELEASE = Path('release')
 ARCHIVE_SHA = '5c9e86011284ad05db6c93d66a6a62d3223f10f82d8fbaed987e3fb0286ba6fb'
 def digest(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def canonical_text(p):
+    return Path(p).read_text(encoding='utf-8-sig').encode('utf-8')
 def unpack():
-    payload=''.join((PARTS/f'part{i}.b64').read_text().strip() for i in range(4))
+    payload=''.join((PARTS/f'part{i}.b64').read_text(encoding='utf-8').strip() for i in range(4))
     data=base64.b64decode(payload,validate=True)
     if hashlib.sha256(data).hexdigest()!=ARCHIVE_SHA: raise ValueError('Patch archive hash mismatch')
     PATCH.mkdir(exist_ok=False)
@@ -22,10 +24,16 @@ def unpack():
     print('Own source patch hash and safe extraction: PASS')
 def tests():
     RELEASE.mkdir(exist_ok=True)
+    identity={}
     for name in ('runtime.hpp','appearance.hpp','mcb_batch_guard.hpp'):
-        if digest(PATCH/name)!=digest(PROJECT/'project/core/mcb'/name): raise ValueError('Disconnected test header '+name)
-    if digest(PATCH/'coord.hpp')!=digest(PROJECT/'project/external/xdraw/xui/ui_coordinate_map.hpp'):
-        raise ValueError('Disconnected coordinate header')
+        target=PROJECT/'project/core/mcb'/name
+        if digest(PATCH/name)!=digest(target): raise ValueError('Disconnected test header '+name)
+        identity[name]={'mode':'raw_bytes','patch_sha256':digest(PATCH/name),'project_sha256':digest(target)}
+    original=PATCH/'coord.hpp';target=PROJECT/'project/external/xdraw/xui/ui_coordinate_map.hpp'
+    if canonical_text(original)!=canonical_text(target):
+        raise ValueError('Disconnected coordinate header (normalized UTF-8 text differs)')
+    identity['coord.hpp']={'mode':'UTF8_BOM_and_newline_normalized_only','patch_sha256':digest(original),'project_sha256':digest(target),'normalized_sha256':hashlib.sha256(canonical_text(target)).hexdigest()}
+    (RELEASE/'NATIVE_TEST_SOURCE_IDENTITY.json').write_text(json.dumps(identity,indent=2),encoding='utf-8')
     subprocess.run([sys.executable,str(PATCH/'generate_label_test.py'),'mcb-src',str(PATCH/'test_labels.cpp')],check=True)
     dev=Path(os.environ['VSROOT'])/'VC/Auxiliary/Build/vcvars64.bat'
     lines=['@echo off',f'call "{dev}"','if errorlevel 1 exit /b %errorlevel%']
@@ -41,7 +49,7 @@ def tests():
     (RELEASE/'NATIVE_TESTS.log').write_text(process.stdout,encoding='utf-8');print(process.stdout)
     if process.returncode: raise RuntimeError('Windows native contract tests failed')
     (RELEASE/'NATIVE_TESTS.json').write_text(json.dumps({'status':'PASS','platform':'Windows x64 MSVC','assertions_enabled':True,
-       'test_programs':names,'headers_match_compiled_project':True,'game_runtime_tested':False},indent=2),encoding='utf-8')
+       'test_programs':names,'headers_match_compiled_project':True,'coordinate_identity_normalizes_newlines':True,'game_runtime_tested':False},indent=2),encoding='utf-8')
 def package():
     out=RELEASE/'MCB_NATIVE';(out/'runtime').mkdir(parents=True,exist_ok=True)
     products=[(Path('mcb-src/cs2/bin/MCB-CS2-v6.2-exact-panel.dll'),out/'MCB_NATIVE_INTEGRATED.dll'),
