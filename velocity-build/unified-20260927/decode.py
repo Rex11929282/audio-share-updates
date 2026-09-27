@@ -36,9 +36,10 @@ s=replace_one(s,"includes=[root/'project',root/'project/utilities/threadpool',*e
 s=replace_one(s,"        args=['cl','/nologo'","        compiler=vs/'VC/Tools/Llvm/x64/bin/clang-cl.exe'\n        if not compiler.exists():raise ValueError('production Clang toolchain unavailable')\n        args=[str(compiler),'/D_UNICODE','/DUNICODE','/DMCB_STABLE','/arch:AVX2','/nologo'")
 s=replace_one(s,"        candidates=[q for q in candidates if 'debug' not in q.parts]","        candidates=sorted(set(q.resolve() for q in candidates if 'debug' not in q.parts and q.parent.name.lower()=='lib' and ((q.parent.parent/'include/ft2build.h').is_file() or (q.parent.parent/'include/freetype2/ft2build.h').is_file())))")
 compile(s,str(p),'exec');p.write_text(s,encoding='utf-8',newline='\n')
-p=out/'finalize_source.py';p.write_text((HERE/'finalize_source.py').read_text(encoding='utf-8'),encoding='utf-8',newline='\n')
+for name in ('finalize_source.py','release_polish.py'):
+    (out/name).write_text((HERE/name).read_text(encoding='utf-8'),encoding='utf-8',newline='\n')
 p=out/'mcb_unify.py';s=p.read_text(encoding='utf-8')
-s=replace_one(s,"    report={'route':","    from finalize_source import apply as finalize\n    finalize_changes=finalize(root)\n    report={'finalize_changes':finalize_changes,'route':")
+s=replace_one(s,"    report={'route':","    from finalize_source import apply as finalize\n    finalize_changes=finalize(root)\n    from release_polish import apply as polish\n    polish_changes=polish(root)\n    report={'polish_changes':polish_changes,'finalize_changes':finalize_changes,'route':")
 compile(s,str(p),'exec');p.write_text(s,encoding='utf-8',newline='\n')
 pin_script = HERE.parent / 'cs2_update_20260925.py'
 s = pin_script.read_text(encoding='utf-8')
@@ -49,4 +50,4 @@ pin_script.write_text(s, encoding='utf-8', newline='\n')
 final_files={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and '__pycache__' not in p.parts}
 Path('release').mkdir(exist_ok=True)
 Path('release/UNIFIED_PAYLOAD.json').write_text(json.dumps({'source_xz_sha256':XZ_SHA,'source_json_sha256':JSON_SHA,'payload_files':manifest,'final_files':final_files,'upstream':'c077db5d04b6f8746303179d2ed78f50e61975bf','route':'source_rebuild_NOT_Attackware_binary_merge','game_runtime_tested':False},ensure_ascii=False,indent=2),encoding='utf-8')
-print('Verified and expanded',len(files),'source files plus reviewed follow-up')
+print('Verified and expanded',len(files),'source files plus reviewed follow-ups')
