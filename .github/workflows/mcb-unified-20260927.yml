@@ -87,7 +87,10 @@ jobs:
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_BUGFIX_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_FORMAL_UI_REWORK.json release/
       - name: Compile and run production helper and translation tests
-        run: python velocity-build/unified/run_tests.py mcb-src/cs2/MCB-CS2
+        run: |
+          python velocity-build/formal_translation_allowlist_20260928.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/unified/run_tests.py mcb-src/cs2/MCB-CS2
       - name: Compile complete main DLL
         run: python velocity-build/cs2_update_20260925.py run-step 'Build MCB Ship x64'
       - name: Exercise actual D3D11 WARP XUI and native config roundtrips
@@ -117,6 +120,7 @@ jobs:
           Copy-Item velocity-build/ui_bugfix_polish_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui_bugfix_compile_fix_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/formal_ui_rework_20260928.py release/unified-build-inputs/
+          Copy-Item velocity-build/formal_translation_allowlist_20260928.py release/unified-build-inputs/
           Copy-Item velocity-build/formal-ui-20260928 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
