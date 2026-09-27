@@ -60,6 +60,9 @@ def apply(root):
     s=once(s,'   const auto applied=mcb::presets::apply_and_save(kind);',r'''   const auto applied=mcb::presets::apply_and_save(kind);
    auto message=applied.message;if(message.starts_with("MCB"))message.erase(0,3);
    check(std::none_of(message.begin(),message.end(),[](unsigned char c){return (c>='A'&&c<='Z')||(c>='a'&&c<='z');}),"native preset status is Chinese");''')
+    anchor='out.rect=xui::layout::current_window()->last_item;'
+    assert s.count(anchor)==2, 'expected root and child rectangle captures'
+    s=s.replace(anchor,anchor+'out.rect.x=std::floor(out.rect.x+xui::layout::current_window()->bounds.x);out.rect.y=std::floor(out.rect.y+xui::layout::current_window()->bounds.y);')
     p.write_text(s,encoding='utf-8',newline='\n');changes.append({'test_harness':p.name,'after':hashlib.sha256(s.encode()).hexdigest()})
     (root/'MCB_RELEASE_POLISH.json').write_text(json.dumps(changes,ensure_ascii=False,indent=2),encoding='utf-8')
     return changes
