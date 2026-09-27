@@ -67,7 +67,10 @@ jobs:
         run: |
           python velocity-build/unified/mcb_unify.py mcb-src/cs2/MCB-CS2 > release/UNIFIED_PATCH.log
           if ($LASTEXITCODE -ne 0) { Get-Content release/UNIFIED_PATCH.log; exit $LASTEXITCODE }
+          python velocity-build/ui_rework_20260927.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_REWORK.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UNIFIED_CHANGES.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_REWORK.json release/
       - name: Compile and run production helper and translation tests
         run: python velocity-build/unified/run_tests.py mcb-src/cs2/MCB-CS2
       - name: Compile complete main DLL
@@ -93,6 +96,7 @@ jobs:
           Copy-Item .github/workflows/mcb-unified-20260927.yml release/unified-build-inputs/
           Copy-Item velocity-build/unified-20260927 release/unified-build-inputs/ -Recurse
           if (Test-Path velocity-build/unified) { Copy-Item velocity-build/unified release/unified-build-inputs/ -Recurse }
+          Copy-Item velocity-build/ui_rework_20260927.py release/unified-build-inputs/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
