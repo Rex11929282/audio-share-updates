@@ -37,7 +37,7 @@ def tests():
     subprocess.run([sys.executable,str(PATCH/'generate_label_test.py'),'mcb-src',str(PATCH/'test_labels.cpp')],check=True)
     dev=Path(os.environ['VSROOT'])/'VC/Auxiliary/Build/vcvars64.bat'
     lines=['@echo off',f'call "{dev}"','if errorlevel 1 exit /b %errorlevel%']
-    names=['test_runtime','test_coord','test_batch_guard','test_source_bindings','test_labels']
+    names=['test_runtime','test_coord','test_batch_guard','test_source_bindings','test_labels','test_presets']
     for name in names:
         exe=(RELEASE/(name+'.exe')).resolve()
         source=(PATCH/(name+'.cpp')).resolve()
