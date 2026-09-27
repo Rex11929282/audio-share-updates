@@ -23,13 +23,30 @@ for name, text in files.items():
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding='utf-8', newline='\n')
     manifest[name] = hashlib.sha256(text.encode('utf-8')).hexdigest()
+def replace_one(text,old,new):
+    assert text.count(old)==1, 'unexpected overlay anchor: '+old[:80]
+    return text.replace(old,new,1)
+# Avoid passing a quoted compound command through list2cmdline to cmd.exe.
+p=out/'run_tests.py';s=p.read_text(encoding='utf-8')
+a="        run(['cmd','/d','/s','/c',command],out/(name+'.log'),cwd=out)"
+b='''        launcher=out/(name+'_build.cmd')
+        launcher.write_text('@echo off\\n'+command.replace(' && ','\\nif errorlevel 1 exit /b %errorlevel%\\n')+'\\nexit /b %errorlevel%\\n',encoding='utf-8',newline='\\r\\n')
+        run(['cmd','/d','/c',str(launcher)],out/(name+'.log'),cwd=out)'''
+s=replace_one(s,a,b).replace("'/std:c++20'","'/std:c++latest'")
+compile(s,str(p),'exec');p.write_text(s,encoding='utf-8',newline='\n')
+# Apply this separately reviewable source follow-up after the immutable payload.
+p=out/'finalize_source.py';p.write_text((HERE/'finalize_source.py').read_text(encoding='utf-8'),encoding='utf-8',newline='\n')
+p=out/'mcb_unify.py';s=p.read_text(encoding='utf-8')
+s=replace_one(s,"    report={'route':","    from finalize_source import apply as finalize\n    finalize_changes=finalize(root)\n    report={'finalize_changes':finalize_changes,'route':")
+compile(s,str(p),'exec');p.write_text(s,encoding='utf-8',newline='\n')
 # Pin this build to the reviewed upstream follow-up, not a moving branch.
 pin_script = HERE.parent / 'cs2_update_20260925.py'
 s = pin_script.read_text(encoding='utf-8')
 old = 'NEW_SOURCE = "a6f200d09e17b144584cdd80c5429d7189bf2259"'
 new = 'NEW_SOURCE = "c077db5d04b6f8746303179d2ed78f50e61975bf"'
-assert s.count(old) == 1 and new not in s, 'unexpected source pin input'
-pin_script.write_text(s.replace(old,new), encoding='utf-8', newline='\n')
+s=replace_one(s,old,new)
+pin_script.write_text(s, encoding='utf-8', newline='\n')
+final_files={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and '__pycache__' not in p.parts}
 Path('release').mkdir(exist_ok=True)
-Path('release/UNIFIED_PAYLOAD.json').write_text(json.dumps({'source_xz_sha256':XZ_SHA,'source_json_sha256':JSON_SHA,'files':manifest,'upstream':'c077db5d04b6f8746303179d2ed78f50e61975bf','route':'source_rebuild_NOT_Attackware_binary_merge','game_runtime_tested':False},ensure_ascii=False,indent=2),encoding='utf-8')
-print('Verified and expanded',len(files),'source files')
+Path('release/UNIFIED_PAYLOAD.json').write_text(json.dumps({'source_xz_sha256':XZ_SHA,'source_json_sha256':JSON_SHA,'payload_files':manifest,'final_files':final_files,'upstream':'c077db5d04b6f8746303179d2ed78f50e61975bf','route':'source_rebuild_NOT_Attackware_binary_merge','game_runtime_tested':False},ensure_ascii=False,indent=2),encoding='utf-8')
+print('Verified and expanded',len(files),'source files plus reviewed follow-up')
