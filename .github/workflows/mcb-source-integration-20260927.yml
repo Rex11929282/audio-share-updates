@@ -1,0 +1,66 @@
+name: MCB Native Source Integration
+on:
+  push:
+    branches: [mcb-source-integration-20260927]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: mcb-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify and extract own source patch
+        run: python velocity-build/mcb-native-ci.py unpack
+      - name: Reconstruct pinned native source and exact runtimes
+        run: |
+          python velocity-build/cs2_update_20260925.py test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($s in @('Prepare report','Locate Visual Studio and vcpkg','Fetch pinned MCB source')) {
+            python velocity-build/cs2_update_20260925.py run-step $s
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (Test-Path $env:GITHUB_ENV) {
+              Get-Content $env:GITHUB_ENV | ForEach-Object { if ($_ -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1],$matches[2],'Process') } }
+            }
+          }
+          python velocity-build/cs2_update_20260925.py prepare
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($s in @('Fetch exact LuaJIT revision','Build exact LuaJIT x64 with MSVC','Validate LuaJIT version, FFI and bytecode','Validate Nix LuaJIT cdata value bootstrap','Validate Nix render Lua bootstrap','Compile and run independent DLL loader smoke','Apply MCB and Nix runtime patch chain','Validate responsive UI input mapping','Validate CFG preset and shot evidence integration','Pin built LuaJIT hash into runtime manifest','Validate dual runtime source integration')) {
+            python velocity-build/cs2_update_20260925.py run-step $s
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          python velocity-build/cs2_update_20260925.py audit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Integrate real native pages input ownership movement and batch safety
+        run: |
+          python mcb-native-patch/integrate.py mcb-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile and run native contract regressions on Windows
+        run: python velocity-build/mcb-native-ci.py tests
+      - name: Rebuild full native Windows x64 DLL
+        run: python velocity-build/cs2_update_20260925.py run-step 'Build MCB Ship x64'
+      - name: Package actual new binary and provenance
+        run: python velocity-build/mcb-native-ci.py package
+      - name: Preserve patch and build evidence
+        if: always()
+        run: |
+          New-Item -ItemType Directory -Force release/build-inputs | Out-Null
+          Copy-Item velocity-build/mcb-native-ci.py release/build-inputs/
+          Copy-Item .github/workflows/mcb-source-integration-20260927.yml release/build-inputs/
+          if (Test-Path mcb-src/cs2/MCB-CS2/MCB_INTEGRATION_MANIFEST.json) { Copy-Item mcb-src/cs2/MCB-CS2/MCB_INTEGRATION_MANIFEST.json release/ }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MCB-Native-Integration-${{ github.run_id }}
+          path: release
+          if-no-files-found: error
+          retention-days: 30
