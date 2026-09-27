@@ -1,0 +1,1 @@
+MCB UI rework: combat page merge, neutral glass, titlebar drag, Steam avatar, crisp click ownership.
