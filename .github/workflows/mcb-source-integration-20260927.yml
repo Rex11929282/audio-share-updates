@@ -5,6 +5,8 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
 concurrency:
   group: mcb-native-${{ github.ref }}
   cancel-in-progress: true
@@ -44,8 +46,23 @@ jobs:
         run: |
           python mcb-native-patch/integrate.py mcb-src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/mcb-native-postfix.py mcb-src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile and run native contract regressions on Windows
-        run: python velocity-build/mcb-native-ci.py tests
+        run: |
+          python velocity-build/mcb-native-ci.py tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @(
+            '@echo off',
+            ('call "' + $env:VSROOT + '\VC\Auxiliary\Build\vcvars64.bat"'),
+            'if errorlevel 1 exit /b %errorlevel%',
+            'cl /nologo /EHsc /std:c++20 /utf-8 mcb-native-patch\test_presets.cpp /Fe:release\test_presets.exe',
+            'if errorlevel 1 exit /b %errorlevel%',
+            'release\test_presets.exe',
+            'exit /b %errorlevel%'
+          ) | Set-Content release/preset_test.cmd -Encoding utf8
+          cmd /d /c release/preset_test.cmd 2>&1 | Tee-Object release/NATIVE_PRESET_TEST.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Rebuild full native Windows x64 DLL
         run: python velocity-build/cs2_update_20260925.py run-step 'Build MCB Ship x64'
       - name: Package actual new binary and provenance
@@ -55,6 +72,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force release/build-inputs | Out-Null
           Copy-Item velocity-build/mcb-native-ci.py release/build-inputs/
+          Copy-Item velocity-build/mcb-native-postfix.py release/build-inputs/
           Copy-Item .github/workflows/mcb-source-integration-20260927.yml release/build-inputs/
           if (Test-Path mcb-src/cs2/MCB-CS2/MCB_INTEGRATION_MANIFEST.json) { Copy-Item mcb-src/cs2/MCB-CS2/MCB_INTEGRATION_MANIFEST.json release/ }
       - uses: actions/upload-artifact@v4
