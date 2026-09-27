@@ -74,7 +74,6 @@ def apply(root):
             return;
         }''')
     change('project/core/hooks/impl/cheat.cpp',hooks)
-    # Existing migration already uses the 8 MiB limit; enforce it at ordinary loads too.
     def storage(s):
         a='''DWORD size{};
 			if ( RegQueryValueExW( hkey, name.data( ), nullptr, nullptr, nullptr, &size ) != ERROR_SUCCESS || size == 0 )'''
@@ -84,6 +83,55 @@ def apply(root):
         s=once(s,'RegQueryValueExW( hkey, name.data( ), nullptr, nullptr, buf.data( ), &size ) != ERROR_SUCCESS','RegQueryValueExW(hkey,name.data(),nullptr,&value_type,buf.data(),&size)!=ERROR_SUCCESS || value_type!=REG_BINARY || size!=buf.size()')
         return s
     change('project/external/config.hpp',storage)
+    def xui_finish(s):
+        old='const auto drag_zone = rect{ abs.x + tokens::sidebar_w + 238.0f, abs.y, std::max( 0.0f, abs.w - tokens::sidebar_w - 458.0f ), std::min( 66.0f, abs.h ) };'
+        s=once(s,old,'const auto drag_zone = rect{ abs.x + tokens::sidebar_w, abs.y, std::max( 0.0f, abs.w - tokens::sidebar_w ), std::min( 14.0f, abs.h ) };')
+        return function(s,'const char* vk_name( int key )',r'''const char* vk_name( int key )
+    {
+        if(key==0)return "未綁定";
+        thread_local char text[48]{};
+        if(key>=0x41 && key<=0x5A){std::snprintf(text,sizeof(text),"字母鍵%02d",key-0x40);return text;}
+        if(key>=0x30 && key<=0x39){std::snprintf(text,sizeof(text),"數字鍵%d",key-0x30);return text;}
+        if(key>=VK_F1 && key<=VK_F24){std::snprintf(text,sizeof(text),"功能鍵%d",key-VK_F1+1);return text;}
+        switch(key){
+        case VK_LBUTTON:return "左鍵";case VK_RBUTTON:return "右鍵";case VK_MBUTTON:return "中鍵";
+        case VK_XBUTTON1:return "側鍵一";case VK_XBUTTON2:return "側鍵二";
+        case VK_SHIFT:case VK_LSHIFT:case VK_RSHIFT:return "上檔鍵";
+        case VK_CONTROL:case VK_LCONTROL:case VK_RCONTROL:return "控制鍵";
+        case VK_MENU:case VK_LMENU:case VK_RMENU:return "替代鍵";
+        case VK_SPACE:return "空白鍵";case VK_RETURN:return "確認鍵";case VK_ESCAPE:return "退出鍵";
+        case VK_TAB:return "定位鍵";case VK_CAPITAL:return "大寫鎖定";case VK_INSERT:return "插入鍵";
+        case VK_DELETE:return "刪除鍵";case VK_HOME:return "起始鍵";case VK_END:return "結束鍵";
+        case VK_PRIOR:return "上一頁";case VK_NEXT:return "下一頁";
+        case VK_LEFT:return "向左鍵";case VK_RIGHT:return "向右鍵";case VK_UP:return "向上鍵";case VK_DOWN:return "向下鍵";
+        case VK_BACK:return "退格鍵";case VK_PAUSE:return "暫停鍵";case VK_SNAPSHOT:return "截圖鍵";
+        default:std::snprintf(text,sizeof(text),"按鍵%d",key);return text;
+        }
+    }''')
+    change('project/external/xdraw/xui/xui.cpp',xui_finish)
+    def shell_finish(s):
+        s=once(s,'"UI ONLY · LOCAL"','"來源整合・本機"')
+        return once(s,'"M", xdraw::color{ 168, 237, 255, 255 }','"我", xdraw::color{ 168, 237, 255, 255 }')
+    change('project/core/rendering/impl/menu/menu.core.cpp',shell_finish)
+    def translate_finish(s):
+        return once(s,'#undef EXTRA','            EXTRA("clear bind","清除綁定");\n            EXTRA("unknown","未知");\n#undef EXTRA')
+    change('project/core/localization/zh_tw.hpp',translate_finish)
+    fixture=Path(__file__).parent/'tests/native_ui.cpp'
+    t=fixture.read_text(encoding='utf-8')
+    t=once(t,'  xui::layout::set_cursor(215,100);','''  if(shape==4){
+   xui::layout::set_cursor(470,18);out.first=xui::button("工具列功能##toolbar_test",100,28);out.rect=xui::layout::current_window()->last_item;
+  } else {
+  xui::layout::set_cursor(215,100);''')
+    t=once(t,'  xui::end_window();xui::end();xdraw::end_frame();return out;','  }\n  xui::end_window();xui::end();xdraw::end_frame();return out;')
+    t=once(t,'  h.resize(1440,1080,1440,1080);h.frame(3);','''  h.resize(1440,1080,1440,1080);
+  auto top=h.frame(4);const auto tx=top.rect.x+30,ty=top.rect.y+10;
+  h.pointer(tx,ty,WM_LBUTTONDOWN);h.frame(4);check(xui::ctx().active_window==xui::null_id,"toolbar press does not start window drag");
+  h.pointer(tx,ty,WM_LBUTTONUP);check(h.frame(4).first,"toolbar button releases independently of window drag");
+  for(int keycode=0;keycode<256;++keycode){const std::string name=xui::vk_name(keycode);check(!name.empty()&&std::none_of(name.begin(),name.end(),[](unsigned char c){return (c>='A'&&c<='Z')||(c>='a'&&c<='z');}),"Chinese virtual-key label");}
+  check(localization::tr("clear bind")=="清除綁定","keybind action translation");
+  h.resize(1440,1080,1440,1080);h.frame(3);''')
+    fixture.write_text(t,encoding='utf-8',newline='\n')
+    changed.append({'test_harness':str(fixture.name),'after':hashlib.sha256(t.encode()).hexdigest()})
     out=root/'MCB_UNIFIED_FINALIZE.json';out.write_text(json.dumps({'changes':changed,'in_game_runtime':'NOT_TESTED'},ensure_ascii=False,indent=2),encoding='utf-8')
     return changed
 
