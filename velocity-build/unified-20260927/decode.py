@@ -26,20 +26,19 @@ for name, text in files.items():
 def replace_one(text,old,new):
     assert text.count(old)==1, 'unexpected overlay anchor: '+old[:80]
     return text.replace(old,new,1)
-# Avoid passing a quoted compound command through list2cmdline to cmd.exe.
 p=out/'run_tests.py';s=p.read_text(encoding='utf-8')
 a="        run(['cmd','/d','/s','/c',command],out/(name+'.log'),cwd=out)"
 b='''        launcher=out/(name+'_build.cmd')
         launcher.write_text('@echo off\\n'+command.replace(' && ','\\nif errorlevel 1 exit /b %errorlevel%\\n')+'\\nexit /b %errorlevel%\\n',encoding='utf-8',newline='\\r\\n')
         run(['cmd','/d','/c',str(launcher)],out/(name+'.log'),cwd=out)'''
 s=replace_one(s,a,b).replace("'/std:c++20'","'/std:c++latest'")
+s=replace_one(s,"includes=[root/'project',root/'project/utilities/threadpool',*extra_includes]","includes=[root/'project',root/'project/external/phnt',root/'project/utilities/threadpool',*extra_includes]")
+s=replace_one(s,"        args=['cl','/nologo'","        compiler=vs/'VC/Tools/Llvm/x64/bin/clang-cl.exe'\n        if not compiler.exists():raise ValueError('production Clang toolchain unavailable')\n        args=[str(compiler),'/D_UNICODE','/DUNICODE','/DMCB_STABLE','/arch:AVX2','/nologo'")
 compile(s,str(p),'exec');p.write_text(s,encoding='utf-8',newline='\n')
-# Apply this separately reviewable source follow-up after the immutable payload.
 p=out/'finalize_source.py';p.write_text((HERE/'finalize_source.py').read_text(encoding='utf-8'),encoding='utf-8',newline='\n')
 p=out/'mcb_unify.py';s=p.read_text(encoding='utf-8')
 s=replace_one(s,"    report={'route':","    from finalize_source import apply as finalize\n    finalize_changes=finalize(root)\n    report={'finalize_changes':finalize_changes,'route':")
 compile(s,str(p),'exec');p.write_text(s,encoding='utf-8',newline='\n')
-# Pin this build to the reviewed upstream follow-up, not a moving branch.
 pin_script = HERE.parent / 'cs2_update_20260925.py'
 s = pin_script.read_text(encoding='utf-8')
 old = 'NEW_SOURCE = "a6f200d09e17b144584cdd80c5429d7189bf2259"'
