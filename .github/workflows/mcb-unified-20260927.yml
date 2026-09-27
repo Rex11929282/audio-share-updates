@@ -75,17 +75,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/ui_bugfix_polish_20260927.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_BUGFIX_POLISH.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python velocity-build/ui_translation_fix_20260927.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_TRANSLATION_FIX.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/ui_bugfix_compile_fix_20260927.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_BUGFIX_COMPILE_FIX.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/formal_ui_rework_20260928.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/FORMAL_UI_REWORK.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UNIFIED_CHANGES.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_REWORK.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_WEAPON_UI_POLISH.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_WEAPON_UI_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_BUGFIX_POLISH.json release/
-          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_TRANSLATION_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_BUGFIX_COMPILE_FIX.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_FORMAL_UI_REWORK.json release/
       - name: Compile and run production helper and translation tests
         run: python velocity-build/unified/run_tests.py mcb-src/cs2/MCB-CS2
       - name: Compile complete main DLL
@@ -115,8 +115,9 @@ jobs:
           Copy-Item velocity-build/weapon_ui_polish_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/weapon_ui_compile_fix_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui_bugfix_polish_20260927.py release/unified-build-inputs/
-          Copy-Item velocity-build/ui_translation_fix_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui_bugfix_compile_fix_20260927.py release/unified-build-inputs/
+          Copy-Item velocity-build/formal_ui_rework_20260928.py release/unified-build-inputs/
+          Copy-Item velocity-build/formal-ui-20260928 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
