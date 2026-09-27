@@ -71,9 +71,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/weapon_ui_polish_20260927.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/WEAPON_UI_POLISH.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/weapon_ui_compile_fix_20260927.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/WEAPON_UI_COMPILE_FIX.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UNIFIED_CHANGES.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_REWORK.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_WEAPON_UI_POLISH.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_WEAPON_UI_COMPILE_FIX.json release/
       - name: Compile and run production helper and translation tests
         run: python velocity-build/unified/run_tests.py mcb-src/cs2/MCB-CS2
       - name: Compile complete main DLL
@@ -101,6 +104,7 @@ jobs:
           if (Test-Path velocity-build/unified) { Copy-Item velocity-build/unified release/unified-build-inputs/ -Recurse }
           Copy-Item velocity-build/ui_rework_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/weapon_ui_polish_20260927.py release/unified-build-inputs/
+          Copy-Item velocity-build/weapon_ui_compile_fix_20260927.py release/unified-build-inputs/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
