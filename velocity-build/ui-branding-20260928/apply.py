@@ -208,26 +208,30 @@ write(core_rel, core)
 
 widgets_rel = "project/core/rendering/impl/widgets.cpp"
 widgets = read(widgets_rel)
-logo_start = widgets.find("\t\t// ── logo")
-if logo_start < 0:
-    raise RuntimeError("watermark logo section missing")
-logo_end = widgets.find("\t\tconst auto inner_h", logo_start)
-if logo_end < 0:
-    raise RuntimeError("watermark logo end missing")
-logo_block = f'''\t\t// ── fixed tiger icon ───────────────────────────────────────────────
+if "fixed tiger icon" not in widgets:
+    logo_start = widgets.find("\t\t// ── logo")
+    if logo_start < 0:
+        raise RuntimeError("watermark logo section missing")
+    logo_end = widgets.find("\t\tconst auto inner_h", logo_start)
+    if logo_end < 0:
+        raise RuntimeError("watermark logo end missing")
+    logo_block = f'''\t\t// ── fixed tiger icon ───────────────────────────────────────────────
 \t\tconst auto logo_scale = logo_icon_size / 24.0f;
 \t\tstatic auto logo_w = 0, logo_h = 0;
 \t\tstatic const auto logo = xdraw::load_svg( R"({TIGER_SVG})", logo_scale, &logo_w, &logo_h );
 
 '''
-widgets = widgets[:logo_start] + logo_block + widgets[logo_end:]
+    widgets = widgets[:logo_start] + logo_block + widgets[logo_end:]
+
 widgets = re.sub(r'\n\t\tconst char\* brand_symbol=.*?;\n\t\tconst auto \[name_tw, name_th\] = xdraw::measure_text\( brand_symbol \);', '', widgets, count=1)
-widgets = replace_once(
-    widgets,
-    "\t\tconst auto logo_pill_w = logo_icon_pad + logo_draw_w + logo_icon_pad + name_tw + text_pad_x;",
-    "\t\tconst auto logo_pill_w = logo_icon_pad + logo_draw_w + logo_icon_pad;",
-    "watermark pill width",
-)
+
+old_logo_width = "\t\tconst auto logo_pill_w = logo_icon_pad + logo_draw_w + logo_icon_pad + name_tw + text_pad_x;"
+new_logo_width = "\t\tconst auto logo_pill_w = logo_icon_pad + logo_draw_w + logo_icon_pad;"
+if old_logo_width in widgets:
+    widgets = widgets.replace(old_logo_width, new_logo_width, 1)
+elif new_logo_width not in widgets:
+    raise RuntimeError("watermark pill width anchor missing")
+
 widgets = re.sub(
     r'\n\t\tdraw_list\.text\( cx \+ logo_icon_pad \+ logo_draw_w \+ logo_icon_pad,\n\t\t\ty \+ \( h - name_th \) \* 0\.5f \+ text_nudge, brand_symbol, s\.checkbox_mark_icon \);',
     '', widgets, count=1
