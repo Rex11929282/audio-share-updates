@@ -36,7 +36,7 @@ subprocess.run(args, check=True)
 # legacy Lua-page aliases to the same Simplified Chinese vocabulary as the
 # rebuilt native menu. This changes the reviewed labels themselves; it does not
 # relax or bypass the translation test.
-alias_path = REPO / "velocity-build/unified/mcb_ui_zh.json"
+alias_path = ROOT.parents[2] / "velocity-build/unified/mcb_ui_zh.json"
 if not alias_path.exists():
     raise RuntimeError("decoded mcb_ui_zh.json is missing")
 aliases = json.loads(alias_path.read_text(encoding="utf-8"))
