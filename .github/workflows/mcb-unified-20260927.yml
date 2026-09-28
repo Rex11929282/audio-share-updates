@@ -83,8 +83,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/ui-only-delivery-20260928/compile_fix.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_ONLY_COMPILE_FIX.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/ui-only-delivery-20260928/bugfix_round2_20260928.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/BUGFIX_ROUND2.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_DELIVERY.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_COMPILE_FIX.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_BUGFIX_ROUND2.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UNIFIED_CHANGES.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_REWORK.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_WEAPON_UI_POLISH.json release/
