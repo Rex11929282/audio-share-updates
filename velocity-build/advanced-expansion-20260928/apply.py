@@ -8,9 +8,9 @@ PREFIX = Path("cs2/MCB-CS2")
 
 parts=[(HERE/f"part{i}.txt").read_text(encoding="ascii").strip() for i in (1,2,3)]
 payload="".join(parts)
-if len(payload)!=8275:
+if len(payload)!=8828:
     raise RuntimeError(f"unexpected payload length: {len(payload)}")
-if hashlib.sha256(payload.encode("ascii")).hexdigest()!="4a8157311130300b1686392f9ff96007547eed67c900db62958ff2a29b09b021":
+if hashlib.sha256(payload.encode("ascii")).hexdigest()!="b0e5afb08d1f962bf84e00b977b5a023e27d2941ef8b884ffa713859ab1e9bbd":
     raise RuntimeError("advanced payload hash mismatch")
 
 patch=zlib.decompress(base64.b64decode(payload))
