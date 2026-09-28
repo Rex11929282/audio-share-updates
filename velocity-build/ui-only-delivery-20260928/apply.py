@@ -44,7 +44,7 @@ required = {
     "six_main_pages": 'static constexpr const char* labels[]{ "戰鬥", "玩家", "庫存", "其他", "腳本", "設定檔" }' in core,
     "profile_center": "個人中心" in core,
     "unnamed_user": "未命名" in core,
-    "scripts_folder_action": "開啟腳本資料夾" in exact,
+    "scripts_folder_action": "開啟腳本資料夾" in config,
     "config_folder_action": "開啟設定資料夾" in config,
     "ui_contract_present": (ROOT / "project/external/xdraw/xui/ui_contract.hpp").is_file(),
 }
