@@ -2,7 +2,7 @@ name: MCB Unified Source and Native Component Validation
 
 on:
   push:
-    branches: [mcb-unified-source-20260927, mcb-ui-only-delivery-20260928]
+    branches: [mcb-unified-source-20260927, mcb-ui-only-delivery-20260928, mcb-ui-branding-20260928]
   workflow_dispatch: {}
 
 permissions:
@@ -87,6 +87,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/ui-only-delivery-20260928/bugfix_round2_compile_fix.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/BUGFIX_ROUND2_COMPILE_FIX.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/ui-branding-20260928/apply.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_BRANDING.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_BRANDING_20260928.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_DELIVERY.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_BUGFIX_ROUND2.json release/
@@ -128,6 +131,7 @@ jobs:
           Copy-Item velocity-build/ui_bugfix_polish_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui_bugfix_compile_fix_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui-only-delivery-20260928 release/unified-build-inputs/ -Recurse
+          Copy-Item velocity-build/ui-branding-20260928 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
