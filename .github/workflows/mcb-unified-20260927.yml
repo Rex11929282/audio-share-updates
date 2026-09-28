@@ -2,7 +2,7 @@ name: MCB Unified Source and Native Component Validation
 
 on:
   push:
-    branches: [mcb-unified-source-20260927, mcb-ui-only-delivery-20260928, mcb-ui-branding-20260928, mcb-major-noncombat-20260928, mcb-all-feature-expansion-20260928, mcb-advanced-expansion-20260928, mcb-gameinfo-stats-expansion-20260928]
+    branches: [mcb-unified-source-20260927, mcb-ui-only-delivery-20260928, mcb-ui-branding-20260928, mcb-major-noncombat-20260928, mcb-all-feature-expansion-20260928, mcb-advanced-expansion-20260928, mcb-gameinfo-stats-expansion-20260928, mcb-status-threat-expansion-20260928]
   workflow_dispatch: {}
 
 permissions:
@@ -107,6 +107,10 @@ jobs:
           python velocity-build/gameinfo-stats-expansion-20260928/apply.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/GAMEINFO_STATS_EXPANSION.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_GAMEINFO_STATS_EXPANSION_20260928.json release/
+          python velocity-build/status-threat-expansion-20260928/apply.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/STATUS_THREAT_EXPANSION.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_STATUS_THREAT_EXPANSION_20260928.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_STATUS_THREAT_EXPANSION.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_DELIVERY.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_BUGFIX_ROUND2.json release/
@@ -153,6 +157,7 @@ jobs:
           Copy-Item velocity-build/all-feature-expansion-20260928 release/unified-build-inputs/ -Recurse
           Copy-Item velocity-build/advanced-expansion-20260928 release/unified-build-inputs/ -Recurse
           Copy-Item velocity-build/gameinfo-stats-expansion-20260928 release/unified-build-inputs/ -Recurse
+          Copy-Item velocity-build/status-threat-expansion-20260928 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
