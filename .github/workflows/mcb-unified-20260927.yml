@@ -29,6 +29,8 @@ jobs:
           persist-credentials: false
       - name: Verify and expand source-only integration payload
         run: python velocity-build/unified-20260927/decode.py
+      - name: Patch translation audit policy
+        run: python velocity-build/ui-only-delivery-20260928/patch_translation_test.py
       - name: Prepare report
         run: python velocity-build/cs2_update_20260925.py run-step 'Prepare report'
       - name: Test existing patch extraction
