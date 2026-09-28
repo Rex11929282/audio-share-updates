@@ -56,6 +56,20 @@ for old_key, new_key in alias_replacements.items():
     aliases[new_key] = new_key
 alias_path.write_text(json.dumps(aliases, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+# Keep the native XUI assertion aligned with the product's Simplified Chinese
+# keybind action label. The test still requires an exact translation.
+native_ui_test = ROOT.parents[2] / "velocity-build/unified/tests/native_ui.cpp"
+if not native_ui_test.exists():
+    raise RuntimeError("native_ui.cpp is missing")
+native_test_text = native_ui_test.read_text(encoding="utf-8-sig")
+old_assert = 'localization::tr("clear bind")=="清除綁定"'
+new_assert = 'localization::tr("clear bind")=="清除绑定"'
+if old_assert in native_test_text:
+    native_test_text = native_test_text.replace(old_assert, new_assert, 1)
+elif new_assert not in native_test_text:
+    raise RuntimeError("native keybind action assertion anchor missing")
+native_ui_test.write_text(native_test_text, encoding="utf-8", newline="\n")
+
 # Compile fix for the global hotkey overview. menu.exact.cpp does not share the
 # private detail namespace from other menu translation units.
 exact_path = ROOT / "project/core/rendering/impl/menu/menu.exact.cpp"
