@@ -13,7 +13,7 @@ if len(payload)!=8275:
 if hashlib.sha256(payload.encode("ascii")).hexdigest()!="4a8157311130300b1686392f9ff96007547eed67c900db62958ff2a29b09b021":
     raise RuntimeError("advanced payload hash mismatch")
 
-patch=zlib.decompress(base64.b85decode(payload))
+patch=zlib.decompress(base64.b64decode(payload))
 if len(patch)!=29827:
     raise RuntimeError(f"unexpected patch length: {len(patch)}")
 if hashlib.sha256(patch).hexdigest()!="159b697a5f78c5fca0931bb51e1fcc9932e19c474dc15a0e281424d77366a93d":
