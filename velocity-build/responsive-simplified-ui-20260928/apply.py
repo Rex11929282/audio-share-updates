@@ -9,15 +9,15 @@ PREFIX = Path("cs2/MCB-CS2")
 names = ["part1.txt","part2.txt","part3.txt","part4_1.txt","part4_2.txt","part4_3.txt","part4_4.txt"]
 payload = "".join((HERE / name).read_text(encoding="ascii").strip() for name in names)
 
-if len(payload) != 70588:
+if len(payload) != 70736:
     raise RuntimeError(f"unexpected responsive payload length: {len(payload)}")
-if hashlib.sha256(payload.encode("ascii")).hexdigest() != "0ca45d1d79d31b1b17cfa16949a4af69ccef532646977f2cf8bf8f723957ac23":
+if hashlib.sha256(payload.encode("ascii")).hexdigest() != "9be01b18bc19c9942c9a5cc68c221bec2f06abd4301db2748c2ddf5761aeacc2":
     raise RuntimeError("responsive payload hash mismatch")
 
 patch = zlib.decompress(base64.b64decode(payload))
-if len(patch) != 247494:
+if len(patch) != 247912:
     raise RuntimeError(f"unexpected responsive patch length: {len(patch)}")
-if hashlib.sha256(patch).hexdigest() != "8645af2a09475f1cf1a327d77eeaca3f0b81c48c9988944301fbec50e223252b":
+if hashlib.sha256(patch).hexdigest() != "9abb485c7cb5de7446d0b7f00fda4636baf5d097fbdcf6cd8e72c2101a517b0e":
     raise RuntimeError("responsive patch hash mismatch")
 
 patch_file = ROOT / "MCB_RESPONSIVE_SIMPLIFIED_UI.patch"
