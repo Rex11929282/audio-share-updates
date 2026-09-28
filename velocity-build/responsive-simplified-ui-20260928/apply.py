@@ -82,6 +82,23 @@ elif new_blob not in exact_text:
     raise RuntimeError("hotkey search blob compile-fix anchor missing")
 exact_path.write_text(exact_text, encoding="utf-8", newline="\n")
 
+# Compile fix for search result labels: localization::tr returns string_view.
+core_path = ROOT / "project/core/rendering/impl/menu/menu.core.cpp"
+core_text = core_path.read_text(encoding="utf-8-sig")
+old_name = '                const std::string display_name = localization::tr( item.name );'
+new_name = '                const std::string display_name{ localization::tr( item.name ) };'
+if old_name in core_text:
+    core_text = core_text.replace(old_name, new_name, 1)
+elif new_name not in core_text:
+    raise RuntimeError("search display_name compile-fix anchor missing")
+old_category = '                const std::string display_category = item.category.empty( ) ? "其他" : localization::tr( item.category );'
+new_category = '                const std::string display_category = item.category.empty( ) ? std::string{ "其他" } : std::string{ localization::tr( item.category ) };'
+if old_category in core_text:
+    core_text = core_text.replace(old_category, new_category, 1)
+elif new_category not in core_text:
+    raise RuntimeError("search display_category compile-fix anchor missing")
+core_path.write_text(core_text, encoding="utf-8", newline="\n")
+
 # Normalize user-visible lower-level strings that live outside the menu .cpp
 # files (keybind names, Lua dialogs/status, preset feedback). This keeps the
 # whole visible product vocabulary in Simplified Chinese, not only the pages.
