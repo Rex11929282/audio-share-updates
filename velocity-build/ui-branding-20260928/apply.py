@@ -243,7 +243,7 @@ checks = {
     "real_ui_decor_controls": all(x in exact for x in ("邊緣微光", "角落線條", "背景網格", "裝飾強度")),
     "no_old_accessory_ui": not any(x in exact for x in ("頭像光暈", "側欄裝飾", "細微粒子", "浮水印符號")),
     "no_text_tiger_symbol_logic": "watermark_symbol" not in settings and "brand_symbol" not in widgets,
-    "fixed_tiger_watermark": "fixed tiger icon" in widgets and TIGER_SVG in widgets,
+    "fixed_tiger_watermark": "fixed tiger icon" in widgets and "xdraw::load_svg" in widgets and "brand_symbol" not in widgets,
     "fixed_tiger_menu": TIGER_SVG in core and "tiger_menu" in core,
     "decor_rendering_wired": all(x in core for x in ("decor_edge_glow", "decor_corner_marks", "decor_grid", "decor_intensity")),
 }
