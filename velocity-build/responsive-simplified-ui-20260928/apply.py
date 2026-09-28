@@ -56,6 +56,67 @@ for old_key, new_key in alias_replacements.items():
     aliases[new_key] = new_key
 alias_path.write_text(json.dumps(aliases, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+# Compile fix for the global hotkey overview. menu.exact.cpp does not share the
+# private detail namespace from other menu translation units.
+exact_path = ROOT / "project/core/rendering/impl/menu/menu.exact.cpp"
+exact_text = exact_path.read_text(encoding="utf-8-sig")
+old_query = '        const auto query = detail::to_lower_copy( this->m_hotkey_filter );'
+new_query = '''        const auto ascii_lower_copy = []( std::string value )
+        {
+            for ( auto& ch : value )
+            {
+                if ( ch >= 'A' && ch <= 'Z' ) ch = static_cast<char>( ch - 'A' + 'a' );
+            }
+            return value;
+        };
+        const auto query = ascii_lower_copy( this->m_hotkey_filter );'''
+if old_query in exact_text:
+    exact_text = exact_text.replace(old_query, new_query, 1)
+elif "const auto query = ascii_lower_copy" not in exact_text:
+    raise RuntimeError("hotkey search query compile-fix anchor missing")
+old_blob = '            auto search_blob = detail::to_lower_copy( name + " " + category );'
+new_blob = '            auto search_blob = ascii_lower_copy( name + " " + category );'
+if old_blob in exact_text:
+    exact_text = exact_text.replace(old_blob, new_blob, 1)
+elif new_blob not in exact_text:
+    raise RuntimeError("hotkey search blob compile-fix anchor missing")
+exact_path.write_text(exact_text, encoding="utf-8", newline="\n")
+
+# Normalize user-visible lower-level strings that live outside the menu .cpp
+# files (keybind names, Lua dialogs/status, preset feedback). This keeps the
+# whole visible product vocabulary in Simplified Chinese, not only the pages.
+traditional_to_simplified = str.maketrans({
+    "戰":"战","鬥":"斗","庫":"库","腳":"脚","設":"设","檔":"档","載":"载",
+    "儲":"储","刪":"删","顯":"显","關":"关","選":"选","擇":"择","類":"类",
+    "數":"数","傷":"伤","準":"准","鏡":"镜","視":"视","覺":"觉","環":"环",
+    "風":"风","濕":"湿","潤":"润","圓":"圆","邊":"边","動":"动","裝":"装",
+    "飾":"饰","強":"强","稱":"称","當":"当","與":"与","擊":"击","後":"后",
+    "餘":"余","體":"体","隱":"隐","尋":"寻","預":"预","點":"点","內":"内",
+    "資":"资","訊":"讯","彈":"弹","藥":"药","槍":"枪","敵":"敌","隊":"队",
+    "讀":"读","寫":"写","會":"会","應":"应","項":"项","細":"细","網":"网",
+    "廣":"广","顏":"颜","總":"总","覽":"览","調":"调","啟":"启","閉":"闭",
+    "遠":"远","層":"层","塗":"涂","標":"标","籤":"签","計":"计","時":"时",
+    "個":"个","員":"员","觸":"触","發":"发","匯":"汇","複":"复","製":"制",
+    "夾":"夹","這":"这","裡":"里","開":"开","無":"无","進":"进","對":"对",
+    "為":"为","還":"还","從":"从","將":"将","僅":"仅","暫":"暂","過":"过",
+    "輕":"轻","敗":"败","復":"复","驗":"验","證":"证","參":"参","鍵":"键",
+    "處":"处","萬":"万","斷":"断","線":"线","聲":"声","屍":"尸","蹤":"踪",
+    "跡":"迹","間":"间","幀":"帧","掃":"扫","錄":"录","歸":"归","優":"优",
+    "檢":"检","測":"测","擴":"扩","縮":"缩","續":"续","頓":"顿","階":"阶",
+    "態":"态","結":"结","鎖":"锁","側":"侧","確":"确","暢":"畅","暫":"暂",
+    "許":"许","滿":"满","僅":"仅","達":"达","過":"过","與":"与","據":"据",
+})
+for rel in (
+    "project/external/xdraw/xui/xui.cpp",
+    "project/core/scripting/lua_manager.cpp",
+    "project/core/scripting/nix_runtime.cpp",
+    "project/core/mcb/mcb_presets.cpp",
+):
+    p = ROOT / rel
+    txt = p.read_text(encoding="utf-8-sig")
+    txt = txt.translate(traditional_to_simplified)
+    p.write_text(txt, encoding="utf-8", newline="\n")
+
 def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8-sig")
 
