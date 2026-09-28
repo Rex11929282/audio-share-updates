@@ -47,14 +47,22 @@ checks = {
     "drag_visual_fix": "Keep the same blur while moving/resizing" in xui,
     "decorations": all(x in settings for x in ("decor_top_line","decor_dot_matrix","decor_vignette","decor_sidebar_glow","decor_section_lines")),
     "layout_offsets": all(x in settings for x in ("bomb_offset_x","spectator_offset_x","stats_offset_x")),
+    "hotkey_search_compile_fix": "const auto query = ascii_lower_copy" in exact and "detail::to_lower_copy" not in exact,
 }
 bad = [k for k,v in checks.items() if not v]
 if bad:
     raise RuntimeError("postcondition failed: " + ", ".join(bad))
 
 files = list((ROOT / "project/core/rendering/impl/menu").glob("*.cpp"))
-files += [ROOT / "project/core/rendering/impl/widgets.cpp", ROOT / "project/core/localization/zh_tw.hpp"]
-traditional = set("戰鬥庫腳設檔載儲刪顯開關選擇類數傷準鏡視覺環風濕潤圓邊動畫裝飾強稱當與擊後餘體隱尋預點內資訊彈藥槍敵隊讀寫會應項細網廣顏總覽調啟閉遠層塗標籤計時")
+files += [
+    ROOT / "project/core/rendering/impl/widgets.cpp",
+    ROOT / "project/core/localization/zh_tw.hpp",
+    ROOT / "project/external/xdraw/xui/xui.cpp",
+    ROOT / "project/core/scripting/lua_manager.cpp",
+    ROOT / "project/core/scripting/nix_runtime.cpp",
+    ROOT / "project/core/mcb/mcb_presets.cpp",
+]
+traditional = set("戰鬥庫腳設檔載儲刪顯關選擇類數傷準鏡視覺環風濕潤圓邊動畫裝飾強稱當與擊後餘體隱尋預點內資訊彈藥槍敵隊讀寫會應項細網廣顏總覽調啟閉遠層塗標籤計時個員觸發匯複製夾這裡開無進對為還從將僅暫過輕敗復驗證參鍵處萬斷線聲屍蹤跡間幀掃錄歸優檢測擴縮續頓階態結鎖側確")
 pat = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 hits = []
 for path in files:
