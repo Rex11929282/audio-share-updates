@@ -97,6 +97,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_ALL_FEATURE_EXPANSION_20260928.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_ALL_FEATURE_EXPANSION.patch release/
+          python velocity-build/all-feature-expansion-20260928/post_fix.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/ALL_FEATURE_EXPANSION_FIX.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_ALL_FEATURE_EXPANSION_FIX_20260928.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_DELIVERY.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_BUGFIX_ROUND2.json release/
