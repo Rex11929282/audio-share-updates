@@ -25,7 +25,8 @@ skins.write_text(ss,encoding="utf-8",newline="\n")
 
 checks={
     "no_xyz_labels": all(x not in s for x in ("方向 X##env_lrx","方向 Y##env_lry","方向 Z##env_lrz")),
-    "chinese_light_rotation": all(x in s for x in ("光源俯仰##env_lrx","光源偏航##env_lry","光源翻滾##env_lrz")),\n    "inventory_sort_scope": "detail::skin_map( ).contains" in ss,
+    "chinese_light_rotation": all(x in s for x in ("光源俯仰##env_lrx","光源偏航##env_lry","光源翻滾##env_lrz")),
+    "inventory_sort_scope": "detail::skin_map( ).contains" in ss,
 }
 if not all(checks.values()):
     raise RuntimeError("feature expansion localization fix failed")
