@@ -357,7 +357,7 @@ s=s[:start]+new_other+s[i+1:]
 s=s.replace('if ( xui::begin_child( "##misc_removals", col_w ) )\n\t\t\t{\n\t\t\t\txui::checkbox( "remove crosshair", rem.crosshair );','if ( xui::begin_child( "##misc_removals", col_w ) )\n\t\t\t{\n\t\t\t\txui::text( "畫面移除", tokens::col_text );\n\t\t\t\txui::layout::separator( );\n\t\t\t\txui::checkbox( "remove crosshair", rem.crosshair );')
 s=s.replace('if ( xui::begin_child( "##misc_camera", col_w ) )\n\t\t\t{\n\t\t\t\txui::checkbox( "custom fov", cam.change_fov );','if ( xui::begin_child( "##misc_camera", col_w ) )\n\t\t\t{\n\t\t\t\txui::text( "鏡頭", tokens::col_text );\n\t\t\t\txui::layout::separator( );\n\t\t\t\txui::checkbox( "custom fov", cam.change_fov );')
 s=s.replace('if ( xui::begin_child( "##misc_viewmodel", col_w ) )\n\t\t\t{\n\t\t\t\txui::checkbox( "viewmodel adjust", vm.enabled );','if ( xui::begin_child( "##misc_viewmodel", col_w ) )\n\t\t\t{\n\t\t\t\txui::text( "第一人稱模型", tokens::col_text );\n\t\t\t\txui::layout::separator( );\n\t\t\t\txui::checkbox( "viewmodel adjust", vm.enabled );')
-s=s.replace('if ( xui::begin_child( "##misc_hud", col_w ) )\n\t\t\t{\n\t\t\t\txui::checkbox( "crosshair overlay", hud.m_crosshair.enabled );','if ( xui::begin_child( "##misc_hud", col_w ) )\n\t\t\t{\n\t\t\t\txui::text( "HUD 疊加", tokens::col_text );\n\t\t\t\txui::layout::separator( );\n\t\t\t\txui::checkbox( "crosshair overlay", hud.m_crosshair.enabled );')
+s=s.replace('if ( xui::begin_child( "##misc_hud", col_w ) )\n\t\t\t{\n\t\t\t\txui::checkbox( "crosshair overlay", hud.m_crosshair.enabled );','if ( xui::begin_child( "##misc_hud", col_w ) )\n\t\t\t{\n\t\t\t\txui::text( "畫面疊加", tokens::col_text );\n\t\t\t\txui::layout::separator( );\n\t\t\t\txui::checkbox( "crosshair overlay", hud.m_crosshair.enabled );')
 s=s.replace('if ( xui::begin_child( "##misc_hud_hat", col_w ) )\n\t\t\t{\n\t\t\t\txui::checkbox( "hat", hud.m_hat.enabled );','if ( xui::begin_child( "##misc_hud_hat", col_w ) )\n\t\t\t{\n\t\t\t\txui::text( "模型裝飾", tokens::col_text );\n\t\t\t\txui::layout::separator( );\n\t\t\t\txui::checkbox( "hat", hud.m_hat.enabled );')
 new_env=r'''    void menu::draw_environment_page( float group_w ) const
     {
@@ -421,7 +421,7 @@ write(rel,s)
 
 rel='project/core/rendering/impl/menu/menu.config.cpp'; s=read(rel)
 s=s.replace('xui::text("腳本",tokens::col_text);const auto statuses=scripting::g_lua.script_statuses();','xui::text("腳本管理",tokens::col_text);xui::text("載入狀態與錯誤集中顯示",tokens::col_text_dim);xui::layout::separator();const auto statuses=scripting::g_lua.script_statuses();',1)
-s=s.replace('if(!xui::begin_child("##cfg_panel",panel_w,panel_h,false))return;\n        xui::text_input','if(!xui::begin_child("##cfg_panel",panel_w,panel_h,false))return;\n        xui::text("設定檔",tokens::col_text);xui::text("檔案來源：%LOCALAPPDATA%\\\\MCB\\\\configs",tokens::col_text_dim);xui::layout::separator();\n        xui::text_input')
+s=s.replace('if(!xui::begin_child("##cfg_panel",panel_w,panel_h,false))return;\n        xui::text_input','if(!xui::begin_child("##cfg_panel",panel_w,panel_h,false))return;\n        xui::text("設定檔",tokens::col_text);xui::text("設定檔來源：本機 MCB 資料夾",tokens::col_text_dim);xui::layout::separator();\n        xui::text_input')
 write(rel,s)
 
 checks={
