@@ -52,17 +52,17 @@ checks = {
     "rage_expanded": "自動開鏡##rage_autoscope" in rage and "最大回溯##rage_bt" in rage and "穩健##rage_p1" in rage,
     "legit_presets": "自然##legit_p1" in legit and "快速##legit_p3" in legit,
     "aa_advanced": all(k in settings for k in ("direction_indicator_radius", "direction_indicator_sweep", "direction_indicator_thickness", "direction_indicator_height")) and "direction_indicator_radius" in combat_misc,
-    "player_presets": "完整##esp_preset" in player and "單層##chams_preset" in player,
+    "player_presets": "完整##esp_full" in player and "單層##cham_one" in player,
     "feedback_layout": "log_position" in settings and "資訊列位置##feedback_pos" in misc and "cfg.log_width" in impacts,
     "hit_marker_geometry": "hit_marker_size" in settings and "cfg.hit_marker_arm" in impacts,
-    "environment_expanded": all(k in misc for k in ("環境光照", "光源 X", "色差後處理", "速度除錯")),
+    "environment_expanded": all(k in misc for k in ("環境補光", "方向 X##env_lrx", "色差後處理", "速度除錯")),
     "crosshair_expanded": "center_dot" in settings and "中心點##xhair" in misc and "cfg.gap.value" in hud,
     "inventory_expanded": "struct inventory_ui" in settings and "排序##inventory_sort" in skins and "compact_cards" in skins,
     "watermark_expanded": "show_logo" in settings and "水印位置##profile_wm_pos" in exact and "wm.placement.value" in widgets,
     "identity_expanded": "clantag_frame" in settings and "外框##identity_tag_frame" in misc,
     "script_filter": "##script_filter" in config,
     "config_utilities": "重設目前設定" in config and "備份選取設定" in config,
-    "world_presets": "重點##item_preset" in world,
+    "world_presets": "重點##item_key" in world,
 }
 bad = [k for k, v in checks.items() if not v]
 if bad:
