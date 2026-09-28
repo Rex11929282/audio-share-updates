@@ -134,7 +134,8 @@ jobs:
           Copy-Item velocity-build/ui_bugfix_polish_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui_bugfix_compile_fix_20260927.py release/unified-build-inputs/
           Copy-Item velocity-build/ui-only-delivery-20260928 release/unified-build-inputs/ -Recurse
-          Copy-Item velocity-build/ui-branding-20260928 release/unified-build-inputs/ -Recurse\n          Copy-Item velocity-build/major-noncombat-20260928 release/unified-build-inputs/ -Recurse
+          Copy-Item velocity-build/ui-branding-20260928 release/unified-build-inputs/ -Recurse
+          Copy-Item velocity-build/major-noncombat-20260928 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
