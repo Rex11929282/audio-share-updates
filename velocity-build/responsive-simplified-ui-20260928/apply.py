@@ -53,9 +53,9 @@ checks = {
     "responsive_geometry": "980.0f" in core and "620.0f" in core and "m_user_layout_initialized" in core,
     "drag_alpha_fix": "Keep the same blur while moving/resizing" in xui,
     "top_right_tools": all(x in core for x in ('"⌕"','"▦"','"⌨"','"⚙"')),
-    "collapsed_controls": '"›"' in exact and '"▾"' in exact,
+    "collapsed_controls": 'std::string label = std::string( open ? "▾  " : "›  " )' in exact,
     "layout_free_position": all(x in exact for x in ("水平位置","垂直位置","界面大小")),
-    "inventory_compact_toolbar": "m_inventory_categories_open" in skins and "m_inventory_tools_open" in skins,
+    "inventory_compact_toolbar": "显示选项  ▾##inventory_tools" in skins and "##inventory_tools_panel" in skins and "m_inventory_categories_open" in exact,
 }
 bad = [k for k,v in checks.items() if not v]
 if bad:
