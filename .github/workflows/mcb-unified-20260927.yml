@@ -2,7 +2,7 @@ name: MCB Unified Source and Native Component Validation
 
 on:
   push:
-    branches: [mcb-unified-source-20260927, mcb-ui-only-delivery-20260928, mcb-ui-branding-20260928, mcb-major-noncombat-20260928, mcb-all-feature-expansion-20260928, mcb-advanced-expansion-20260928, mcb-gameinfo-stats-expansion-20260928, mcb-status-threat-expansion-20260928, mcb-responsive-simplified-ui-20260928, mcb-ui-audit-bugfix-20260929]
+    branches: [mcb-unified-source-20260927, mcb-ui-only-delivery-20260928, mcb-ui-branding-20260928, mcb-major-noncombat-20260928, mcb-all-feature-expansion-20260928, mcb-advanced-expansion-20260928, mcb-gameinfo-stats-expansion-20260928, mcb-status-threat-expansion-20260928, mcb-responsive-simplified-ui-20260928, mcb-ui-audit-bugfix-20260929, mcb-ui-audit-polish2-20260929]
   workflow_dispatch: {}
 
 permissions:
@@ -115,11 +115,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/ui-audit-bugfix-20260929/apply.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_AUDIT_BUGFIX.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python velocity-build/ui-audit-polish2-20260929/apply.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_AUDIT_POLISH2.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python velocity-build/responsive-simplified-ui-20260928/validate.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/RESPONSIVE_SIMPLIFIED_UI_VALIDATE.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_RESPONSIVE_SIMPLIFIED_UI_20260928.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_RESPONSIVE_SIMPLIFIED_UI.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_AUDIT_BUGFIX_20260929.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_AUDIT_POLISH2_20260929.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_AUDIT_POLISH2_20260929.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_DELIVERY.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_BUGFIX_ROUND2.json release/
@@ -169,6 +173,7 @@ jobs:
           Copy-Item velocity-build/status-threat-expansion-20260928 release/unified-build-inputs/ -Recurse
           Copy-Item velocity-build/responsive-simplified-ui-20260928 release/unified-build-inputs/ -Recurse
           Copy-Item velocity-build/ui-audit-bugfix-20260929 release/unified-build-inputs/ -Recurse
+          Copy-Item velocity-build/ui-audit-polish2-20260929 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
