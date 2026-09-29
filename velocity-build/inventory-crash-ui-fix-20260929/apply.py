@@ -8,3 +8,23 @@ source=gzip.decompress(base64.b64decode(PAYLOAD))
 if hashlib.sha256(source).hexdigest()!="10fc5f61b073c1de24b2a4b750dafab4e4867b935d7a2ff51b47d70f1215a0c3":
     raise RuntimeError("source hash mismatch")
 exec(compile(source,"inventory-crash-ui-fix","exec"))
+
+# Remove the remaining legacy quick-CFG strip from the v6.2 config view.
+# The backend preset implementation may remain for compatibility, but there is
+# no user-facing quick-config entry anymore.
+root = Path(sys.argv[1]).resolve()
+v62 = root / "project/core/rendering/ui_views_v62.inl"
+txt = v62.read_text(encoding="utf-8-sig")
+start = txt.find('    xui::text("Native gameplay presets",tokens::col_text);')
+end_marker = '    xui::layout::separator();\n    xui::text_input("##v62_config_name"'
+if start >= 0:
+    end = txt.find(end_marker, start)
+    if end < 0:
+        raise RuntimeError("legacy quick-CFG block end missing")
+    txt = txt[:start] + '    xui::layout::separator();\n    xui::text_input("##v62_config_name"' + txt[end + len(end_marker):]
+elif "::mcb::presets::apply_and_save" in txt:
+    raise RuntimeError("legacy quick-CFG block still present")
+v62.write_text(txt, encoding="utf-8", newline="\n")
+
+if "::mcb::presets::apply_and_save" in v62.read_text(encoding="utf-8"):
+    raise RuntimeError("legacy quick-CFG UI removal failed")
