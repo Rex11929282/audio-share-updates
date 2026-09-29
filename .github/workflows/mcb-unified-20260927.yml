@@ -121,6 +121,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_INVENTORY_BUGFIX_20260929.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_INVENTORY_BUGFIX_20260929.patch release/
+          python velocity-build/ui-bugfix-stage2-20260929/apply.py mcb-src/cs2/MCB-CS2 2>&1 | Tee-Object -FilePath release/UI_BUGFIX_STAGE2.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_BUGFIX_STAGE2_20260929.json release/
+          Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_BUGFIX_STAGE2_20260929.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_DELIVERY.patch release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_UI_ONLY_COMPILE_FIX.json release/
           Copy-Item mcb-src/cs2/MCB-CS2/MCB_BUGFIX_ROUND2.json release/
@@ -170,6 +174,7 @@ jobs:
           Copy-Item velocity-build/status-threat-expansion-20260928 release/unified-build-inputs/ -Recurse
           Copy-Item velocity-build/responsive-simplified-ui-20260928 release/unified-build-inputs/ -Recurse
           Copy-Item velocity-build/ui-bugfix-inventory-20260929 release/unified-build-inputs/ -Recurse
+          Copy-Item velocity-build/ui-bugfix-stage2-20260929 release/unified-build-inputs/ -Recurse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
