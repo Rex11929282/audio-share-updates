@@ -5,15 +5,15 @@ HERE=Path(__file__).resolve().parent
 ROOT=Path(sys.argv[1]).resolve()
 
 payload=(HERE/"part1.txt").read_text(encoding="ascii").strip()+(HERE/"part2.txt").read_text(encoding="ascii").strip()
-if len(payload)!=10716:
+if len(payload)!=10788:
     raise RuntimeError(f"unexpected UI audit payload length: {len(payload)}")
-if hashlib.sha256(payload.encode("ascii")).hexdigest()!="0b863dc3ea87cbaea87e3139c2f73e1d879adfb152488d1f0812649f361159bd":
+if hashlib.sha256(payload.encode("ascii")).hexdigest()!="8a6385e80adcdd557ad7d9e86e87827298e2e54aa1a7d9f193522503cdc5e733":
     raise RuntimeError("UI audit payload hash mismatch")
 
 source=zlib.decompress(base64.b64decode(payload))
-if len(source)!=35504:
+if len(source)!=35693:
     raise RuntimeError(f"unexpected UI audit source length: {len(source)}")
-if hashlib.sha256(source).hexdigest()!="5914ea39ecfa85093ad55ae4caaad02bf5f45efd532ffa1af1f2ab8f62703dd6":
+if hashlib.sha256(source).hexdigest()!="ee80c83a80dfc082ff2ed98aad88b1269b08b089b309e9d47538fa3cf3f23c7a":
     raise RuntimeError("UI audit source hash mismatch")
 
 ns={"__name__":"__main__"}
