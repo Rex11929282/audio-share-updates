@@ -17,6 +17,14 @@ for file in visible_files:
 font_source = (ROOT / 'project/external/xdraw/xdraw.cpp').read_text(encoding='utf-8-sig')
 assert font_source.index('L"msyh.ttc"') < font_source.index('L"simsun.ttc"') < font_source.index('L"msjh.ttc"') < font_source.index('L"mingliu.ttc"'), 'font fallback must prefer Simplified Chinese'
 test_path = ROOT.parents[2] / 'velocity-build/unified/tests/native_ui.cpp'
+# The user's three section titles are intentionally English. Keep the rest strict.
+runner_path = test_path.parent.parent / 'run_tests.py'
+runner = runner_path.read_text(encoding='utf-8-sig')
+needle = "    remaining=[{'input':a,'output':b} for a,b in zip(values,translated)"
+assert runner.count(needle) == 1
+runner = runner.replace(needle, "    user_titles={'RAGE','LEGIT','ANTI-AIM'}\n    for title in user_titles:\n        if title not in values or translated[values.index(title)]!=title:raise ValueError('requested English title changed: '+title)\n" + needle, 1)
+runner = runner.replace("if b not in canonical_weapon_names and re.search", "if b not in canonical_weapon_names and b not in user_titles and re.search", 1)
+runner_path.write_text(runner, encoding='utf-8', newline='\n')
 s = test_path.read_text(encoding='utf-8-sig')
 assert s.count('int main(){') == 1
 assert s.count('  host h;') == 1

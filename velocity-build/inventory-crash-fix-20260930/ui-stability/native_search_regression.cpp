@@ -89,7 +89,7 @@ static std::string to_lower_copy(std::string_view value) {
                 if ( ui_model::has( lower, "watermark" ) || ui_model::has( category, "水印" ) ) path += " / 水印";
                 return path;
             }
-            static constexpr const char* sections[]{ "反馈、移动与系统", "物品、投掷物与战局信息", "环境与天气", "镜头与第一人称", "HUD 与屏幕组件", "画面移除" };
+            static constexpr const char* sections[]{ "反馈、移动与系统", "物品、投掷物与战局信息", "环境与天气", "镜头与第一人称", "屏幕组件", "画面移除" };
             return std::string( "其他 / " ) + sections[ std::clamp( route.misc_section, 0, 5 ) ];
         }
 

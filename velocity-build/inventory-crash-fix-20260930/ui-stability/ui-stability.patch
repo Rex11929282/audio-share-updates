@@ -580,7 +580,7 @@
 +                if ( ui_model::has( lower, "watermark" ) || ui_model::has( category, "水印" ) ) path += " / 水印";
 +                return path;
 +            }
-+            static constexpr const char* sections[]{ "反馈、移动与系统", "物品、投掷物与战局信息", "环境与天气", "镜头与第一人称", "HUD 与屏幕组件", "画面移除" };
++            static constexpr const char* sections[]{ "反馈、移动与系统", "物品、投掷物与战局信息", "环境与天气", "镜头与第一人称", "屏幕组件", "画面移除" };
 +            return std::string( "其他 / " ) + sections[ std::clamp( route.misc_section, 0, 5 ) ];
 +        }
 +        static void draw_toolbar_tooltip( const xui::rect& anchor, std::string_view text )
@@ -1056,7 +1056,7 @@
 +            { "物品、投掷物与战局信息", 1 },
 +            { "环境与天气", 2 },
 +            { "镜头与第一人称", 3 },
-+            { "HUD 与屏幕组件", 4 },
++            { "屏幕组件", 4 },
 +            { "画面移除", 5 },
          };
  
