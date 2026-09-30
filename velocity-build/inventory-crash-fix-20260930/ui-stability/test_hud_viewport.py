@@ -25,6 +25,8 @@ assert (root / 'project/core/features/misc/impl/impacts.cpp').read_text(encoding
 
 preamble = r'''
 #include <core/rendering/viewport_bounds.hpp>
+#include <core/rendering/hud_layout.hpp>
+namespace hud_layout = rendering::hud_layout;
 #include <array>
 #include <iostream>
 #include <limits>

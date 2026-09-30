@@ -20,8 +20,9 @@ test_path = ROOT.parents[2] / 'velocity-build/unified/tests/native_ui.cpp'
 s = test_path.read_text(encoding='utf-8-sig')
 assert s.count('int main(){') == 1
 assert s.count('  host h;') == 1
-s = s.replace('int main(){', (HERE / 'native_regression.cpp').read_text(encoding='utf-8') + '\nint main(){', 1)
-s = s.replace('  host h;', '  host h;\n  h.resize(1440,1080,1440,1080);ui_stability_regression();ui_autoheight_regression();ui_viewport_regression();ui_model_regression();', 1)
+fragments = ['native_regression.cpp', 'native_hotkey_regression.cpp', 'native_search_regression.cpp', 'native_hud_editor_fragment.hpp']
+s = s.replace('int main(){', '\n'.join((HERE / name).read_text(encoding='utf-8') for name in fragments) + '\nint main(){', 1)
+s = s.replace('  host h;', '  host h;\n  h.resize(1440,1080,1440,1080);ui_stability_regression();ui_autoheight_regression();ui_viewport_regression();ui_model_regression();ui_hotkey_scope_regression();ui_search_display_regression();ui_hud_editor_regression(h);', 1)
 test_path.write_text(s, encoding='utf-8', newline='\n')
 report = {'name':'UI stability follow-up 2026-09-30','baseline_commit':'f1ab0e76098287f8c3460ea673ec02c07a6d7008','patch_sha256':hashlib.sha256(patch.read_bytes()).hexdigest(),'scope':'UI layout, search navigation, window lifetime; no gameplay algorithms changed','native_regression':'scheduled in existing native-ui CI step','in_game_runtime':'NOT_TESTED'}
 (ROOT / 'MCB_UI_STABILITY_20260930.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')

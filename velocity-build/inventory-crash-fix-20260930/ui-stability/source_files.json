@@ -1,6 +1,10 @@
 [
   "project/core/features/esp/other/other.overlay.cpp",
   "project/core/features/misc/impl/impacts.cpp",
+  "project/core/rendering/hotkey_conflicts.hpp",
+  "project/core/rendering/hud_layout.hpp",
+  "project/core/rendering/hud_layout_xui.hpp",
+  "project/core/rendering/impl/context.cpp",
   "project/core/rendering/impl/menu/menu.core.cpp",
   "project/core/rendering/impl/menu/menu.exact.cpp",
   "project/core/rendering/impl/menu/menu.legitbot.cpp",

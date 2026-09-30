@@ -1,14 +1,15 @@
 --- a/project/core/features/esp/other/other.overlay.cpp
 +++ b/project/core/features/esp/other/other.overlay.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
  #include <utilities/addresses/addresses.hpp>
  #include <utilities/steam/steam.hpp>
  #include <core/rendering/rendering.hpp>
 +#include <core/rendering/viewport_bounds.hpp>
++#include <core/rendering/hud_layout.hpp>
  #include <core/settings.hpp>
  #include <core/features/features.hpp>
  
-@@ -343,8 +344,8 @@
+@@ -343,8 +345,12 @@
  		const auto timer_pill_w = timer_vw + timer_uw + text_pad_x * 2.0f;
  
  		const auto total_w = inner_pad + site_pill_w + section_spacing + health_pill_w + section_spacing + timer_pill_w + inner_pad;
@@ -16,40 +17,57 @@
 -		const auto y = ( other_cfg.bomb_placement.value == settings::esp::other::bomb_position::bottom_center ? static_cast<float>( screen_h ) - h - top_offset : top_offset ) + other_cfg.bomb_offset_y.value;
 +		const auto x = rendering::viewport::clamp_origin( ( static_cast< float >( screen_w ) - total_w ) * 0.5f + other_cfg.bomb_offset_x.value, total_w, static_cast<float>( screen_w ) );
 +		const auto y = rendering::viewport::clamp_origin( ( other_cfg.bomb_placement.value == settings::esp::other::bomb_position::bottom_center ? static_cast<float>( screen_h ) - h - top_offset : top_offset ) + other_cfg.bomb_offset_y.value, h, static_cast<float>( screen_h ) );
++
++		rendering::hud_layout::rendered.add( rendering::hud_layout::component::bomb, { x, y, total_w, h },
++			( static_cast<float>( screen_w ) - total_w ) * 0.5f,
++			( other_cfg.bomb_placement.value == settings::esp::other::bomb_position::bottom_center ? static_cast<float>( screen_h ) - h - top_offset : top_offset ) );
  
  		draw_list.rect_filled_blurred( x, y, total_w, h, xdraw::corner_radius{ r } );
  		draw_list.rect_filled( x, y, total_w, h, bomb_col( s.window_bg ), xdraw::corner_radius{ r } );
-@@ -504,8 +505,8 @@
+@@ -504,11 +510,15 @@
  		const auto bottom_side = placement == settings::esp::other::spectator_position::left_bottom || placement == settings::esp::other::spectator_position::right_bottom;
  		const auto header_block_h = other_cfg.spectator_header.value ? header_h + row_spacing : 0.0f;
  		const auto total_h = header_block_h + static_cast<float>( count ) * ( row_h + row_spacing );
 -		auto ry = ( top_side ? margin : bottom_side ? static_cast<float>( screen_h ) - margin - total_h : ( static_cast<float>( screen_h ) - total_h ) * 0.5f ) + other_cfg.spectator_offset_y.value;
 -		const auto x = ( right_side ? static_cast<float>( screen_w ) - header_w - margin : margin ) + other_cfg.spectator_offset_x.value;
+-
++		const auto layout_base_y = ( top_side ? margin : bottom_side ? static_cast<float>( screen_h ) - margin - total_h : ( static_cast<float>( screen_h ) - total_h ) * 0.5f );
 +		auto ry = rendering::viewport::clamp_origin( ( top_side ? margin : bottom_side ? static_cast<float>( screen_h ) - margin - total_h : ( static_cast<float>( screen_h ) - total_h ) * 0.5f ) + other_cfg.spectator_offset_y.value, total_h - row_spacing, static_cast<float>( screen_h ) );
 +		const auto x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - header_w - margin : margin ) + other_cfg.spectator_offset_x.value, header_w, static_cast<float>( screen_w ) );
- 
++
++		const auto rendered_start_y = ry;
  		if ( other_cfg.spectator_header.value )
  		{
-@@ -540,7 +541,7 @@
++			rendering::hud_layout::rendered.add( rendering::hud_layout::component::spectators, { x, ry, header_w, header_h },
++				( right_side ? static_cast<float>( screen_w ) - header_w - margin : margin ), layout_base_y );
+ 			draw_list.rect_filled_blurred( x, ry, header_w, header_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, static_cast<std::uint8_t>( 255.0f * spectator_alpha ) } );
+ 			draw_list.rect_filled( x, ry, header_w, header_h, spectator_col( s.window_bg ), xdraw::corner_radius{ r } );
+ 
+@@ -540,8 +550,10 @@
  
  			const auto name_pill_w = nw + text_pad_x * 2.0f;
  			const auto row_w = inner_pad + name_pill_w + ( has_avatar ? inner_pad + avatar_pill_size : 0.0f ) + inner_pad;
 -			const auto rx = ( right_side ? static_cast< float >( screen_w ) - row_w - margin : margin ) + other_cfg.spectator_offset_x.value;
+-
 +			const auto rx = rendering::viewport::clamp_origin( ( right_side ? static_cast< float >( screen_w ) - row_w - margin : margin ) + other_cfg.spectator_offset_x.value, row_w, static_cast<float>( screen_w ) );
- 
++
++			rendering::hud_layout::rendered.add( rendering::hud_layout::component::spectators, { rx, ry, row_w, row_h },
++				( right_side ? static_cast<float>( screen_w ) - row_w - margin : margin ), layout_base_y + ry - rendered_start_y );
  			draw_list.rect_filled_blurred( rx, ry, row_w, row_h, xdraw::corner_radius{ r } );
  			draw_list.rect_filled( rx, ry, row_w, row_h, spectator_col( s.window_bg ), xdraw::corner_radius{ r } );
+ 
 --- a/project/core/features/misc/impl/impacts.cpp
 +++ b/project/core/features/misc/impl/impacts.cpp
-@@ -8,6 +8,7 @@
+@@ -8,6 +8,8 @@
  #include <utilities/logging/logging.hpp>
  #include <core/systems/systems.hpp>
  #include <core/rendering/rendering.hpp>
 +#include <core/rendering/viewport_bounds.hpp>
++#include <core/rendering/hud_layout.hpp>
  #include <core/settings.hpp>
  #include <core/features/features.hpp>
  #include <protection/game_addresses.hpp>
-@@ -1493,8 +1494,8 @@
+@@ -1493,8 +1495,11 @@
  		const auto margin = 18.0f * layout_scale;
  		const auto on_right = cfg.stats_position.value == settings::misc::impacts::feed_position::top_right || cfg.stats_position.value == settings::misc::impacts::feed_position::bottom_right;
  		const auto on_bottom = cfg.stats_position.value == settings::misc::impacts::feed_position::bottom_left || cfg.stats_position.value == settings::misc::impacts::feed_position::bottom_right;
@@ -57,12 +75,348 @@
 -		const auto y = ( on_bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + cfg.stats_offset_y.value;
 +		const auto x = rendering::viewport::clamp_origin( ( on_right ? static_cast<float>( screen_w ) - w - margin : margin ) + cfg.stats_offset_x.value, w, static_cast<float>( screen_w ) );
 +		const auto y = rendering::viewport::clamp_origin( ( on_bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + cfg.stats_offset_y.value, h, static_cast<float>( screen_h ) );
++		rendering::hud_layout::rendered.add( rendering::hud_layout::component::stats, { x, y, w, h },
++			( on_right ? static_cast<float>( screen_w ) - w - margin : margin ),
++			( on_bottom ? static_cast<float>( screen_h ) - h - margin : margin ) );
  		auto ac = [ & ]( xdraw::color c ) { c.a = static_cast<std::uint8_t>( static_cast<float>( c.a ) * alpha ); return c; };
  
  		draw_list.rect_filled_blurred( x, y, w, h, xdraw::corner_radius{ 6.0f }, xdraw::color{ 255, 255, 255, static_cast<std::uint8_t>( 255.0f * alpha ) } );
+--- /dev/null
++++ b/project/core/rendering/hotkey_conflicts.hpp
+@@ -0,0 +1,49 @@
++#pragma once
++#include <cstddef>
++#include <type_traits>
++#include <unordered_map>
++
++// Diagnostic metadata only. Never dispatches keys or changes feature settings.
++namespace rendering::hotkey_ui {
++    enum class family { general, rage, legit };
++    struct scope { family mode{ family::general }; std::size_t group{}; };
++
++    constexpr bool overlaps( scope a, scope b, bool explicit_exclusion = false ) noexcept {
++        if ( explicit_exclusion || a.mode == family::general || b.mode == family::general ) return true;
++        // Only one replacement weapon group is consumed at a time. Combat mode
++        // selection is mutually exclusive for feature values, not master hotkeys.
++        return a.mode == b.mode && a.group == b.group;
++    }
++
++    template<class Rage, class Legit>
++    auto describe_groups( const Rage& rage, const Legit& legit ) {
++        using setting_type = std::remove_cvref_t<decltype( rage.global.silent )>;
++        std::unordered_map<const setting_type*, scope> result;
++        const auto add_rage = [&]( const auto& group, std::size_t id ) {
++            const setting_type* values[]{ &group.silent, &group.no_spread, &group.doubletap,
++                &group.body_aim, &group.force_shot_air, &group.force_shot,
++                &group.min_damage_override, &group.hitchance_override,
++                &group.dynamic_pointscale };
++            for ( const auto* value : values ) result.emplace( value, scope{ family::rage, id } );
++        };
++        const auto add_legit = [&]( const auto& group, std::size_t id ) {
++            const setting_type* values[]{ &group.aimbot, &group.rcs, &group.standalone_rcs,
++                &group.triggerbot, &group.trigger_head_only, &group.give_me_your_seed,
++                &group.autowall, &group.visualize_fov };
++            for ( const auto* value : values ) result.emplace( value, scope{ family::legit, id } );
++        };
++        add_rage( rage.global, 0 );
++        add_legit( legit.global, 0 );
++        std::size_t id = 1;
++        for ( const auto& group : rage.groups ) add_rage( group, id++ );
++        for ( const auto& weapon : rage.weapons ) add_rage( weapon.values, id++ );
++        id = 1;
++        for ( const auto& group : legit.groups ) add_legit( group, id++ );
++        for ( const auto& weapon : legit.weapons ) add_legit( weapon.values, id++ );
++        // The debug-point overlay is also intentionally absent: its cached rendering
++        // can outlive a combat-mode switch.
++        // Masters and category/weapon override switches are intentionally absent:
++        // dispatching those can change modes/scopes and must still warn on reuse.
++        return result;
++    }
++}
+--- /dev/null
++++ b/project/core/rendering/hud_layout.hpp
+@@ -0,0 +1,176 @@
++#pragma once
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <cstddef>
++#include "viewport_bounds.hpp"
++
++// UI geometry only. No entity, gameplay, input-hook, or configuration dependencies.
++namespace rendering::hud_layout {
++    enum class component : std::size_t { watermark, keybinds, status, spectators, bomb, stats, count };
++    constexpr std::size_t count = static_cast<std::size_t>( component::count );
++    struct rect {
++        float x{}, y{}, w{}, h{};
++        float right() const { return x + w; }
++        float bottom() const { return y + h; }
++        bool contains(float px, float py) const { return px >= x && py >= y && px < right() && py < bottom(); }
++    };
++    inline bool valid(rect r) {
++        return std::isfinite(r.x) && std::isfinite(r.y) && std::isfinite(r.w) && std::isfinite(r.h) && r.w > 0 && r.h > 0;
++    }
++    struct rendered_node {
++        bool visible{};
++        rect bounds{};
++        // Origin of the union before saved offsets and viewport clamping.
++        float base_x{}, base_y{};
++        unsigned order{};
++    };
++    struct registry {
++        std::array<rendered_node, count> nodes{};
++        unsigned order{};
++        void begin_frame() { nodes = {}; order = 0; }
++        void add(component id, rect r, float base_x, float base_y) {
++            if (static_cast<std::size_t>(id) >= count || !valid(r) || !std::isfinite(base_x) || !std::isfinite(base_y)) return;
++            auto& n = nodes[static_cast<std::size_t>(id)];
++            if (n.visible) {
++                const float right = std::max(n.bounds.right(), r.right());
++                const float bottom = std::max(n.bounds.bottom(), r.bottom());
++                n.bounds.x = std::min(n.bounds.x, r.x); n.bounds.y = std::min(n.bounds.y, r.y);
++                n.bounds.w = right - n.bounds.x; n.bounds.h = bottom - n.bounds.y;
++                n.base_x = std::min(n.base_x, base_x); n.base_y = std::min(n.base_y, base_y);
++            } else { n.visible = true; n.bounds = r; n.base_x = base_x; n.base_y = base_y; }
++            n.order = ++order;
++        }
++    };
++    inline registry rendered;
++    struct value { float x{}, y{}, scale{1.0f}; };
++    struct binding {
++        float* x{}; float* y{}; float* scale{}; bool enabled{};
++        bool valid() const { return x && y && scale; }
++        value read() const { return {*x, *y, *scale}; }
++        void write(value v) const { *x = v.x; *y = v.y; *scale = v.scale; }
++    };
++    using bindings = std::array<binding, count>;
++    struct pointer {
++        float x{}, y{};
++        bool down{}, pressed{}, released{}, escape{}, cancel{}, free_move{};
++    };
++    enum class corner { none, top_left, top_right, bottom_left, bottom_right };
++    inline bool left(corner c) { return c == corner::top_left || c == corner::bottom_left; }
++    inline bool top(corner c) { return c == corner::top_left || c == corner::top_right; }
++    inline rect handle(rect r, corner c) {
++        // Keep handles inside the real rectangle so edge-aligned widgets remain selectable.
++        const float size = std::min({10.0f, r.w * 0.5f, r.h * 0.5f});
++        return {left(c) ? r.x : r.right()-size, top(c) ? r.y : r.bottom()-size, size, size};
++    }
++    inline corner hit_corner(rect r, float x, float y) {
++        for (auto c : {corner::top_left, corner::top_right, corner::bottom_left, corner::bottom_right})
++            if (handle(r,c).contains(x,y)) return c;
++        return corner::none;
++    }
++    struct guide { bool visible{}; float position{}; };
++    struct editor {
++        bool open{};
++        bool snapping{true};
++        int selected{-1};
++        int captured{-1};
++        corner resizing{corner::none};
++        guide vertical{}, horizontal{};
++        std::array<value,count> original{};
++        value gesture_original{};
++        rect initial{};
++        float press_x{}, press_y{}, viewport_w{}, viewport_h{};
++        // A resize uses next-frame measured dimensions, including unscaled text.
++        bool settle_resize{};
++        float fixed_x{}, fixed_y{};
++        void start(const bindings& b) {
++            for (std::size_t i=0; i<count; ++i) if (b[i].valid()) original[i] = b[i].read();
++            open=true; selected=captured=-1; resizing=corner::none; settle_resize=false;
++            vertical={}; horizontal={}; viewport_w=viewport_h=0;
++        }
++        void cancel_gesture(const bindings& b) {
++            if (captured >= 0 && b[captured].valid()) b[captured].write(gesture_original);
++            captured=-1; resizing=corner::none; settle_resize=false; vertical={}; horizontal={};
++        }
++        void finish(const bindings& b, bool keep) {
++            if (!keep) { for (std::size_t i=0; i<count; ++i) if (b[i].valid()) b[i].write(original[i]); }
++            else if (captured>=0) cancel_gesture(b);
++            open=false; captured=-1; resizing=corner::none; settle_resize=false; vertical={}; horizontal={};
++        }
++        bool usable(int i,const registry& r,const bindings& b) const {
++            return i>=0 && i<static_cast<int>(count) && r.nodes[i].visible && b[i].valid() && b[i].enabled &&
++                std::isfinite(*b[i].x) && std::isfinite(*b[i].y) && std::isfinite(*b[i].scale);
++        }
++        static void closest(float moving, float target, float& distance, float& correction, guide& line) {
++            const float d=target-moving;
++            if (std::abs(d)<distance) { distance=std::abs(d); correction=d; line={true,target}; }
++        }
++        void snap(rect& desired,const registry& r,const bindings& b,float vw,float vh) {
++            float dx=0,dy=0,near_x=7.0f,near_y=7.0f;
++            const std::array<float,3> xs{desired.x,desired.x+desired.w*0.5f,desired.right()};
++            const std::array<float,3> ys{desired.y,desired.y+desired.h*0.5f,desired.bottom()};
++            for(float x:xs) for(float t:{0.0f, vw*0.5f, vw}) closest(x,t,near_x,dx,vertical);
++            for(float y:ys) for(float t:{0.0f, vh*0.5f, vh}) closest(y,t,near_y,dy,horizontal);
++            for(int i=0;i<static_cast<int>(count);++i) if(i!=captured && usable(i,r,b)) {
++                const auto n=r.nodes[i].bounds;
++                for(float x:xs) for(float t:{n.x,n.x+n.w*0.5f,n.right()}) closest(x,t,near_x,dx,vertical);
++                for(float y:ys) for(float t:{n.y,n.y+n.h*0.5f,n.bottom()}) closest(y,t,near_y,dy,horizontal);
++            }
++            desired.x+=dx; desired.y+=dy;
++        }
++        void place(const rendered_node& n,const binding& b,rect desired,float vw,float vh) {
++            *b.x=viewport::clamp_origin(desired.x,desired.w,vw)-n.base_x;
++            *b.y=viewport::clamp_origin(desired.y,desired.h,vh)-n.base_y;
++        }
++        void anchor_resize(const registry& r,const bindings& b,float vw,float vh) {
++            if(!usable(selected,r,b)) return;
++            const auto& n=r.nodes[selected]; auto desired=n.bounds;
++            desired.x=left(resizing)?fixed_x-desired.w:fixed_x;
++            desired.y=top(resizing)?fixed_y-desired.h:fixed_y;
++            place(n,b[selected],desired,vw,vh);
++        }
++        void update(const registry& r,const bindings& b,pointer p,float vw,float vh,bool blocked=false) {
++            if(!open) return;
++            vertical={}; horizontal={};
++            if(!std::isfinite(vw) || !std::isfinite(vh) || vw<=0 || vh<=0 || p.cancel) {
++                cancel_gesture(b); return;
++            }
++            if(viewport_w>0 && (vw!=viewport_w || vh!=viewport_h)) { cancel_gesture(b); viewport_w=vw;viewport_h=vh;return; }
++            viewport_w=vw; viewport_h=vh;
++            if(captured>=0 && (!usable(captured,r,b) || !std::isfinite(p.x) || !std::isfinite(p.y))) { cancel_gesture(b); return; }
++            if(p.escape) { if(captured>=0) cancel_gesture(b); else finish(b,false); return; }
++            if(settle_resize) { anchor_resize(r,b,vw,vh); settle_resize=false; resizing=corner::none; }
++            if(captured<0 && p.pressed && !blocked) {
++                int hit=-1;
++                for(int i=0;i<static_cast<int>(count);++i) if(usable(i,r,b) && r.nodes[i].bounds.contains(p.x,p.y))
++                    if(hit<0 || r.nodes[i].order>r.nodes[hit].order) hit=i;
++                selected=hit;
++                if(hit>=0) {
++                    captured=hit; initial=r.nodes[hit].bounds; gesture_original=b[hit].read();
++                    press_x=p.x;press_y=p.y;resizing=hit_corner(initial,p.x,p.y);
++                    fixed_x=left(resizing)?initial.right():initial.x;
++                    fixed_y=top(resizing)?initial.bottom():initial.y;
++                }
++            }
++            if(captured<0) return;
++            if(!p.down && !p.released) { cancel_gesture(b); return; }
++            const auto& n=r.nodes[captured]; const auto& cfg=b[captured];
++            if(resizing==corner::none) {
++                auto desired=n.bounds;
++                desired.x=initial.x+p.x-press_x;desired.y=initial.y+p.y-press_y;
++                if(snapping && !p.free_move) snap(desired,r,b,vw,vh);
++                place(n,cfg,desired,vw,vh);
++            } else {
++                const float dx=(p.x-press_x)*(left(resizing)?-1.0f:1.0f);
++                const float dy=(p.y-press_y)*(top(resizing)?-1.0f:1.0f);
++                // Both axes participate; existing per-widget scale semantics stay unchanged.
++                const float ratio=1.0f+(dx/initial.w+dy/initial.h)*0.5f;
++                *cfg.scale=std::clamp(gesture_original.scale*ratio,0.85f,1.35f);
++                anchor_resize(r,b,vw,vh);
++            }
++            if(p.released) { settle_resize=resizing!=corner::none;captured=-1; }
++        }
++    };
++    inline editor editing;
++} // namespace rendering::hud_layout
+--- /dev/null
++++ b/project/core/rendering/hud_layout_xui.hpp
+@@ -0,0 +1,83 @@
++#pragma once
++#include "hud_layout.hpp"
++#include <external/xdraw/xui/xui.hpp>
++
++namespace rendering::hud_layout {
++    struct editor_surface {
++        float x{180.0f},y{120.0f};
++        bool dragging{};
++        float press_x{},press_y{},start_x{},start_y{};
++    };
++    inline editor_surface surface;
++    // Same adapter is exercised by the standalone D3D11/XUI harness.
++    inline void draw_editor(editor& e,const registry& r,const bindings& b,bool cancel_pointer=false,editor_surface& toolbar=surface) {
++        auto& c=xui::ctx(); const auto& in=c.input;
++        const auto [vw_i,vh_i]=xdraw::viewport_size();
++        const float vw=static_cast<float>(vw_i),vh=static_cast<float>(vh_i);
++        auto& tx=toolbar.x;auto& ty=toolbar.y;
++        float tw=std::min(570.0f,std::max(1.0f,vw)),th=std::min(190.0f,std::max(1.0f,vh));
++        tx=viewport::clamp_origin(tx,tw,vw);ty=viewport::clamp_origin(ty,th,vh);
++        bool escape=false;
++        for(const auto key:in.key_presses()) if(key==VK_ESCAPE) escape=true;
++        pointer p{in.mouse_x,in.mouse_y,in.mouse_down,in.mouse_clicked,in.mouse_released,
++            escape,in.focus_lost||cancel_pointer,in.shift_held()};
++        const bool was_toolbar_drag=toolbar.dragging;
++        if(toolbar.dragging && (p.cancel || p.escape || (!p.down && !p.released))) {
++            tx=toolbar.start_x;ty=toolbar.start_y;toolbar.dragging=false;p.escape=false;
++        }
++        if(e.captured<0 && !toolbar.dragging && !p.cancel && p.pressed && rect{tx,ty,tw,60.0f}.contains(p.x,p.y)) {
++            toolbar.dragging=true;toolbar.press_x=p.x;toolbar.press_y=p.y;toolbar.start_x=tx;toolbar.start_y=ty;
++        }
++        if(toolbar.dragging) {
++            tx=viewport::clamp_origin(toolbar.start_x+p.x-toolbar.press_x,tw,vw);
++            ty=viewport::clamp_origin(toolbar.start_y+p.y-toolbar.press_y,th,vh);
++            if(p.released) toolbar.dragging=false;
++        }
++        e.update(r,b,p,vw,vh,rect{tx,ty,tw,th}.contains(p.x,p.y) || toolbar.dragging || was_toolbar_drag);
++        if(!e.open) { toolbar.dragging=false;return; }
++        auto& dl=xdraw::get(xdraw::layer::top);
++        static constexpr const char* names[count]{"水印","快捷键面板","状态监控","观战列表","炸弹计时器","战局统计"};
++        for(int i=0;i<static_cast<int>(count);++i) if(e.usable(i,r,b)) {
++            const auto n=r.nodes[i].bounds;
++            const auto color=i==e.selected ? c.style.accent : xdraw::color{190,200,214,210};
++            dl.rect(n.x,n.y,n.w,n.h,color,xdraw::corner_radius{2.0f},1.0f);
++            const auto [lw,lh]=xdraw::measure_text(names[i]);
++            const float lx=viewport::clamp_origin(n.x,lw+8.0f,vw);
++            const float ly=viewport::clamp_origin(n.y>=lh+6.0f?n.y-lh-6.0f:n.bottom()+2.0f,lh+4.0f,vh);
++            dl.rect_filled(lx,ly,lw+8.0f,lh+4.0f,xdraw::color{12,15,20,225},xdraw::corner_radius{2.0f});
++            dl.text(lx+4.0f,ly+2.0f,names[i],color);
++            for(const auto corner:{corner::top_left,corner::top_right,corner::bottom_left,corner::bottom_right}) {
++                const auto h=handle(n,corner);
++                dl.rect_filled(h.x,h.y,h.w,h.h,color,xdraw::corner_radius{1.0f});
++            }
++        }
++        if(e.vertical.visible) dl.line(e.vertical.position,0,e.vertical.position,vh,c.style.accent,1.0f);
++        if(e.horizontal.visible) dl.line(0,e.horizontal.position,vw,e.horizontal.position,c.style.accent,1.0f);
++        // This window only contains editor controls, never gameplay or hidden HUD previews.
++        xui::draw::push_layer(xdraw::layer::top);
++        // begin_window's default drag strip is specialized for the main menu.
++        // Temporarily reserve that path, then restore it before normal button handling.
++        const auto old_window=c.active_window;
++        c.active_window=xui::fnv1a("##hud_toolbar_drag_guard");
++        const bool toolbar_visible=xui::begin_window("界面布局 · 可拖动工具栏##direct_hud",tx,ty,tw,th,false);
++        c.active_window=old_window;
++        if(toolbar_visible) {
++            xui::layout::set_cursor(10.0f,16.0f);
++            xui::text("界面布局编辑 · 拖动标题栏移动工具栏",c.style.text);
++            xui::layout::set_cursor(10.0f,72.0f);
++            if(xui::button("完成##hud_done",78.0f,24.0f)) e.finish(b,true);
++            xui::layout::same_line();
++            if(xui::button("取消全部##hud_cancel",90.0f,24.0f)) e.finish(b,false);
++            xui::layout::same_line();
++            if(xui::button(e.snapping?"吸附：开##hud_snap":"吸附：关##hud_snap",100.0f,24.0f)) e.snapping=!e.snapping;
++            xui::text("拖动组件移动；拖动四角缩放；按住上档键暂停吸附",c.style.text);
++            xui::text("退出键撤销当前拖动；再次按退出键取消本次编辑",c.style.text_dim);
++            int visible=0;for(int i=0;i<static_cast<int>(count);++i) visible+=e.usable(i,r,b)?1:0;
++            const auto status=std::string("当前可见 ")+std::to_string(visible)+" / 6；隐藏或未启用的组件仍可用滑块调整";
++            xui::text(status,c.style.text_dim);
++            xui::end_window();
++        }
++        xui::draw::pop_layer();
++        if(!e.open) toolbar.dragging=false;
++    }
++} // namespace rendering::hud_layout
+--- a/project/core/rendering/impl/context.cpp
++++ b/project/core/rendering/impl/context.cpp
+@@ -1,4 +1,5 @@
+ #include <pch/pch.hpp>
++#include <core/rendering/hud_layout.hpp>
+ #include <core/systems/systems.hpp>
+ #include <core/features/features.hpp>
+ #include <core/scripting/scripting.hpp>
+@@ -108,6 +109,7 @@
+ 
+ 		m_context->OMSetRenderTargets( 1, &this->m_rtv, nullptr );
+ 
++		hud_layout::rendered.begin_frame( );
+ 		xdraw::begin_frame( true );
+ 		{
+ 			auto& dl = xdraw::get( xdraw::layer::bottom );
 --- a/project/core/rendering/impl/menu/menu.core.cpp
 +++ b/project/core/rendering/impl/menu/menu.core.cpp
-@@ -65,79 +65,6 @@
+@@ -65,79 +65,114 @@
  			return out;
  		}
  
@@ -139,10 +493,118 @@
 -
 -			return { 5, 0 };
 -		}
++
++        [[nodiscard]] static std::size_t next_utf8_boundary( std::string_view text, std::size_t begin )
++        {
++            auto end = begin + 1;
++            while ( end < text.size( ) && ( static_cast<unsigned char>( text[ end ] ) & 0xc0 ) == 0x80 ) ++end;
++            return std::min( end, text.size( ) );
++        }
++        [[nodiscard]] static std::string fit_search_text( std::string_view text, float width )
++        {
++            if ( width <= 0.0f ) return {};
++            if ( xdraw::measure_text( text ).first <= width ) return std::string( text );
++            const auto suffix_w = xdraw::measure_text( "…" ).first;
++            if ( suffix_w > width ) return {};
++            std::size_t end{};
++            while ( end < text.size( ) )
++            {
++                const auto next = next_utf8_boundary( text, end );
++                if ( xdraw::measure_text( text.substr( 0, next ) ).first + suffix_w > width ) break;
++                end = next;
++            }
++            return std::string( text.substr( 0, end ) ) + "…";
++        }
++        [[nodiscard]] static std::vector<std::string> wrap_search_path( std::string_view text, float width )
++        {
++            std::vector<std::string> lines;
++            std::size_t begin{}, end{};
++            while ( end < text.size( ) )
++            {
++                const auto next = next_utf8_boundary( text, end );
++                if ( end > begin && xdraw::measure_text( text.substr( begin, next - begin ) ).first > width )
++                {
++                    lines.emplace_back( text.substr( begin, end - begin ) );
++                    begin = end;
++                }
++                end = next;
++            }
++            if ( begin < text.size( ) ) lines.emplace_back( text.substr( begin ) );
++            return lines;
++        }
++        [[nodiscard]] static std::string search_navigation_path( const ui_model::search_route& route, std::string_view category )
++        {
++            if ( route.hotkeys ) return "全局工具 / 快捷键总览";
++            if ( route.layout_editor ) return "全局工具 / 界面布局编辑器";
++            const auto lower = to_lower_copy( category );
++            static constexpr const char* weapon_categories[]{ "手枪", "冲锋枪", "步枪", "霰弹枪", "狙击枪", "机枪" };
++            if ( route.page == 0 )
++            {
++                static constexpr const char* modes[]{ "RAGE", "LEGIT", "ANTI-AIM" };
++                auto path = std::string( "战斗 / " ) + modes[ std::clamp( route.combat_tab, 0, 2 ) ];
++                if ( route.combat_tab >= 2 ) return path;
++                const auto marker = lower.find( " - weapon - " );
++                if ( marker != std::string::npos )
++                {
++                    const auto slug = std::string_view( lower ).substr( marker + 12 );
++                    for ( const auto& weapon : settings::weapon_profiles::catalog )
++                    {
++                        if ( slug != weapon.slug ) continue;
++                        return path + " / 单把武器 / " + weapon_categories[ settings::weapon_profiles::category_index( weapon.weapon_type ) ] + " / " + weapon.name;
++                    }
++                    return path + " / 单把武器 / " + std::string( slug );
++                }
++                if ( ui_model::has( lower, " - " ) && !ui_model::has( lower, " - global" ) )
++                    return path + " / 武器分类 / " + weapon_categories[ std::clamp( route.subtab, 0, 5 ) ];
++                return path + " / 全部武器";
++            }
++            if ( route.page == 3 )
++            {
++                static constexpr const char* groups[]{ "敌人", "队友", "自己" };
++                return std::string( "玩家 / " ) + groups[ std::clamp( route.subtab, 0, 2 ) ];
++            }
++            if ( route.page == 5 )
++            {
++                static constexpr const char* categories[]{ "全部枪械", "手枪", "冲锋枪", "步枪", "霰弹枪", "狙击枪", "机枪", "刀具", "手套", "探员" };
++                auto path = std::string( "库存 / " ) + categories[ std::clamp( route.subtab, 0, 9 ) ];
++                if ( ui_model::has( category, "显示选项" ) || lower == "changer ui" ) path += " / 显示选项";
++                else if ( ui_model::has( category, "物品详情" ) ) path += " / 物品详情";
++                else if ( ui_model::has( category, "分类" ) ) path += " / 分类";
++                return path;
++            }
++            if ( route.page == 7 ) return "脚本 / 脚本管理";
++            if ( route.page == 8 ) return "配置 / 配置管理";
++            if ( route.page == 9 )
++            {
++                auto path = std::string( "个人中心 / " ) + ( route.profile_tab == 1 ? "外观" : "个人" );
++                if ( ui_model::has( lower, "watermark" ) || ui_model::has( category, "水印" ) ) path += " / 水印";
++                return path;
++            }
++            static constexpr const char* sections[]{ "反馈、移动与系统", "物品、投掷物与战局信息", "环境与天气", "镜头与第一人称", "HUD 与屏幕组件", "画面移除" };
++            return std::string( "其他 / " ) + sections[ std::clamp( route.misc_section, 0, 5 ) ];
++        }
++        static void draw_toolbar_tooltip( const xui::rect& anchor, std::string_view text )
++        {
++            const auto [screen_w, screen_h] = xdraw::viewport_size( );
++            if ( screen_w <= 0 || screen_h <= 0 ) return;
++            const auto sw = static_cast<float>( screen_w ), sh = static_cast<float>( screen_h );
++            const auto label = fit_search_text( text, std::max( 0.0f, sw - 24.0f ) );
++            const auto [tw, th] = xdraw::measure_text( label );
++            const auto width = std::min( sw, tw + 16.0f ), height = std::min( sh, th + 12.0f );
++            const auto x = std::clamp( anchor.x + ( anchor.w - width ) * 0.5f, 0.0f, std::max( 0.0f, sw - width ) );
++            const auto preferred_y = anchor.bottom( ) + 6.0f + height <= sh ? anchor.bottom( ) + 6.0f : anchor.y - height - 6.0f;
++            const auto y = std::clamp( preferred_y, 0.0f, std::max( 0.0f, sh - height ) );
++            auto& dl = xdraw::get( xdraw::layer::top );
++            dl.push_clip_absolute( 0.0f, 0.0f, sw, sh );
++            dl.rect_filled( x, y, width, height, xdraw::color{ 24, 27, 33, 250 }, xdraw::corner_radius{ 5.0f } );
++            dl.rect( x, y, width, height, xdraw::color{ 87, 98, 116, 210 }, xdraw::corner_radius{ 5.0f } );
++            dl.text( x + 8.0f, y + 6.0f, label, xdraw::color{ 238, 241, 246, 255 } );
++            dl.pop_clip( );
++        }
  
  	} // namespace detail
  
-@@ -1002,32 +929,32 @@
+@@ -1002,32 +1037,33 @@
  
  	void menu::rebuild_search_index( )
  	{
@@ -185,6 +647,7 @@
 +            entry.name_lower += "\n" + std::string( localization::tr( name ) );
 +            entry.category_lower = detail::to_lower_copy( category );
 +            entry.category_lower += "\n" + std::string( localization::tr( category ) ) + "\n" + std::string( kind );
++            entry.category_lower += "\n" + detail::to_lower_copy( detail::search_navigation_path( route, category ) );
 +            entry.destination = route;
 +            entry.bind_key = bind_key;
 +            this->m_search_entries.emplace_back( std::move( entry ) );
@@ -201,7 +664,7 @@
  	}
  
  	void menu::close_search( )
-@@ -1045,24 +972,46 @@
+@@ -1045,24 +1081,46 @@
  		}
  
  		const auto& chosen = this->m_search_entries[ this->m_search_visible_indices[ index ] ];
@@ -266,7 +729,7 @@
  		this->close_search( );
  	}
  
-@@ -1078,10 +1027,6 @@
+@@ -1078,10 +1136,6 @@
  			if ( query_lower.empty( ) || it.name_lower.find( query_lower ) != std::string::npos || it.category_lower.find( query_lower ) != std::string::npos )
  			{
  				this->m_search_visible_indices.emplace_back( i );
@@ -277,7 +740,99 @@
  			}
  		}
  
-@@ -1282,14 +1227,7 @@
+@@ -1091,41 +1145,48 @@
+ 			{
+ 				const auto& item = this->m_search_entries[ this->m_search_visible_indices[ i ] ];
+ 
+-				const auto avail_w = xui::layout::avail( ).first;
+-				const auto row_h = 44.0f;
+-				const auto row = xui::layout::item( avail_w, row_h );
+-				const auto hovered = xui::ctx( ).input.in_rect( row );
+-				const auto row_anim = hovered ? 1.0f : 0.0f;
+-
+-				auto& dl = xui::draw::current( );
+-				const auto row_bg = xui::lerp( tokens::col_card, tokens::col_accent.alpha( 90 ), row_anim * 0.35f );
+-				dl.rect_filled( row.x, row.y, row.w, row.h, row_bg, xdraw::corner_radius{ 8.0f } );
+-
+-				const auto label_col = xui::lerp( tokens::col_text, tokens::col_dark, row_anim * 0.2f );
+-				const auto sub_col = tokens::col_text_dim;
+-				const std::string display_name{ localization::tr( item.name ) };
+-				const std::string display_category = item.category.empty( ) ? std::string{ "其他" } : std::string{ localization::tr( item.category ) };
+-				const auto name_th = xdraw::measure_text( display_name ).second;
+-				const auto sub_th = xdraw::measure_text( display_category ).second;
+-				const auto block_h = name_th + 3.0f + sub_th;
+-				const auto text_start_y = row.y + ( row.h - block_h ) * 0.5f;
+-				const auto name_y = text_start_y;
+-				dl.text( row.x + 8.0f, name_y, display_name, label_col );
+-
+-				const auto sub_y = name_y + name_th + 3.0f;
+-				dl.text( row.x + 8.0f, sub_y, display_category, sub_col.alpha( 170 ) );
+-
+-				if ( item.bind_key != 0 )
+-				{
+-					const auto key = xui::vk_name( item.bind_key );
+-					const auto [kw, kh] = xdraw::measure_text( key );
+-					const auto bh = 20.0f;
+-					const auto bw = kw + 16.0f;
+-					const auto bx = row.right( ) - bw - 6.0f;
+-					const auto by = row.y + ( row.h - bh ) * 0.5f;
+-					dl.rect_filled( bx, by, bw, bh, tokens::col_card, xdraw::corner_radius{ 5.0f } );
+-					dl.text( bx + 8.0f, by + ( bh - kh ) * 0.5f, key, tokens::col_text_dim );
+-				}
++                const auto avail_w = xui::layout::avail( ).first;
++                const std::string display_name{ localization::tr( item.name ) };
++                const auto path = detail::search_navigation_path( item.destination, item.category );
++                const std::string key = item.bind_key != 0 ? xui::vk_name( item.bind_key ) : "";
++                const auto [kw, kh] = xdraw::measure_text( key );
++                const auto badge_w = key.empty( ) ? 0.0f : std::min( kw + 16.0f, std::max( 0.0f, avail_w - 16.0f ) );
++                const auto text_w = std::max( 0.0f, avail_w - 16.0f - ( badge_w > 0.0f ? badge_w + 8.0f : 0.0f ) );
++                const auto label = detail::fit_search_text( display_name, text_w );
++                const auto path_lines = detail::wrap_search_path( path, text_w );
++                const auto line_h = std::max( 1.0f, xdraw::measure_text( "路径 Ag" ).second );
++                const auto block_h = line_h + static_cast<float>( path_lines.size( ) ) * ( line_h + 3.0f );
++                const auto row_h = std::max( 44.0f, block_h + 12.0f );
++                const auto row = xui::layout::item( avail_w, row_h );
++                const auto* window = xui::layout::current_window_const( );
++                const auto hovered = xui::ctx( ).input.in_rect( row ) && window && xui::ctx( ).input.in_rect( window->bounds );
++                const auto row_anim = hovered ? 1.0f : 0.0f;
++                auto& dl = xui::draw::current( );
++                const auto row_bg = xui::lerp( tokens::col_card, tokens::col_accent.alpha( 90 ), row_anim * 0.35f );
++                dl.rect_filled( row.x, row.y, row.w, row.h, row_bg, xdraw::corner_radius{ 8.0f } );
++                const auto label_col = xui::lerp( tokens::col_text, tokens::col_dark, row_anim * 0.2f );
++                const auto name_y = row.y + ( row.h - block_h ) * 0.5f;
++                // Both text lines reserve the badge column; long paths wrap in full.
++                dl.push_clip( row.x + 8.0f, row.y, text_w, row.h );
++                dl.text( row.x + 8.0f, name_y, label, label_col );
++                auto path_y = name_y + line_h + 3.0f;
++                for ( const auto& line : path_lines )
++                {
++                    dl.text( row.x + 8.0f, path_y, line, tokens::col_text_dim.alpha( 170 ) );
++                    path_y += line_h + 3.0f;
++                }
++                dl.pop_clip( );
++                if ( badge_w > 0.0f )
++                {
++                    const auto bh = 20.0f;
++                    const auto bx = row.right( ) - badge_w - 8.0f;
++                    const auto by = row.y + ( row.h - bh ) * 0.5f;
++                    const auto badge_label = detail::fit_search_text( key, std::max( 0.0f, badge_w - 16.0f ) );
++                    dl.rect_filled( bx, by, badge_w, bh, tokens::col_card, xdraw::corner_radius{ 5.0f } );
++                    dl.text( bx + 8.0f, by + ( bh - kh ) * 0.5f, badge_label, tokens::col_text_dim );
++                }
++                if ( hovered && label != display_name && !xui::ctx( ).overlay_blocking( ) && !xui::ctx( ).input.mouse_down )
++                    detail::draw_toolbar_tooltip( row, display_name );
+ 
+ 				if ( hovered && xui::ctx( ).input.mouse_clicked && !xui::ctx( ).overlay_blocking( ) )
+ 				{
+@@ -1240,6 +1301,7 @@
+ 		this->apply_theme_preset(std::clamp(settings::g_misc.m_profile_ui.accent_preset.value,0,5));
+ 		this->sync_theme_style( );
+ 		auto& input = xui::ctx( ).input;
++		if ( this->draw_direct_layout_editor( ) ) { xui::end( ); return; }
+ 
+ 		// Match the uploaded UI-only keyboard navigation.
+ 		const auto typing = xui::ctx( ).active_text_input != xui::null_id ||
+@@ -1282,14 +1344,7 @@
  			return;
  		}
  
@@ -293,7 +848,7 @@
  
  		const auto [ viewport_w_i, viewport_h_i ] = xdraw::viewport_size( );
  		if ( viewport_w_i > 0 && viewport_h_i > 0 )
-@@ -1311,7 +1249,7 @@
+@@ -1311,7 +1366,7 @@
  			}
  			else
  			{
@@ -302,7 +857,7 @@
  				this->m_h = std::clamp( this->m_h, std::min( 500.0f, available_h ), available_h );
  				this->m_x = std::clamp( this->m_x, 0.0f, std::max( 0.0f, viewport_w - this->m_w ) );
  				this->m_y = std::clamp( this->m_y, 0.0f, std::max( 0.0f, viewport_h - this->m_h ) );
-@@ -1321,8 +1259,8 @@
+@@ -1321,8 +1376,8 @@
  		}
  
  		const auto menu_reveal = xui::ease::out_cubic( this->m_open_anim );
@@ -313,7 +868,7 @@
  		{
  			xui::end( );
  			return;
-@@ -1362,7 +1300,7 @@
+@@ -1362,7 +1417,7 @@
  				if ( decor.decor_grid.value )
  				{
  					decor_col.a = static_cast<std::uint8_t>( std::clamp( 3 + decor_level / 5, 3, 23 ) );
@@ -322,7 +877,7 @@
  					const auto gx1 = this->m_x + this->m_w - 12.0f;
  					const auto gy0 = this->m_y + 66.0f + 12.0f;
  					const auto gy1 = this->m_y + this->m_h - 12.0f;
-@@ -1456,7 +1394,7 @@
+@@ -1456,7 +1511,7 @@
  	{
  		auto& dl = xui::draw::current( );
  		const auto& input = xui::ctx( ).input;
@@ -331,7 +886,32 @@
  		const auto sx = this->m_x, sy = this->m_y, sw = tokens::sidebar_w, sh = h;
  		dl.rect_filled( sx, sy, sw, sh, xdraw::color{ 8, 9, 12, 184 }, xdraw::corner_radius::left( 10.0f ) );
  		dl.line( sx + sw - 1.0f, sy + 10.0f, sx + sw - 1.0f, sy + sh - 10.0f, xdraw::color{ 255, 255, 255, 16 }, 1.0f );
-@@ -1744,7 +1682,7 @@
+@@ -1724,18 +1779,19 @@
+ 		const auto layout = xui::rect{ hotkeys.x - tool_gap - tool_size, profile.y, tool_size, tool_size };
+ 		const auto search = xui::rect{ layout.x - tool_gap - tool_size, profile.y, tool_size, tool_size };
+ 
+-		auto draw_tool = [ & ]( const xui::rect& r, const char* glyph, bool active )
++		auto draw_tool = [ & ]( const xui::rect& r, const char* glyph, const char* tooltip, bool active )
+ 		{
+ 			const auto hover = !xui::ctx( ).overlay_blocking( ) && input.in_rect( r );
+ 			if ( hover || active ) dl.rect_filled( r.x, r.y, r.w, r.h, active ? tokens::col_accent.alpha( 35 ) : xdraw::color{ 255, 255, 255, 12 }, xdraw::corner_radius{ 6.0f } );
+ 			dl.text( r.x + 8.0f, r.y + 8.0f, glyph, active ? tokens::col_accent : xdraw::color{ 154, 160, 170, 235 } );
++            if ( hover && !input.mouse_down ) detail::draw_toolbar_tooltip( r, tooltip );
+ 			return hover;
+ 		};
+ 
+-		const auto search_hover = draw_tool( search, "⌕", this->m_search_open );
+-		const auto layout_hover = draw_tool( layout, "▦", this->m_layout_editor_open );
+-		const auto hotkey_hover = draw_tool( hotkeys, "⌨", this->m_hotkey_overview_open );
+-		const auto profile_hover = draw_tool( profile, "⚙", this->m_exact_page == 9 );
++		const auto search_hover = draw_tool( search, "⌕", "全局搜索", this->m_search_open );
++		const auto layout_hover = draw_tool( layout, "▦", "界面布局编辑器", this->m_layout_editor_open );
++		const auto hotkey_hover = draw_tool( hotkeys, "⌨", "全局快捷键总览", this->m_hotkey_overview_open );
++		const auto profile_hover = draw_tool( profile, "⚙", "个人中心", this->m_exact_page == 9 );
+ 
+ 		if ( input.mouse_clicked && !xui::ctx( ).overlay_blocking( ) )
+ 		{
+@@ -1744,7 +1800,7 @@
  				this->m_search_open = !this->m_search_open;
  				this->m_hotkey_overview_open = false;
  				this->m_layout_editor_open = false;
@@ -342,7 +922,124 @@
  			{
 --- a/project/core/rendering/impl/menu/menu.exact.cpp
 +++ b/project/core/rendering/impl/menu/menu.exact.cpp
-@@ -799,27 +799,35 @@
+@@ -1,5 +1,7 @@
+ #include <pch/pch.hpp>
+ #include <core/settings.hpp>
++#include <core/rendering/hotkey_conflicts.hpp>
++#include <core/rendering/hud_layout_xui.hpp>
+ #include <core/localization/zh_tw.hpp>
+ #include <core/scripting/nix_runtime.hpp>
+ #include <core/rendering/ui_state_v62.hpp>
+@@ -709,12 +711,18 @@
+         if ( !xui::begin_child( "##global_hotkey_overview", w, h, true ) ) return;
+ 
+         xui::text( "全局快捷键总览", tokens::col_text );
+-        xui::text( "可直接修改按键与触发方式，重复按键会标记冲突。", tokens::col_text_dim );
++        xui::text( "可修改按键与触发方式；会同时影响的同键设置标记冲突。", tokens::col_text_dim );
+         xui::text_input( "##global_hotkey_filter", this->m_hotkey_filter, 80, "搜索快捷键…" );
+         xui::layout::separator( );
+ 
+-        std::unordered_map<int, int> key_count{};
+-        for ( const auto* setting : xui::binds::all( ) ) if ( setting && setting->bind.key != 0 ) ++key_count[ setting->bind.key ];
++        static const auto scopes = hotkey_ui::describe_groups( settings::g_combat.m_ragebot, settings::g_combat.m_legitbot );
++        const auto describe = [&]( const xui::setting* setting ) {
++            const auto found = scopes.find( setting );
++            return found == scopes.end( ) ? hotkey_ui::scope{} : found->second;
++        };
++        std::unordered_map<int, std::vector<const xui::setting*>> same_key{};
++        for ( const auto* setting : xui::binds::all( ) )
++            if ( setting && setting->bind.key != 0 ) same_key[ setting->bind.key ].push_back( setting );
+         const auto ascii_lower_copy = []( std::string value )
+         {
+             for ( auto& ch : value )
+@@ -736,14 +744,23 @@
+ 
+             xui::push_id( reinterpret_cast<std::uintptr_t>( setting ) );
+             const auto avail = xui::layout::avail( ).first;
+-            if ( xui::begin_child( "##hotkey_row", std::max( 260.0f, avail ), 58.0f, false ) )
++            if ( xui::begin_child( "##hotkey_row", avail, 0.0f, false ) )
+             {
+                 const auto key_name = setting->bind.key ? xui::vk_name( setting->bind.key ) : "未绑定";
+-                const auto conflict = setting->bind.key != 0 && key_count[ setting->bind.key ] > 1;
++                bool conflict{}, separate_scopes{};
++                if ( setting->bind.key != 0 )
++                {
++                    for ( const auto* other_setting : same_key[ setting->bind.key ] )
++                    {
++                        if ( other_setting == setting ) continue;
++                        const auto explicit_exclusion = setting->bind.excludes == other_setting || other_setting->bind.excludes == setting;
++                        if ( hotkey_ui::overlaps( describe( setting ), describe( other_setting ), explicit_exclusion ) ) conflict = true;
++                        else separate_scopes = true;
++                    }
++                }
+                 xui::text( name, tokens::col_text );
+-                xui::text( category, tokens::col_text_dim );
+-                xui::layout::same_line( );
+-                xui::text( conflict ? "按键冲突" : ( setting->bind.active ? "已激活" : "未激活" ), conflict ? xdraw::color{255,105,105,255} : tokens::col_text_dim );
++                xui::text( xui::truncate( category, xui::layout::avail( ).first ), tokens::col_text_dim );
++                xui::text( conflict ? "按键冲突" : separate_scopes ? "不同作用域同键" : ( setting->bind.active ? "已激活" : "未激活" ), conflict ? xdraw::color{255,105,105,255} : tokens::col_text_dim );
+                 int mode = static_cast<int>( setting->bind.mode );
+                 xui::keybind( "按键##global_hotkey", setting->bind.key );
+                 xui::layout::same_line( );
+@@ -756,13 +773,56 @@
+         xui::end_child( );
+     }
+ 
++    namespace {
++        hud_layout::bindings layout_bindings( )
++        {
++            auto& wm = settings::g_misc.m_watermark;
++            auto& kb = settings::g_misc.m_widgets.m_keybinds;
++            auto& st = settings::g_misc.m_widgets.m_status;
++            auto& other = settings::g_esp.m_other;
++            auto& impacts = settings::g_misc.m_impacts;
++            return {{
++                { &wm.offset_x.value, &wm.offset_y.value, &wm.scale.value, wm.enabled.value },
++                { &kb.offset_x.value, &kb.offset_y.value, &kb.scale.value, kb.enabled.value },
++                { &st.offset_x.value, &st.offset_y.value, &st.scale.value, st.enabled.value },
++                { &other.spectator_offset_x.value, &other.spectator_offset_y.value, &other.spectator_scale.value, other.spectator_list.value },
++                { &other.bomb_offset_x.value, &other.bomb_offset_y.value, &other.bomb_scale.value, other.bomb_timer.value },
++                { &impacts.stats_offset_x.value, &impacts.stats_offset_y.value, &impacts.stats_scale.value, impacts.session_stats.value }
++            }};
++        }
++    }
++
++    bool menu::draw_direct_layout_editor( )
++    {
++        auto& editor = hud_layout::editing;
++        if ( !editor.open ) return false;
++        const auto bindings = layout_bindings( );
++        if ( !this->m_open ) { editor.finish( bindings, false ); hud_layout::surface.dragging = false; return false; }
++        // Recover a release outside the client or focus transfer even if Win32 did not
++        // deliver its release message. Never leave a logical drag captured indefinitely.
++        const auto& input = xui::ctx( ).input;
++        const auto lost_pointer = ( editor.captured >= 0 || hud_layout::surface.dragging ) && !input.mouse_released &&
++            ( GetForegroundWindow( ) != g_context.get_window( ) || ( GetAsyncKeyState( VK_LBUTTON ) & 0x8000 ) == 0 );
++        hud_layout::draw_editor( editor, hud_layout::rendered, bindings, lost_pointer );
++        return true;
++    }
++
+     void menu::draw_layout_editor( float x, float y, float w, float h )
+     {
+         xui::layout::set_cursor( x - this->m_x, y - this->m_y );
+         if ( !xui::begin_child( "##hud_layout_editor", w, h, true ) ) return;
+ 
+         xui::text( "界面布局编辑器", tokens::col_text );
+-        xui::text( "每个屏幕组件都可以独立调整位置偏移与大小，不再只能选择固定角落。", tokens::col_text_dim );
++        xui::text( "直接拖动实际组件或拖动四角缩放；也可继续使用下方滑块。", tokens::col_text_dim );
++        if ( xui::button( "进入屏幕直接编辑##hud_direct_start", 230.0f, 28.0f ) )
++        {
++            xui::overlays::close_all( );
++            auto& c = xui::ctx( );
++            c.active_window = c.active_resize = c.active_slider = c.active_text_input = c.active_slider_edit = c.active_keybind = c.active_child_scroll = xui::null_id;
++            hud_layout::surface.dragging = false;
++            hud_layout::editing.start( layout_bindings( ) );
++        }
++        xui::text( "仅为当前可见组件显示编辑框；关闭或没有内容的组件不会生成假预览。", tokens::col_text_dim );
+         xui::layout::separator( );
+ 
+         auto& wm = settings::g_misc.m_watermark;
+@@ -799,27 +859,35 @@
          xui::layout::set_cursor( x - this->m_x, y - this->m_y );
          if ( !xui::begin_child( "##misc_all_in_one", w, h, true ) ) return;
  
@@ -799,15 +1496,20 @@
 +}
 --- a/project/core/rendering/impl/widgets.cpp
 +++ b/project/core/rendering/impl/widgets.cpp
-@@ -8,6 +8,7 @@
+@@ -8,6 +8,8 @@
  #include <core/features/features.hpp>
  
  #include "../rendering.hpp"
 +#include <core/rendering/viewport_bounds.hpp>
++#include <core/rendering/hud_layout.hpp>
  #include <utilities/security/security.hpp>
  
  namespace rendering {
-@@ -192,8 +193,8 @@
+@@ -189,11 +191,15 @@
+ 		if ( smoothed_w == 0.0f ) smoothed_w = target_w;
+ 		smoothed_w += ( target_w - smoothed_w ) * std::min( 8.0f * xdraw::delta_time( ), 1.0f );
+ 
++		if ( hud_layout::editing.open ) smoothed_w = target_w;
  		const auto w = smoothed_w;
  		const auto right = wm.placement.value == settings::misc::watermark_cfg::position::top_right || wm.placement.value == settings::misc::watermark_cfg::position::bottom_right;
  		const auto bottom = wm.placement.value == settings::misc::watermark_cfg::position::bottom_left || wm.placement.value == settings::misc::watermark_cfg::position::bottom_right;
@@ -815,10 +1517,13 @@
 -		const auto y = ( bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + wm.offset_y.value;
 +		const auto x = rendering::viewport::clamp_origin( ( right ? static_cast<float>( screen_w ) - w - margin : margin ) + wm.offset_x.value, std::max( w, target_w ), static_cast<float>( screen_w ) );
 +		const auto y = rendering::viewport::clamp_origin( ( bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + wm.offset_y.value, h, static_cast<float>( screen_h ) );
++		hud_layout::rendered.add( hud_layout::component::watermark, { x, y, std::max( w, target_w ), h },
++			( right ? static_cast<float>( screen_w ) - w - margin : margin ),
++			( bottom ? static_cast<float>( screen_h ) - h - margin : margin ) );
  		auto wm_col = [ & ]( xdraw::color c ) { c.a = static_cast<std::uint8_t>( static_cast<float>( c.a ) * wm_alpha ); return c; };
  
  		draw_list.rect_filled_blurred( x, y, w, h, xdraw::corner_radius{ r } );
-@@ -293,8 +294,8 @@
+@@ -293,8 +299,12 @@
  		const auto right = placement == settings::misc::widgets_cfg::status_cfg::position::right_top || placement == settings::misc::widgets_cfg::status_cfg::position::right_center || placement == settings::misc::widgets_cfg::status_cfg::position::right_bottom;
  		const auto top = placement == settings::misc::widgets_cfg::status_cfg::position::left_top || placement == settings::misc::widgets_cfg::status_cfg::position::right_top;
  		const auto bottom = placement == settings::misc::widgets_cfg::status_cfg::position::left_bottom || placement == settings::misc::widgets_cfg::status_cfg::position::right_bottom;
@@ -826,13 +1531,18 @@
 -		auto y = ( top ? margin : bottom ? static_cast<float>( screen_h ) - panel_h - margin : ( static_cast<float>( screen_h ) - panel_h ) * 0.5f ) + cfg.offset_y.value;
 +		const auto x = rendering::viewport::clamp_origin( ( right ? static_cast<float>( screen_w ) - panel_w - margin : margin ) + cfg.offset_x.value, panel_w, static_cast<float>( screen_w ) );
 +		auto y = rendering::viewport::clamp_origin( ( top ? margin : bottom ? static_cast<float>( screen_h ) - panel_h - margin : ( static_cast<float>( screen_h ) - panel_h ) * 0.5f ) + cfg.offset_y.value, panel_h, static_cast<float>( screen_h ) );
++
++		hud_layout::rendered.add( hud_layout::component::status, { x, y, panel_w, panel_h },
++			( right ? static_cast<float>( screen_w ) - panel_w - margin : margin ),
++			( top ? margin : bottom ? static_cast<float>( screen_h ) - panel_h - margin : ( static_cast<float>( screen_h ) - panel_h ) * 0.5f ) );
  
  		auto draw_row = [ & ]( const char* label, const char* value, bool bad )
  		{
-@@ -515,41 +516,14 @@
+@@ -514,42 +524,16 @@
+ 
  		smoothed_base_y.set_target( target_base_y );
  		smoothed_base_y.update( );
- 
+-
 -		const auto base_ry = smoothed_base_y.value( );
 -
 -		static auto icon_w_px = 0, icon_h_px = 0;
@@ -865,6 +1575,8 @@
 -			draw_list.text( htx + text_pad_x, base_ry + ( header_h - header_th ) * 0.5f + text_nudge, "快捷键", s.accent.alpha( static_cast< std::uint8_t >( s.accent.a * master_alpha ) ) );
 -		}
 -
++		if ( hud_layout::editing.open ) smoothed_base_y.snap( target_base_y );
++
 +		// Clamp the actual spring/fade bounds, including rows leaving the list.
  		for ( auto& [name, state] : row_states )
  			state.active_this_frame = false;
@@ -876,12 +1588,15 @@
  		float current_offset_y = header_block_h;
  		for ( auto i = 0; i < count; ++i )
  		{
-@@ -565,8 +539,70 @@
+@@ -564,9 +548,74 @@
+ 			anim.offset_y.set_target( current_offset_y );
  			anim.alpha.update( );
  			anim.offset_y.update( );
- 
+-
 -			const auto row_alpha = anim.alpha.alpha( ) * master_alpha;
 -			const auto draw_y = base_ry + anim.offset_y.value( );
++			if ( hud_layout::editing.open ) anim.offset_y.snap( current_offset_y );
++
 +			row_offsets[ i ] = anim.offset_y.value( );
 +			row_alphas[ i ] = anim.alpha.alpha( );
 +			animated_min_y = std::min( animated_min_y, row_offsets[ i ] );
@@ -923,6 +1638,8 @@
 +
 +		if ( kb_cfg.show_header.value )
 +		{
++			hud_layout::rendered.add( hud_layout::component::keybinds, { header_x, base_ry, header_w, header_h },
++				( right_side ? static_cast<float>( screen_w ) - margin - header_w : margin ), target_base_y - kb_cfg.offset_y.value );
 +			draw_list.rect_filled_blurred( header_x, base_ry, header_w, header_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, master_u8 } );
 +			draw_list.rect_filled( header_x, base_ry, header_w, header_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * master_alpha ) ), xdraw::corner_radius{ r } );
 +			draw_list.rect_filled( header_x + inner_pad, base_ry + inner_pad, icon_size, header_inner_h, s.accent.alpha( static_cast< std::uint8_t >( s.accent.a * master_alpha ) ), xdraw::corner_radius{ inner_r } );
@@ -949,16 +1666,21 @@
  			const auto [nw, nh] = xdraw::measure_text( e.name );
  			const auto row_u8 = static_cast< std::uint8_t >( 255.0f * row_alpha );
  
-@@ -576,7 +612,7 @@
+@@ -576,8 +625,11 @@
  				const auto name_pill_w = nw + text_pad_x * 2.0f;
  				const auto value_pill_w = vw + text_pad_x * 2.0f;
  				const auto row_w = inner_pad + name_pill_w + inner_pad + value_pill_w + inner_pad;
 -				const auto row_x = ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value;
+-
 +				const auto row_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value, row_w, static_cast<float>( screen_w ) );
- 
++
++				hud_layout::rendered.add( hud_layout::component::keybinds, { row_x, draw_y, row_w, row_h },
++					( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ),
++					target_base_y - kb_cfg.offset_y.value + draw_y - base_ry );
  				draw_list.rect_filled_blurred( row_x, draw_y, row_w, row_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, row_u8 } );
  				draw_list.rect_filled( row_x, draw_y, row_w, row_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * row_alpha ) ), xdraw::corner_radius{ r } );
-@@ -591,7 +627,7 @@
+ 				draw_list.rect_filled( row_x + inner_pad, draw_y + inner_pad, name_pill_w, inner_h, s.child_bg.alpha( static_cast< std::uint8_t >( s.child_bg.a * row_alpha ) ), xdraw::corner_radius{ inner_r } );
+@@ -591,43 +643,37 @@
  			{
  				const auto name_pill_w = nw + text_pad_x * 2.0f;
  				const auto row_w = inner_pad + name_pill_w + inner_pad;
@@ -966,8 +1688,12 @@
 +				const auto row_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value, row_w, static_cast<float>( screen_w ) );
  				const auto text_col = ( e.mode == xui::bind_mode::toggle ) ? s.text_dim : s.accent;
  
++				hud_layout::rendered.add( hud_layout::component::keybinds, { row_x, draw_y, row_w, row_h },
++					( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ),
++					target_base_y - kb_cfg.offset_y.value + draw_y - base_ry );
  				draw_list.rect_filled_blurred( row_x, draw_y, row_w, row_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, row_u8 } );
-@@ -600,34 +636,22 @@
+ 				draw_list.rect_filled( row_x, draw_y, row_w, row_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * row_alpha ) ), xdraw::corner_radius{ r } );
+ 				draw_list.rect_filled( row_x + inner_pad, draw_y + inner_pad, name_pill_w, inner_h, s.child_bg.alpha( static_cast< std::uint8_t >( s.child_bg.a * row_alpha ) ), xdraw::corner_radius{ inner_r } );
  				draw_list.text( row_x + inner_pad + text_pad_x, draw_y + ( row_h - nh ) * 0.5f + text_nudge, e.name, text_col.alpha( static_cast< std::uint8_t >( text_col.a * row_alpha ) ) );
  			}
  
@@ -997,8 +1723,12 @@
  				const auto [nw, nh] = xdraw::measure_text( it->first.c_str( ) );
  				const auto row_w = inner_pad + ( nw + text_pad_x * 2.0f ) + inner_pad;
 -				const auto row_x = ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value;
+-
 +				const auto row_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value, row_w, static_cast<float>( screen_w ) );
- 
++
++				hud_layout::rendered.add( hud_layout::component::keybinds, { row_x, draw_y, row_w, row_h },
++					( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ),
++					target_base_y - kb_cfg.offset_y.value + draw_y - base_ry );
  				draw_list.rect_filled_blurred( row_x, draw_y, row_w, row_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, row_u8 } );
  				draw_list.rect_filled( row_x, draw_y, row_w, row_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * row_alpha ) ), xdraw::corner_radius{ r } );
  			}
@@ -1018,7 +1748,15 @@
  
  namespace rendering {
  
-@@ -128,13 +130,13 @@
+@@ -74,6 +76,7 @@
+         void draw_search_results( float x, float y, float w, float h );
+         void draw_hotkey_overview( float x, float y, float w, float h );
+         void draw_layout_editor( float x, float y, float w, float h );
++        bool draw_direct_layout_editor( );
+         void draw_misc_hub( float x, float y, float w, float h );
+         void rebuild_search_index( );
+         void close_search( );
+@@ -128,13 +131,13 @@
          int m_exact_page{};
          int m_profile_tab{};
          bool m_sidebar_compact{};
@@ -1034,7 +1772,7 @@
          std::string m_hotkey_filter{};
          int m_exact_config_index{};
          int m_subtab_pill_tab{ -1 };
-@@ -156,8 +158,7 @@
+@@ -156,8 +159,7 @@
  			std::string category{};
  			std::string name_lower{};
  			std::string category_lower{};

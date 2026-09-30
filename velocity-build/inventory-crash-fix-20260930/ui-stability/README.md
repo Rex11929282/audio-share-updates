@@ -25,3 +25,9 @@ The existing quick-configuration removal stays in place. Normal configuration fi
 - The former vector window-storage pattern reproduces a heap-use-after-free under AddressSanitizer; the deque pattern preserves parent addresses
 
 Passing these checks does not prove CS2 gameplay execution or reproduction of a user's game crash. In-game testing remains explicitly unverified.
+
+## Second batch
+
+Includes full search breadcrumbs, a separate key-badge column, UTF-8-safe truncation and four toolbar tooltips. Scope-aware hotkey warnings use field identity; master keys, overrides, unknown settings and potentially lingering debug rendering remain conservative.
+
+The direct HUD editor uses actual current-frame bounds. It supports drag, four-corner scale editing, snapping/alignment guides, release outside, focus/capture-loss recovery, viewport changes and cancel/restore. Hidden or disabled HUD components remain hidden and retain the slider fallback. Closing the menu cancels the editor session. No gameplay data collection or feature algorithm changes are introduced.
