@@ -1065,8 +1065,107 @@
 +    }
 +
 +} // namespace rendering::viewport
+--- a/project/core/scripting/lua_manager.cpp
++++ b/project/core/scripting/lua_manager.cpp
+@@ -473,7 +473,7 @@
+         dialog.lpstrFilter = filter;
+         dialog.lpstrFile = selected;
+         dialog.nMaxFile = static_cast< DWORD >( std::size( selected ) );
+-        dialog.lpstrTitle = L"導入 Lua 脚本";
++        dialog.lpstrTitle = L"导入 Lua 脚本";
+         dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_EXPLORER;
+         dialog.lpstrDefExt = L"lua";
+ 
+@@ -485,7 +485,7 @@
+         std::filesystem::path source{ selected };
+         if ( _wcsicmp( source.extension( ).c_str( ), L".lua" ) != 0 )
+         {
+-            logging::console::print( "[MCB Lua] 導入失败：只允许 .lua 档案" );
++            logging::console::print( "[MCB Lua] 导入失败：只允许 .lua 档案" );
+             return false;
+         }
+ 
+@@ -512,13 +512,13 @@
+                 std::filesystem::copy_options::overwrite_existing, ec );
+             if ( ec )
+             {
+-                logging::console::print( "[MCB Lua] 導入失败：{}", ec.message( ) );
++                logging::console::print( "[MCB Lua] 导入失败：{}", ec.message( ) );
+                 return false;
+             }
+         }
+ 
+         m_scan_requested.store( true, std::memory_order_release );
+-        logging::console::print( "[MCB Lua] 已導入，将在下一帧载入：{}", destination.filename( ).string( ) );
++        logging::console::print( "[MCB Lua] 已导入，将在下一帧载入：{}", destination.filename( ).string( ) );
+         return true;
+     }
+ 
+@@ -701,7 +701,7 @@
+         if ( result != LUA_OK )
+         {
+             const auto error = lua_tostring( value.state, -1 );
+-            const std::string message = error ? error : "未知錯誤";
++            const std::string message = error ? error : "未知错误";
+             log_error_unlocked( value, "载入", message.c_str( ) );
+             lua_close( value.state );
+             value.state = nullptr;
+@@ -750,7 +750,7 @@
+         if ( result != LUA_OK )
+         {
+             const auto error = lua_tostring( value.state, -1 );
+-            const std::string message = error ? error : "未知錯誤";
++            const std::string message = error ? error : "未知错误";
+             lua_pop( value.state, 1 );
+             log_error_unlocked( value, callback, message.c_str( ) );
+             if ( std::string_view{ callback } == "on_frame" || std::string_view{ callback } == "on_load" )
+--- a/project/external/xdraw/xdraw.cpp
++++ b/project/external/xdraw/xdraw.cpp
+@@ -2443,11 +2443,11 @@
+ 		{
+ 			const auto fonts_dir = std::filesystem::path( windows_dir ) / L"Fonts";
+ 			const std::array candidates{
+-				fonts_dir / L"msjh.ttc",   // Microsoft JhengHei (Traditional Chinese)
++				fonts_dir / L"msyh.ttc",   // Prefer Simplified Chinese glyph forms.
++				fonts_dir / L"simsun.ttc",
++				fonts_dir / L"msjh.ttc",   // Traditional Chinese fallback when unavailable.
+ 				fonts_dir / L"msjhbd.ttc",
+-				fonts_dir / L"mingliu.ttc",
+-				fonts_dir / L"msyh.ttc",
+-				fonts_dir / L"simsun.ttc"
++				fonts_dir / L"mingliu.ttc"
+ 			};
+ 
+ 			for ( const auto& candidate : candidates )
 --- a/project/external/xdraw/xui/xui.cpp
 +++ b/project/external/xdraw/xui/xui.cpp
+@@ -1072,7 +1072,7 @@
+ 		{
+ 			switch ( m )
+ 			{
+-			case bind_mode::toggle:   return "切換";
++			case bind_mode::toggle:   return "切换";
+ 			case bind_mode::hold_on:  return "按住启用";
+ 			case bind_mode::hold_off: return "按住停用";
+ 			default:                  return "未知";
+@@ -1605,7 +1605,7 @@
+ 
+ 	const char* vk_name( int key )
+     {
+-        if(key==0)return "未綁定";
++        if(key==0)return "未绑定";
+         thread_local char text[48]{};
+         if(key>=0x41 && key<=0x5A){std::snprintf(text,sizeof(text),"字母键%02d",key-0x40);return text;}
+         if(key>=0x30 && key<=0x39){std::snprintf(text,sizeof(text),"数字键%d",key-0x30);return text;}
+@@ -1619,7 +1619,7 @@
+         case VK_SPACE:return "空白键";case VK_RETURN:return "确認键";case VK_ESCAPE:return "退出键";
+         case VK_TAB:return "定位键";case VK_CAPITAL:return "大写锁定";case VK_INSERT:return "插入键";
+         case VK_DELETE:return "删除键";case VK_HOME:return "起始键";case VK_END:return "结束键";
+-        case VK_PRIOR:return "上一頁";case VK_NEXT:return "下一頁";
++        case VK_PRIOR:return "上一页";case VK_NEXT:return "下一页";
+         case VK_LEFT:return "向左键";case VK_RIGHT:return "向右键";case VK_UP:return "向上键";case VK_DOWN:return "向下键";
+         case VK_BACK:return "退格键";case VK_PAUSE:return "暂停键";case VK_SNAPSHOT:return "截圖键";
+         default:std::snprintf(text,sizeof(text),"按键%d",key);return text;
 @@ -1885,7 +1885,7 @@
  		const auto consumed_y = pwin->cursor_y + ( pwin->line_h > 0.0f ? pwin->line_h + s.item_spacing_y : 0.0f );
  		const auto max_h = parent->bounds.h - consumed_y - s.window_pad_y;
@@ -1084,6 +1183,17 @@
  		state.group_id = id;
  		state.scrollable = scrollable;
  		state.scroll_y = scroll_y;
+@@ -2453,8 +2454,8 @@
+ 						text_col = lerp( text_col, style.text, ha );
+ 						text_col.a = static_cast< std::uint8_t >( text_col.a * item_alpha );
+ 
+-						const auto [cw, ch] = xdraw::measure_text( "清除綁定" );
+-						dl.text( ir.x + ( ir.w - cw ) * 0.5f, ir.y + ( k_item_h - ch ) * 0.5f + slide, "清除綁定", text_col );
++						const auto [cw, ch] = xdraw::measure_text( "清除绑定" );
++						dl.text( ir.x + ( ir.w - cw ) * 0.5f, ir.y + ( k_item_h - ch ) * 0.5f + slide, "清除绑定", text_col );
+ 					}
+ 					else
+ 					{
 @@ -2527,10 +2528,11 @@
  		const auto& input = c.input;
  

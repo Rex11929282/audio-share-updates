@@ -2,6 +2,10 @@
 // Executes against the real production XUI implementation in a D3D11 WARP host.
 // It does not load the game DLL or call any game systems.
 static void ui_stability_regression(){
+ check(std::string(xui::binds::mode_name(xui::bind_mode::toggle))=="切换","toggle mode label uses Simplified Chinese");
+ check(std::string(xui::vk_name(0))=="未绑定","unbound key label uses Simplified Chinese");
+ check(std::string(xui::vk_name(VK_PRIOR))=="上一页","page-up label uses Simplified Chinese");
+ check(std::string(xui::vk_name(VK_NEXT))=="下一页","page-down label uses Simplified Chinese");
  xdraw::begin_frame();xui::begin();
  float x=40,y=40,w=846,h=640;
  check(xui::begin_window("MCB##stability",x,y,w,h,false),"stability root window");
@@ -75,8 +79,8 @@ static void ui_viewport_regression(){
 #include <iostream>
 #include <iterator>
 #include <string_view>
-using namespace rendering::ui_model;
 static void ui_model_regression() {
+    using namespace rendering::ui_model;
     section_focus focus{};
     focus.request(5);
     UI_ASSERT(focus.update(100,false) && focus.index==5);

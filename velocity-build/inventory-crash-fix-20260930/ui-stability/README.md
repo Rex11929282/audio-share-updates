@@ -4,6 +4,7 @@ Baseline: `f1ab0e76098287f8c3460ea673ec02c07a6d7008`, Actions Run 92.
 
 This patch is applied after the existing inventory patch. It only changes UI storage, layout, drawing bounds and search navigation. It does not change feature algorithms or automatically execute configuration/script actions.
 
+- Remaining Traditional Chinese key/Lua labels use Simplified Chinese; font fallback prefers YaHei/SimSun
 - Stable XUI window storage prevents retained parent pointers from becoming dangling when inventory options or nested children open
 - Checkbox layout reserves displayed labels and bind badges
 - Inventory options grow to fit controls; cards start below the toolbar and agent-team cards wrap at one column

@@ -9,6 +9,8 @@
   "project/core/rendering/impl/widgets.cpp",
   "project/core/rendering/rendering.hpp",
   "project/core/rendering/viewport_bounds.hpp",
+  "project/core/scripting/lua_manager.cpp",
+  "project/external/xdraw/xdraw.cpp",
   "project/external/xdraw/xui/xui.cpp",
   "project/external/xdraw/xui/xui.hpp"
 ]
