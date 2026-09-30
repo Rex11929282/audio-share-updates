@@ -1,0 +1,1137 @@
+--- a/project/core/features/esp/other/other.overlay.cpp
++++ b/project/core/features/esp/other/other.overlay.cpp
+@@ -3,6 +3,7 @@
+ #include <utilities/addresses/addresses.hpp>
+ #include <utilities/steam/steam.hpp>
+ #include <core/rendering/rendering.hpp>
++#include <core/rendering/viewport_bounds.hpp>
+ #include <core/settings.hpp>
+ #include <core/features/features.hpp>
+ 
+@@ -343,8 +344,8 @@
+ 		const auto timer_pill_w = timer_vw + timer_uw + text_pad_x * 2.0f;
+ 
+ 		const auto total_w = inner_pad + site_pill_w + section_spacing + health_pill_w + section_spacing + timer_pill_w + inner_pad;
+-		const auto x = ( static_cast< float >( screen_w ) - total_w ) * 0.5f + other_cfg.bomb_offset_x.value;
+-		const auto y = ( other_cfg.bomb_placement.value == settings::esp::other::bomb_position::bottom_center ? static_cast<float>( screen_h ) - h - top_offset : top_offset ) + other_cfg.bomb_offset_y.value;
++		const auto x = rendering::viewport::clamp_origin( ( static_cast< float >( screen_w ) - total_w ) * 0.5f + other_cfg.bomb_offset_x.value, total_w, static_cast<float>( screen_w ) );
++		const auto y = rendering::viewport::clamp_origin( ( other_cfg.bomb_placement.value == settings::esp::other::bomb_position::bottom_center ? static_cast<float>( screen_h ) - h - top_offset : top_offset ) + other_cfg.bomb_offset_y.value, h, static_cast<float>( screen_h ) );
+ 
+ 		draw_list.rect_filled_blurred( x, y, total_w, h, xdraw::corner_radius{ r } );
+ 		draw_list.rect_filled( x, y, total_w, h, bomb_col( s.window_bg ), xdraw::corner_radius{ r } );
+@@ -504,8 +505,8 @@
+ 		const auto bottom_side = placement == settings::esp::other::spectator_position::left_bottom || placement == settings::esp::other::spectator_position::right_bottom;
+ 		const auto header_block_h = other_cfg.spectator_header.value ? header_h + row_spacing : 0.0f;
+ 		const auto total_h = header_block_h + static_cast<float>( count ) * ( row_h + row_spacing );
+-		auto ry = ( top_side ? margin : bottom_side ? static_cast<float>( screen_h ) - margin - total_h : ( static_cast<float>( screen_h ) - total_h ) * 0.5f ) + other_cfg.spectator_offset_y.value;
+-		const auto x = ( right_side ? static_cast<float>( screen_w ) - header_w - margin : margin ) + other_cfg.spectator_offset_x.value;
++		auto ry = rendering::viewport::clamp_origin( ( top_side ? margin : bottom_side ? static_cast<float>( screen_h ) - margin - total_h : ( static_cast<float>( screen_h ) - total_h ) * 0.5f ) + other_cfg.spectator_offset_y.value, total_h - row_spacing, static_cast<float>( screen_h ) );
++		const auto x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - header_w - margin : margin ) + other_cfg.spectator_offset_x.value, header_w, static_cast<float>( screen_w ) );
+ 
+ 		if ( other_cfg.spectator_header.value )
+ 		{
+@@ -540,7 +541,7 @@
+ 
+ 			const auto name_pill_w = nw + text_pad_x * 2.0f;
+ 			const auto row_w = inner_pad + name_pill_w + ( has_avatar ? inner_pad + avatar_pill_size : 0.0f ) + inner_pad;
+-			const auto rx = ( right_side ? static_cast< float >( screen_w ) - row_w - margin : margin ) + other_cfg.spectator_offset_x.value;
++			const auto rx = rendering::viewport::clamp_origin( ( right_side ? static_cast< float >( screen_w ) - row_w - margin : margin ) + other_cfg.spectator_offset_x.value, row_w, static_cast<float>( screen_w ) );
+ 
+ 			draw_list.rect_filled_blurred( rx, ry, row_w, row_h, xdraw::corner_radius{ r } );
+ 			draw_list.rect_filled( rx, ry, row_w, row_h, spectator_col( s.window_bg ), xdraw::corner_radius{ r } );
+--- a/project/core/features/misc/impl/impacts.cpp
++++ b/project/core/features/misc/impl/impacts.cpp
+@@ -8,6 +8,7 @@
+ #include <utilities/logging/logging.hpp>
+ #include <core/systems/systems.hpp>
+ #include <core/rendering/rendering.hpp>
++#include <core/rendering/viewport_bounds.hpp>
+ #include <core/settings.hpp>
+ #include <core/features/features.hpp>
+ #include <protection/game_addresses.hpp>
+@@ -1493,8 +1494,8 @@
+ 		const auto margin = 18.0f * layout_scale;
+ 		const auto on_right = cfg.stats_position.value == settings::misc::impacts::feed_position::top_right || cfg.stats_position.value == settings::misc::impacts::feed_position::bottom_right;
+ 		const auto on_bottom = cfg.stats_position.value == settings::misc::impacts::feed_position::bottom_left || cfg.stats_position.value == settings::misc::impacts::feed_position::bottom_right;
+-		const auto x = ( on_right ? static_cast<float>( screen_w ) - w - margin : margin ) + cfg.stats_offset_x.value;
+-		const auto y = ( on_bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + cfg.stats_offset_y.value;
++		const auto x = rendering::viewport::clamp_origin( ( on_right ? static_cast<float>( screen_w ) - w - margin : margin ) + cfg.stats_offset_x.value, w, static_cast<float>( screen_w ) );
++		const auto y = rendering::viewport::clamp_origin( ( on_bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + cfg.stats_offset_y.value, h, static_cast<float>( screen_h ) );
+ 		auto ac = [ & ]( xdraw::color c ) { c.a = static_cast<std::uint8_t>( static_cast<float>( c.a ) * alpha ); return c; };
+ 
+ 		draw_list.rect_filled_blurred( x, y, w, h, xdraw::corner_radius{ 6.0f }, xdraw::color{ 255, 255, 255, static_cast<std::uint8_t>( 255.0f * alpha ) } );
+--- a/project/core/rendering/impl/menu/menu.core.cpp
++++ b/project/core/rendering/impl/menu/menu.core.cpp
+@@ -65,79 +65,6 @@
+ 			return out;
+ 		}
+ 
+-		[[nodiscard]] static int parse_weapon_subtab( const std::string& category_lower )
+-		{
+-			if ( category_lower.find( "pistol" ) != std::string::npos ) return 0;
+-			if ( category_lower.find( "smg" ) != std::string::npos ) return 1;
+-			if ( category_lower.find( "rifle" ) != std::string::npos ) return 2;
+-			if ( category_lower.find( "shotgun" ) != std::string::npos ) return 3;
+-			if ( category_lower.find( "sniper" ) != std::string::npos ) return 4;
+-			if ( category_lower.find( "lmg" ) != std::string::npos ) return 5;
+-			return 0;
+-		}
+-
+-		[[nodiscard]] static std::pair<int, int> map_category_to_tab( const std::string& category_lower )
+-		{
+-			if ( category_lower.find( "ragebot" ) != std::string::npos || category_lower.find( "anti aim" ) != std::string::npos || category_lower.find( "peek assistance" ) != std::string::npos || category_lower.find( "zeusbot" ) != std::string::npos || category_lower.find( "knifebot" ) != std::string::npos || category_lower.find( "autos" ) != std::string::npos )
+-			{
+-				return { 0, parse_weapon_subtab( category_lower ) };
+-			}
+-
+-			if ( category_lower.find( "legitbot" ) != std::string::npos )
+-			{
+-				return { 1, parse_weapon_subtab( category_lower ) };
+-			}
+-
+-			if ( category_lower.find( "enemy" ) != std::string::npos || category_lower.find( "player enemies" ) != std::string::npos )
+-			{
+-				return { 2, 0 };
+-			}
+-			if ( category_lower.find( "allies" ) != std::string::npos || category_lower.find( "teammate" ) != std::string::npos || category_lower.find( "friendly" ) != std::string::npos )
+-			{
+-				return { 2, 1 };
+-			}
+-			if ( category_lower.find( "local" ) != std::string::npos )
+-			{
+-				return { 2, 2 };
+-			}
+-
+-			if ( category_lower.find( "scene" ) != std::string::npos )
+-			{
+-				return { 3, 1 };
+-			}
+-			if ( category_lower.find( "weather" ) != std::string::npos )
+-			{
+-				return { 3, 2 };
+-			}
+-			if ( category_lower.find( "world" ) != std::string::npos || category_lower.find( "projectile" ) != std::string::npos || category_lower.find( "item" ) != std::string::npos || category_lower.find( "bomb" ) != std::string::npos || category_lower.find( "spectator" ) != std::string::npos )
+-			{
+-				return { 3, 0 };
+-			}
+-
+-			if ( category_lower.find( "knife" ) != std::string::npos )
+-			{
+-				return { 4, 1 };
+-			}
+-			if ( category_lower.find( "glove" ) != std::string::npos )
+-			{
+-				return { 4, 2 };
+-			}
+-			if ( category_lower.find( "agent" ) != std::string::npos )
+-			{
+-				return { 4, 3 };
+-			}
+-			if ( category_lower.find( "skin" ) != std::string::npos || category_lower.find( "paint" ) != std::string::npos || category_lower.find( "sticker" ) != std::string::npos || category_lower.find( "wear" ) != std::string::npos )
+-			{
+-				return { 4, 0 };
+-			}
+-
+-			if ( category_lower.find( "config" ) != std::string::npos )
+-			{
+-				return { 6, 0 };
+-			}
+-
+-			return { 5, 0 };
+-		}
+ 
+ 	} // namespace detail
+ 
+@@ -1002,32 +929,32 @@
+ 
+ 	void menu::rebuild_search_index( )
+ 	{
+-		this->m_search_entries.clear( );
+-
+-		const auto all_settings = xui::binds::all( );
+-		this->m_search_entries.reserve( all_settings.size( ) );
+-
+-		for ( const auto* setting : all_settings )
+-		{
+-			if ( !setting || setting->name.empty( ) )
+-			{
+-				continue;
+-			}
+-
+-			search_entry entry{};
+-			entry.name = setting->name;
+-			entry.category = setting->category;
+-			entry.name_lower = detail::to_lower_copy( entry.name );
+-			entry.name_lower.push_back( '\n' );
+-			entry.name_lower.append( localization::tr( entry.name ) );
+-			entry.category_lower = detail::to_lower_copy( entry.category );
+-			entry.category_lower.push_back( '\n' );
+-			entry.category_lower.append( localization::tr( entry.category ) );
+-			std::tie( entry.tab, entry.subtab ) = detail::map_category_to_tab( entry.category_lower );
+-			entry.bind_key = setting->bind.key;
+-
+-			this->m_search_entries.emplace_back( std::move( entry ) );
+-		}
++        this->m_search_entries.clear( );
++        const auto all_settings = xui::binds::all( );
++        this->m_search_entries.reserve( all_settings.size( ) + std::size( ui_model::controls ) );
++        auto append = [ & ]( std::string_view name, std::string_view category, ui_model::search_route route, int bind_key, std::string_view kind )
++        {
++            if ( name.empty( ) ) return;
++            search_entry entry{};
++            entry.name = name;
++            entry.category = category;
++            entry.name_lower = detail::to_lower_copy( name );
++            entry.name_lower += "\n" + std::string( localization::tr( name ) );
++            entry.category_lower = detail::to_lower_copy( category );
++            entry.category_lower += "\n" + std::string( localization::tr( category ) ) + "\n" + std::string( kind );
++            entry.destination = route;
++            entry.bind_key = bind_key;
++            this->m_search_entries.emplace_back( std::move( entry ) );
++        };
++        for ( const auto& control : ui_model::controls )
++            append( control.label, control.category, control.route, 0, control.kind );
++        for ( const auto* setting : all_settings )
++        {
++            if ( !setting || setting->name.empty( ) ) continue;
++            append( setting->name, setting->category,
++                ui_model::category_route( detail::to_lower_copy( setting->category ), detail::to_lower_copy( setting->name ) ),
++                setting->bind.key, "checkbox" );
++        }
+ 	}
+ 
+ 	void menu::close_search( )
+@@ -1045,24 +972,46 @@
+ 		}
+ 
+ 		const auto& chosen = this->m_search_entries[ this->m_search_visible_indices[ index ] ];
+-		this->m_tab = std::clamp( chosen.tab, 0, 6 );
+-		this->m_subtab = std::clamp( chosen.subtab, 0, k_subtab_defs[ this->m_tab ].count - 1 );
+-		if ( this->m_tab == 0 ) { this->m_exact_page = 0; this->m_combat_tab = 0; }
+-		else if ( this->m_tab == 1 ) { this->m_exact_page = 0; this->m_combat_tab = 1; }
+-		else if ( this->m_tab == 2 ) this->m_exact_page = 3;
+-		else if ( this->m_tab == 4 ) this->m_exact_page = 5;
+-		else if ( this->m_tab == 6 ) this->m_exact_page = 8;
+-		else
+-		{
+-			this->m_exact_page = 6;
+-			if ( this->m_tab == 3 )
+-				this->m_misc_section_open = chosen.subtab == 0 ? 1 : 2;
+-			else
+-				this->m_misc_section_open = 0;
+-		}
+-		this->m_hotkey_overview_open = false;
+-		this->m_layout_editor_open = false;
+-		xui::set_highlight_target( chosen.name, 1.2f );
++        const auto& route = chosen.destination;
++        this->m_tab = std::clamp( route.tab, 0, 6 );
++        this->m_subtab = std::clamp( route.subtab, 0, k_subtab_defs[ this->m_tab ].count - 1 );
++        this->m_exact_page = route.page;
++        this->m_combat_tab = route.combat_tab;
++        this->m_profile_tab = route.profile_tab;
++        if ( route.misc_section >= 0 && route.misc_section < static_cast<int>( this->m_misc_section_open.size( ) ) )
++        {
++            this->m_misc_section_open[ static_cast<std::size_t>( route.misc_section ) ] = true;
++            this->m_misc_section_focus.request( route.misc_section );
++        }
++        if ( route.page == 5 ) this->m_inventory_tools_open = true;
++        if ( route.page == 0 && route.combat_tab < 2 )
++        {
++            // Select the matching editor scope without enabling any feature or override.
++            const auto category = detail::to_lower_copy( chosen.category );
++            this->m_combat_scope = ui_model::has( category, " - " ) && !ui_model::has( category, " - global" ) ? 1 : 0;
++            if ( ui_model::has( category, " - weapon - " ) )
++            {
++                for ( const auto& weapon : settings::weapon_profiles::catalog )
++                {
++                    const auto suffix = std::string( " - weapon - " ) + weapon.slug;
++                    if ( category.size( ) < suffix.size( ) || category.compare( category.size( ) - suffix.size( ), suffix.size( ), suffix ) != 0 ) continue;
++                    this->m_combat_scope = 2;
++                    this->m_subtab = static_cast<int>( settings::weapon_profiles::category_index( weapon.weapon_type ) );
++                    int choice{};
++                    for ( const auto& candidate : settings::weapon_profiles::catalog )
++                    {
++                        if ( candidate.weapon_type != weapon.weapon_type ) continue;
++                        if ( candidate.def_index == weapon.def_index ) break;
++                        ++choice;
++                    }
++                    this->m_combat_weapon_choice[ static_cast<std::size_t>( this->m_subtab ) ] = choice;
++                    break;
++                }
++            }
++        }
++        this->m_hotkey_overview_open = route.hotkeys;
++        this->m_layout_editor_open = route.layout_editor;
++        xui::set_highlight_target( chosen.name, 1.2f );
+ 		this->close_search( );
+ 	}
+ 
+@@ -1078,10 +1027,6 @@
+ 			if ( query_lower.empty( ) || it.name_lower.find( query_lower ) != std::string::npos || it.category_lower.find( query_lower ) != std::string::npos )
+ 			{
+ 				this->m_search_visible_indices.emplace_back( i );
+-				if ( this->m_search_visible_indices.size( ) >= 50 )
+-				{
+-					break;
+-				}
+ 			}
+ 		}
+ 
+@@ -1282,14 +1227,7 @@
+ 			return;
+ 		}
+ 
+-		// HTML shell is 846x682. Compact mode removes 145 px from the sidebar
+-		// while preserving the 643 px workspace, exactly like the source page.
+-		if ( this->m_sidebar_compact != this->m_exact_last_compact )
+-		{
+-			const auto delta_w = this->m_sidebar_compact ? -140.0f : 140.0f;
+-			this->m_w = std::max( this->m_sidebar_compact ? 840.0f : 980.0f, this->m_w + delta_w );
+-			this->m_exact_last_compact = this->m_sidebar_compact;
+-		}
++		// Sidebar toggles change only sidebar geometry. Keep the user-resized window width.
+ 
+ 		const auto [ viewport_w_i, viewport_h_i ] = xdraw::viewport_size( );
+ 		if ( viewport_w_i > 0 && viewport_h_i > 0 )
+@@ -1311,7 +1249,7 @@
+ 			}
+ 			else
+ 			{
+-				this->m_w = std::clamp( this->m_w, std::min( this->m_sidebar_compact ? 700.0f : 780.0f, available_w ), available_w );
++				this->m_w = ui_model::clamp_window_width( this->m_w, available_w );
+ 				this->m_h = std::clamp( this->m_h, std::min( 500.0f, available_h ), available_h );
+ 				this->m_x = std::clamp( this->m_x, 0.0f, std::max( 0.0f, viewport_w - this->m_w ) );
+ 				this->m_y = std::clamp( this->m_y, 0.0f, std::max( 0.0f, viewport_h - this->m_h ) );
+@@ -1321,8 +1259,8 @@
+ 		}
+ 
+ 		const auto menu_reveal = xui::ease::out_cubic( this->m_open_anim );
+-		tokens::sidebar_w = this->m_sidebar_compact ? 58.0f : 172.0f;
+-		if ( !xui::begin_window( "##menu", this->m_x, this->m_y, this->m_w, this->m_h, true, this->m_sidebar_compact ? 700.0f : 780.0f, 500.0f, menu_reveal ) )
++		tokens::sidebar_w = ui_model::sidebar_width( this->m_sidebar_compact );
++		if ( !xui::begin_window( "##menu", this->m_x, this->m_y, this->m_w, this->m_h, true, ui_model::minimum_window_width, 500.0f, menu_reveal ) )
+ 		{
+ 			xui::end( );
+ 			return;
+@@ -1362,7 +1300,7 @@
+ 				if ( decor.decor_grid.value )
+ 				{
+ 					decor_col.a = static_cast<std::uint8_t>( std::clamp( 3 + decor_level / 5, 3, 23 ) );
+-					const auto gx0 = this->m_x + ( this->m_sidebar_compact ? 58.0f : 172.0f ) + 16.0f;
++					const auto gx0 = this->m_x + ( ui_model::sidebar_width( this->m_sidebar_compact ) ) + 16.0f;
+ 					const auto gx1 = this->m_x + this->m_w - 12.0f;
+ 					const auto gy0 = this->m_y + 66.0f + 12.0f;
+ 					const auto gy1 = this->m_y + this->m_h - 12.0f;
+@@ -1456,7 +1394,7 @@
+ 	{
+ 		auto& dl = xui::draw::current( );
+ 		const auto& input = xui::ctx( ).input;
+-		tokens::sidebar_w = this->m_sidebar_compact ? 58.0f : 172.0f;
++		tokens::sidebar_w = ui_model::sidebar_width( this->m_sidebar_compact );
+ 		const auto sx = this->m_x, sy = this->m_y, sw = tokens::sidebar_w, sh = h;
+ 		dl.rect_filled( sx, sy, sw, sh, xdraw::color{ 8, 9, 12, 184 }, xdraw::corner_radius::left( 10.0f ) );
+ 		dl.line( sx + sw - 1.0f, sy + 10.0f, sx + sw - 1.0f, sy + sh - 10.0f, xdraw::color{ 255, 255, 255, 16 }, 1.0f );
+@@ -1744,7 +1682,7 @@
+ 				this->m_search_open = !this->m_search_open;
+ 				this->m_hotkey_overview_open = false;
+ 				this->m_layout_editor_open = false;
+-				if ( this->m_search_open && this->m_search_entries.empty( ) ) this->rebuild_search_index( );
++				if ( this->m_search_open ) this->rebuild_search_index( );
+ 			}
+ 			else if ( layout_hover )
+ 			{
+--- a/project/core/rendering/impl/menu/menu.exact.cpp
++++ b/project/core/rendering/impl/menu/menu.exact.cpp
+@@ -799,27 +799,35 @@
+         xui::layout::set_cursor( x - this->m_x, y - this->m_y );
+         if ( !xui::begin_child( "##misc_all_in_one", w, h, true ) ) return;
+ 
+-        struct section { const char* title; float height; int kind; };
++        struct section { const char* title; int kind; };
+         static constexpr section sections[]{
+-            { "反馈、移动与系统", 720.0f, 0 },
+-            { "物品、投掷物与战局信息", 560.0f, 1 },
+-            { "环境与天气", 500.0f, 2 },
+-            { "镜头与第一人称", 430.0f, 3 },
+-            { "HUD 与屏幕组件", 500.0f, 4 },
+-            { "画面移除", 300.0f, 5 },
++            { "反馈、移动与系统", 0 },
++            { "物品、投掷物与战局信息", 1 },
++            { "环境与天气", 2 },
++            { "镜头与第一人称", 3 },
++            { "HUD 与屏幕组件", 4 },
++            { "画面移除", 5 },
+         };
+ 
+         for ( int i = 0; i < static_cast<int>( std::size( sections ) ); ++i )
+         {
+-            const bool open = this->m_misc_section_open == i;
++            auto& open = this->m_misc_section_open[ static_cast<std::size_t>( i ) ];
+             const auto aw = xui::layout::avail( ).first;
+             std::string label = std::string( open ? "▾  " : "›  " ) + sections[i].title + "##misc_section_" + std::to_string( i );
+-            if ( xui::button( label, std::max( 260.0f, aw ), 34.0f ) ) this->m_misc_section_open = open ? -1 : i;
++            if ( xui::button( label, aw, 34.0f ) ) open = !open;
++            if ( this->m_misc_section_focus.index == i )
++            {
++                auto* hub = xui::layout::current_window( );
++                auto& scroll = xui::ctx( ).child_scroll_cache[ hub->group_id ];
++                const auto offset = std::max( 0.0f, hub->last_item.y + hub->scroll_y - xui::ctx( ).style.window_pad_y );
++                // Re-anchor until nested auto-height panels settle; wheel input takes control.
++                if ( this->m_misc_section_focus.update( offset, xui::ctx( ).input.scroll_delta != 0.0f ) ) scroll.scroll_target = offset;
++            }
+             if ( !open ) continue;
+ 
+-            const auto inner_h = std::min( sections[i].height, std::max( 220.0f, h - 60.0f ) );
++            // Auto-height bodies share the hub scroll; no nested scroll traps.
+             std::string child = "##misc_section_body_" + std::to_string( i );
+-            if ( xui::begin_child( child, std::max( 260.0f, aw ), inner_h, true ) )
++            if ( xui::begin_child( child, aw, 0.0f, false ) )
+             {
+                 const auto saved = this->m_subtab;
+                 if ( sections[i].kind == 0 ) { this->m_subtab = 0; this->draw_misc( aw ); }
+--- a/project/core/rendering/impl/menu/menu.legitbot.cpp
++++ b/project/core/rendering/impl/menu/menu.legitbot.cpp
+@@ -28,7 +28,8 @@
+ 		const auto content_x = wx + tokens::gap;
+ 		const auto body_y = wy + tokens::gap - xui::layout::current_window()->scroll_y;
+ 		const auto content_w = xui::layout::current_window()->bounds.w - tokens::gap * 2.0f;
+-		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
++		const auto single_col = ui_model::single_column( content_w );
++		const auto col_w = single_col ? content_w : ( content_w - tokens::gap ) * 0.5f;
+ 		const auto right_x = content_x + col_w + tokens::gap;
+ 
+ 		xui::layout::set_cursor( content_x - wx, body_y - wy );
+@@ -88,7 +89,7 @@
+ 			xui::end_child( );
+ 		}
+ 
+-		xui::layout::set_cursor( right_x - wx, body_y - wy );
++		if ( !single_col ) xui::layout::set_cursor( right_x - wx, body_y - wy );
+ 
+ 		if ( xui::begin_child( "##legitbot_triggerbot", col_w ) )
+ 		{
+--- a/project/core/rendering/impl/menu/menu.skins.cpp
++++ b/project/core/rendering/impl/menu/menu.skins.cpp
+@@ -1241,10 +1241,10 @@
+ 			if ( xui::button( this->m_inventory_tools_open ? "显示选项  ▴##inventory_tools" : "显示选项  ▾##inventory_tools", std::min( 190.0f, inner_w ), 28.0f ) ) this->m_inventory_tools_open = !this->m_inventory_tools_open;
+ 			if ( this->m_inventory_tools_open )
+ 			{
+-				if ( xui::begin_child( "##inventory_tools_panel", inner_w, 84.0f, false ) )
+-				{
+-					xui::combo( "排序##inventory_sort", inventory_ui.sort.value, std::array<const char*,3>{ "名称", "编号", "已应用优先" }.data(), 3, 132.0f );
+-					xui::layout::same_line( ); xui::slider_int( "列数##inventory_columns", inventory_ui.columns, 3, 7, "%d" );
++				if ( xui::begin_child( "##inventory_tools_panel", inner_w, 0.0f, false ) )
++				{
++					xui::combo( "排序##inventory_sort", inventory_ui.sort.value, std::array<const char*,3>{ "名称", "编号", "已应用优先" }.data(), 3, std::min( 132.0f, xui::layout::avail( ).first ) );
++					xui::layout::new_line( ); xui::slider_int( "列数##inventory_columns", inventory_ui.columns, 3, 7, "%d" );
+ 					xui::checkbox( "显示图片##inventory_images", inventory_ui.show_images );
+ 					xui::checkbox( "紧凑卡片##inventory_compact", inventory_ui.compact_cards );
+ 					xui::end_child( );
+@@ -1264,16 +1264,17 @@
+ 
+ 			if ( this->m_subtab == 9 )
+ 			{
+-				const auto base_x = win->bounds.x + s.window_pad_x + offset_x;
+-				const auto base_y = win->bounds.y + s.window_pad_y - win->scroll_y;
++				const auto team_columns = std::min( columns, 2 );
++				const auto team_rows = ( 2 + team_columns - 1 ) / team_columns;
++				const auto grid = xui::layout::item( inner_w, team_rows * card_h + ( team_rows - 1 ) * detail::k_card_gap );
++				const auto base_x = grid.x + offset_x;
++				const auto base_y = grid.y;
+ 
+ 				const auto ct_card = xui::rect{ base_x, base_y, card_w, card_h };
+-				const auto t_card = xui::rect{ base_x + card_w + detail::k_card_gap, base_y, card_w, card_h };
++				const auto t_card = xui::rect{ base_x + ( 1 % team_columns ) * ( card_w + detail::k_card_gap ), base_y + ( 1 / team_columns ) * ( card_h + detail::k_card_gap ), card_w, card_h };
+ 
+ 				detail::draw_agent_team_card( ct_card, 3, fade_alpha );
+ 				detail::draw_agent_team_card( t_card, 2, fade_alpha );
+-
+-				xui::layout::item( inner_w, card_h );
+ 				xui::end_child( );
+ 				return;
+ 			}
+@@ -1321,10 +1322,11 @@
+ 			const auto rows = ( static_cast< int >( items.size( ) ) + columns - 1 ) / columns;
+ 			const auto total_h = rows * card_h + ( rows > 0 ? ( rows - 1 ) * detail::k_card_gap : 0.0f );
+ 
+-			const auto base_x = win->bounds.x + s.window_pad_x + offset_x;
+-			const auto base_y = win->bounds.y + s.window_pad_y - win->scroll_y;
+-
+-			xui::layout::item( inner_w, total_h );
++			// Use the reserved layout rectangle after the toolbar/options panel.
++			// Starting at window padding overlays cards on the controls above them.
++			const auto grid = xui::layout::item( inner_w, total_h );
++			const auto base_x = grid.x + offset_x;
++			const auto base_y = grid.y;
+ 
+ 			for ( auto i = 0; i < static_cast< int >( items.size( ) ); ++i )
+ 			{
+--- /dev/null
++++ b/project/core/rendering/impl/menu/menu.ui-model.hpp
+@@ -0,0 +1,328 @@
++#pragma once
++
++#include <algorithm>
++#include <string_view>
++
++// UI navigation and geometry only. This model never reads or changes feature values.
++namespace rendering::ui_model {
++    constexpr bool single_column( float content_width ) { return content_width < 760.0f; }
++    constexpr float sidebar_width( bool compact ) { return compact ? 58.0f : 172.0f; }
++    constexpr float minimum_window_width = 700.0f;
++    constexpr float clamp_window_width( float requested, float available ) {
++        return std::clamp( requested, std::min( minimum_window_width, available ), available );
++    }
++
++    struct section_focus {
++        int index{ -1 };
++        float previous_offset{ -1.0f };
++        int stable_frames{};
++        void request( int section ) { index = section; previous_offset = -1.0f; stable_frames = 0; }
++        bool update( float offset, bool user_scrolling ) {
++            if ( index < 0 || user_scrolling ) { index = -1; return false; }
++            stable_frames = offset == previous_offset ? stable_frames + 1 : 0;
++            previous_offset = offset;
++            if ( stable_frames >= 2 ) index = -1;
++            return true;
++        }
++    };
++
++    struct search_route {
++        int tab{ 5 };
++        int subtab{};
++        int page{ 6 };
++        int combat_tab{};
++        int misc_section{ -1 };
++        int profile_tab{};
++        bool layout_editor{};
++        bool hotkeys{};
++    };
++    constexpr search_route misc( int section ) { return { 5, section, 6, 0, section }; }
++    constexpr search_route combat( int selected, int weapon_group = 0 ) { return { selected == 1 ? 1 : 0, weapon_group, 0, selected }; }
++    constexpr search_route player( int group ) { return { 2, group, 3 }; }
++    constexpr search_route inventory( int group = 0 ) { return { 4, group, 5 }; }
++    constexpr search_route config( bool scripts = false ) { return { 6, scripts ? 1 : 0, scripts ? 7 : 8 }; }
++    constexpr search_route profile( int selected = 0 ) { return { 5, 0, 9, 0, -1, selected }; }
++    constexpr search_route layout_editor( ) { return { 5, 0, 9, 0, -1, 0, true }; }
++    constexpr search_route hotkeys( ) { return { 5, 0, 9, 0, -1, 1, false, true }; }
++
++    constexpr bool has( std::string_view text, std::string_view word ) { return text.find( word ) != std::string_view::npos; }
++    constexpr int weapon_group( std::string_view category ) {
++        if ( has( category, "pistol" ) ) return 0;
++        if ( has( category, "smg" ) ) return 1;
++        if ( has( category, "rifle" ) ) return 2;
++        if ( has( category, "shotgun" ) ) return 3;
++        if ( has( category, "sniper" ) ) return 4;
++        if ( has( category, "lmg" ) ) return 5;
++        return 0;
++    }
++    constexpr search_route category_route( std::string_view category, std::string_view name = {} ) {
++        if ( has( category, "anti aim" ) ) return combat( 2 );
++        if ( has( category, "legitbot" ) ) return combat( 1, weapon_group( category ) );
++        if ( has( category, "ragebot" ) || has( category, "autos" ) || has( category, "peek assistance" ) ||
++             has( category, "zeusbot" ) || has( category, "knifebot" ) || has( category, "other 'bots'" ) ) return combat( 0, weapon_group( category ) );
++        if ( has( category, "changer ui" ) ) return inventory( );
++        if ( has( category, "knife" ) ) return inventory( 7 );
++        if ( has( category, "glove" ) ) return inventory( 8 );
++        if ( has( category, "agent" ) ) return inventory( 9 );
++        if ( has( category, "skin" ) || has( category, "paint" ) || has( category, "sticker" ) || has( category, "wear" ) ) return inventory( );
++        if ( has( category, "lua" ) || has( category, "script" ) ) return config( true );
++        if ( has( category, "config" ) ) return config( );
++        if ( has( category, "watermark" ) || has( category, "glass widget" ) ) return profile( );
++        if ( has( category, "profile" ) ) return profile( 1 );
++        if ( has( category, "widgets" ) ) return layout_editor( );
++        if ( has( category, "camera" ) || ( category == "viewmodel" && name == "viewmodel adjust" ) ) return misc( 3 );
++        if ( has( category, "removals" ) ) return misc( 5 );
++        if ( has( category, "scene" ) || has( category, "weather" ) || has( category, "post process" ) ) return misc( 2 );
++        if ( has( category, "other esp" ) || has( category, "projectile" ) || has( category, "inferno" ) || has( category, "items" ) ) return misc( 1 );
++        if ( has( category, "enemy" ) || has( category, "backtrack" ) || has( category, "onshot" ) ) return player( 0 );
++        if ( has( category, "team" ) || has( category, "allies" ) || has( category, "friendly" ) ) return player( 1 );
++        if ( has( category, "local" ) || has( category, "viewmodel" ) ) return player( 2 );
++        if ( category == "esp" || category == "chams" || category == "glow" ) return player( 0 );
++        if ( category == "crosshair" || has( category, "scope overlay" ) || category == "hat" || has( category, "velocity hud" ) ) return misc( 4 );
++        return misc( 0 );
++    }
++
++    struct search_control {
++        const char* label;
++        const char* category;
++        search_route route;
++        const char* kind;
++    };
++    // Explicit navigation metadata for current UI controls that have no bind-registry entry.
++    // Search results navigate to the owner only; action buttons are never executed here.
++    inline constexpr search_control controls[]{
++        { "库存", "库存", inventory( ), "page inventory skins" },
++        { "库存分类", "库存 / 分类", inventory( ), "combo inventory categories" },
++        { "脚本管理", "脚本", config( true ), "page lua scripts" },
++        { "配置管理", "配置", config( ), "page cfg config" },
++        { "界面布局编辑器", "个人 / 布局", layout_editor( ), "page" },
++        { "全局快捷键总览", "个人 / 快捷键", hotkeys( ), "page" },
++        { "全部枪械", "库存 / 分类", inventory( 0 ), "page" },
++        { "手枪", "库存 / 分类", inventory( 1 ), "page" },
++        { "冲锋枪", "库存 / 分类", inventory( 2 ), "page" },
++        { "步枪", "库存 / 分类", inventory( 3 ), "page" },
++        { "霰弹枪", "库存 / 分类", inventory( 4 ), "page" },
++        { "狙击枪", "库存 / 分类", inventory( 5 ), "page" },
++        { "机枪", "库存 / 分类", inventory( 6 ), "page" },
++        { "刀具", "库存 / 分类", inventory( 7 ), "page" },
++        { "手套", "库存 / 分类", inventory( 8 ), "page" },
++        { "探员", "库存 / 分类", inventory( 9 ), "page" },
++        { "最大视野角", "RAGE", combat( 0 ), "slider_float" },
++        { "命中率", "RAGE", combat( 0 ), "slider_int" },
++        { "最低伤害", "RAGE", combat( 0 ), "slider_int" },
++        { "最大外推", "RAGE", combat( 0 ), "slider_int" },
++        { "最大回溯", "RAGE", combat( 0 ), "slider_int" },
++        { "数值", "RAGE", combat( 0 ), "slider_int" },
++        { "点缩放", "RAGE", combat( 0 ), "slider_float" },
++        { "命中部位", "RAGE", combat( 0 ), "multicombo" },
++        { "起点颜色", "RAGE", combat( 0 ), "color_picker" },
++        { "返回颜色", "RAGE", combat( 0 ), "color_picker" },
++        { "俯仰", "ANTI-AIM", combat( 2 ), "combo" },
++        { "颜色", "ANTI-AIM", combat( 2 ), "color_picker" },
++        { "光晕强度", "ANTI-AIM", combat( 2 ), "slider_float" },
++        { "半径", "ANTI-AIM", combat( 2 ), "slider_float" },
++        { "弧度", "ANTI-AIM", combat( 2 ), "slider_float" },
++        { "粗细", "ANTI-AIM", combat( 2 ), "slider_float" },
++        { "高度", "ANTI-AIM", combat( 2 ), "slider_float" },
++        { "fov", "LEGIT", combat( 1 ), "slider_float" },
++        { "smooth", "LEGIT", combat( 1 ), "slider_int" },
++        { "hitboxes", "LEGIT", combat( 1 ), "multicombo" },
++        { "color", "LEGIT", combat( 1 ), "color_picker" },
++        { "min", "LEGIT", combat( 1 ), "slider_int" },
++        { "max", "LEGIT", combat( 1 ), "slider_int" },
++        { "strength", "LEGIT", combat( 1 ), "slider_int" },
++        { "delay", "LEGIT", combat( 1 ), "slider_int" },
++        { "hitchance", "LEGIT", combat( 1 ), "slider_int" },
++        { "min damage", "LEGIT", combat( 1 ), "slider_int" },
++        { "最大距离", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "style", "玩家 / 敌人", player( 0 ), "combo" },
++        { "corner length", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "visible color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "occluded color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "mode", "玩家 / 敌人", player( 0 ), "combo" },
++        { "thickness", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "position", "玩家 / 敌人", player( 0 ), "combo" },
++        { "full color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "low color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "background", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "outline color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "text color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "glow color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "glow strength", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "display", "玩家 / 敌人", player( 0 ), "combo" },
++        { "icon color", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "flags", "玩家 / 敌人", player( 0 ), "multicombo" },
++        { "money", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "armor", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "kit", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "scoped", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "defusing", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "flashed", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "distance", "玩家 / 敌人", player( 0 ), "color_picker" },
++        { "width", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "height", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "radius x", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "radius y", "玩家 / 敌人", player( 0 ), "slider_float" },
++        { "最大距离", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "style", "玩家 / 队友", player( 1 ), "combo" },
++        { "corner length", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "visible color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "occluded color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "mode", "玩家 / 队友", player( 1 ), "combo" },
++        { "thickness", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "position", "玩家 / 队友", player( 1 ), "combo" },
++        { "full color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "low color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "background", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "outline color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "text color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "glow color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "glow strength", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "display", "玩家 / 队友", player( 1 ), "combo" },
++        { "icon color", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "flags", "玩家 / 队友", player( 1 ), "multicombo" },
++        { "money", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "armor", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "kit", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "scoped", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "defusing", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "flashed", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "distance", "玩家 / 队友", player( 1 ), "color_picker" },
++        { "width", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "height", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "radius x", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "radius y", "玩家 / 队友", player( 1 ), "slider_float" },
++        { "duration", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "信息列位置", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "信息列宽度", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "信息列高度", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "信息列间距", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "位置", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "透明度", "其他 / 反馈、移动与系统", misc( 0 ), "slider_int" },
++        { "type", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "volume", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "大小", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "角线长度", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "粗细", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "光晕强度", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "color", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "strength", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "fill", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "edge", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "glow strength", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "spark", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "held color", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "thrown color", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "will damage held color", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "will damage thrown color", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "radius", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "z offset", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "强度", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "can penetrate", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "can pen outline", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "blocked", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "blocked outline", "其他 / 反馈、移动与系统", misc( 0 ), "color_picker" },
++        { "mode", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "passes", "其他 / 反馈、移动与系统", misc( 0 ), "slider_int" },
++        { "speed", "其他 / 反馈、移动与系统", misc( 0 ), "slider_float" },
++        { "主武器", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "副武器", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "投掷物", "其他 / 反馈、移动与系统", misc( 0 ), "multicombo" },
++        { "标签文字", "其他 / 反馈、移动与系统", misc( 0 ), "text_input" },
++        { "呈现方式", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "外框", "其他 / 反馈、移动与系统", misc( 0 ), "combo" },
++        { "名称", "其他 / 反馈、移动与系统", misc( 0 ), "text_input" },
++        { "flash alpha", "其他 / 画面移除", misc( 5 ), "slider_float" },
++        { "fov", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "scoped fov", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "distance", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "hull size", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "ratio", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "offset x", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "offset y", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "offset z", "其他 / 镜头与第一人称", misc( 3 ), "slider_float" },
++        { "size", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "间距", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "粗细", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "动态幅度", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "中心点大小", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "outline", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "color", "其他 / HUD 与屏幕组件", misc( 4 ), "color_picker" },
++        { "outline color", "其他 / HUD 与屏幕组件", misc( 4 ), "color_picker" },
++        { "line length", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "gap", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "thickness", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "anim speed", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "glow strength", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "bottom offset", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "chart width", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "chart height", "其他 / HUD 与屏幕组件", misc( 4 ), "slider_float" },
++        { "type", "其他 / HUD 与屏幕组件", misc( 4 ), "combo" },
++        { "secondary color", "其他 / HUD 与屏幕组件", misc( 4 ), "color_picker" },
++        { "天空", "其他 / 环境与天气", misc( 2 ), "combo" },
++        { "云层", "其他 / 环境与天气", misc( 2 ), "color_picker" },
++        { "太阳", "其他 / 环境与天气", misc( 2 ), "color_picker" },
++        { "颜色", "其他 / 环境与天气", misc( 2 ), "color_picker" },
++        { "强度", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "光源俯仰", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "光源偏航", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "光源翻滚", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "数值", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "近景模糊", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "近景清晰", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "远景清晰", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "远景模糊", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "类型", "其他 / 环境与天气", misc( 2 ), "combo" },
++        { "密度", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "各向异性", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "距离", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "速度", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "方向", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "乱流", "其他 / 环境与天气", misc( 2 ), "slider_float" },
++        { "material", "其他 / 物品、投掷物与战局信息", misc( 1 ), "combo" },
++        { "color", "其他 / 物品、投掷物与战局信息", misc( 1 ), "color_picker" },
++        { "group", "其他 / 物品、投掷物与战局信息", misc( 1 ), "combo" },
++        { "fill color", "其他 / 物品、投掷物与战局信息", misc( 1 ), "color_picker" },
++        { "outline color", "其他 / 物品、投掷物与战局信息", misc( 1 ), "color_picker" },
++        { "outline thickness", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_float" },
++        { "glow strength", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_float" },
++        { "警告距离", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_float" },
++        { "警告秒数", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_float" },
++        { "警告透明度", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_int" },
++        { "高爆警告色", "其他 / 物品、投掷物与战局信息", misc( 1 ), "color_picker" },
++        { "燃烧警告色", "其他 / 物品、投掷物与战局信息", misc( 1 ), "color_picker" },
++        { "位置", "其他 / 物品、投掷物与战局信息", misc( 1 ), "combo" },
++        { "透明度", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_int" },
++        { "危险门槛", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_float" },
++        { "最大列数", "其他 / 物品、投掷物与战局信息", misc( 1 ), "slider_int" },
++        { "导入脚本", "脚本", config( true ), "button lua script" },
++        { "重新加载", "脚本", config( true ), "button lua script" },
++        { "开启脚本文件夹", "脚本", config( true ), "button lua script" },
++        { "保存", "配置", config( ), "button cfg config" },
++        { "加载", "配置", config( ), "button cfg config" },
++        { "删除", "配置", config( ), "button cfg config" },
++        { "开启设置文件夹", "配置", config( ), "button cfg config" },
++        { "重设目前设置", "配置", config( ), "button cfg config" },
++        { "备份选取设置", "配置", config( ), "button cfg config" },
++        { "水平位置", "界面布局编辑器", layout_editor( ), "slider_float" },
++        { "垂直位置", "界面布局编辑器", layout_editor( ), "slider_float" },
++        { "界面大小", "界面布局编辑器", layout_editor( ), "slider_float" },
++        { "重置位置", "界面布局编辑器", layout_editor( ), "button" },
++        { "显示名称", "个人 / 水印", profile( ), "text_input" },
++        { "打开界面布局编辑器", "个人 / 水印", profile( ), "button" },
++        { "强调色", "个人 / 外观", profile( 1 ), "combo" },
++        { "背景透明度", "个人 / 外观", profile( 1 ), "slider_int" },
++        { "玻璃模糊", "个人 / 外观", profile( 1 ), "slider_int" },
++        { "圆角", "个人 / 外观", profile( 1 ), "slider_int" },
++        { "边框强度", "个人 / 外观", profile( 1 ), "slider_int" },
++        { "动画速度", "个人 / 外观", profile( 1 ), "slider_int" },
++        { "装饰强度", "个人 / 外观", profile( 1 ), "slider_int" },
++        { "全局快捷键总览", "个人 / 外观", profile( 1 ), "button" },
++        { "排序", "库存 / 显示选项", inventory( ), "combo" },
++        { "列数", "库存 / 显示选项", inventory( ), "slider_int" },
++        { "磨损", "库存 / 物品详情", inventory( ), "slider_float wear" },
++        { "图案模板", "库存 / 物品详情", inventory( ), "text_input seed" },
++    };
++}
+--- a/project/core/rendering/impl/widgets.cpp
++++ b/project/core/rendering/impl/widgets.cpp
+@@ -8,6 +8,7 @@
+ #include <core/features/features.hpp>
+ 
+ #include "../rendering.hpp"
++#include <core/rendering/viewport_bounds.hpp>
+ #include <utilities/security/security.hpp>
+ 
+ namespace rendering {
+@@ -192,8 +193,8 @@
+ 		const auto w = smoothed_w;
+ 		const auto right = wm.placement.value == settings::misc::watermark_cfg::position::top_right || wm.placement.value == settings::misc::watermark_cfg::position::bottom_right;
+ 		const auto bottom = wm.placement.value == settings::misc::watermark_cfg::position::bottom_left || wm.placement.value == settings::misc::watermark_cfg::position::bottom_right;
+-		const auto x = ( right ? static_cast<float>( screen_w ) - w - margin : margin ) + wm.offset_x.value;
+-		const auto y = ( bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + wm.offset_y.value;
++		const auto x = rendering::viewport::clamp_origin( ( right ? static_cast<float>( screen_w ) - w - margin : margin ) + wm.offset_x.value, std::max( w, target_w ), static_cast<float>( screen_w ) );
++		const auto y = rendering::viewport::clamp_origin( ( bottom ? static_cast<float>( screen_h ) - h - margin : margin ) + wm.offset_y.value, h, static_cast<float>( screen_h ) );
+ 		auto wm_col = [ & ]( xdraw::color c ) { c.a = static_cast<std::uint8_t>( static_cast<float>( c.a ) * wm_alpha ); return c; };
+ 
+ 		draw_list.rect_filled_blurred( x, y, w, h, xdraw::corner_radius{ r } );
+@@ -293,8 +294,8 @@
+ 		const auto right = placement == settings::misc::widgets_cfg::status_cfg::position::right_top || placement == settings::misc::widgets_cfg::status_cfg::position::right_center || placement == settings::misc::widgets_cfg::status_cfg::position::right_bottom;
+ 		const auto top = placement == settings::misc::widgets_cfg::status_cfg::position::left_top || placement == settings::misc::widgets_cfg::status_cfg::position::right_top;
+ 		const auto bottom = placement == settings::misc::widgets_cfg::status_cfg::position::left_bottom || placement == settings::misc::widgets_cfg::status_cfg::position::right_bottom;
+-		const auto x = ( right ? static_cast<float>( screen_w ) - panel_w - margin : margin ) + cfg.offset_x.value;
+-		auto y = ( top ? margin : bottom ? static_cast<float>( screen_h ) - panel_h - margin : ( static_cast<float>( screen_h ) - panel_h ) * 0.5f ) + cfg.offset_y.value;
++		const auto x = rendering::viewport::clamp_origin( ( right ? static_cast<float>( screen_w ) - panel_w - margin : margin ) + cfg.offset_x.value, panel_w, static_cast<float>( screen_w ) );
++		auto y = rendering::viewport::clamp_origin( ( top ? margin : bottom ? static_cast<float>( screen_h ) - panel_h - margin : ( static_cast<float>( screen_h ) - panel_h ) * 0.5f ) + cfg.offset_y.value, panel_h, static_cast<float>( screen_h ) );
+ 
+ 		auto draw_row = [ & ]( const char* label, const char* value, bool bad )
+ 		{
+@@ -515,41 +516,14 @@
+ 		smoothed_base_y.set_target( target_base_y );
+ 		smoothed_base_y.update( );
+ 
+-		const auto base_ry = smoothed_base_y.value( );
+-
+-		static auto icon_w_px = 0, icon_h_px = 0;
+-		static const auto kb_icon = xdraw::load_svg( R"(<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.78571 4.07143C2.53142 4.07143 2.28285 3.99602 2.07141 3.85475C1.85998 3.71347 1.69518 3.51267 1.59787 3.27774C1.50056 3.0428 1.4751 2.78429 1.52471 2.53488C1.57431 2.28548 1.69677 2.05639 1.87658 1.87658C2.05639 1.69677 2.28548 1.57431 2.53488 1.52471C2.78429 1.4751 3.0428 1.50056 3.27774 1.59787C3.51267 1.69518 3.71347 1.85998 3.85475 2.07141C3.99602 2.28285 4.07143 2.53142 4.07143 2.78571V9.21429C4.07143 9.46858 3.99602 9.71716 3.85475 9.92859C3.71347 10.14 3.51267 10.3048 3.27774 10.4021C3.0428 10.4994 2.78429 10.5249 2.53488 10.4753C2.28548 10.4257 2.05639 10.3032 1.87658 10.1234C1.69677 9.94361 1.57431 9.71452 1.52471 9.46512C1.4751 9.21571 1.50056 8.9572 1.59787 8.72226C1.69518 8.48733 1.85998 8.28653 2.07141 8.14525C2.28285 8.00398 2.53142 7.92857 2.78571 7.92857H9.21429C9.46858 7.92857 9.71716 8.00398 9.92859 8.14525C10.14 8.28653 10.3048 8.48733 10.4021 8.72226C10.4994 8.9572 10.5249 9.21571 10.4753 9.46512C10.4257 9.71452 10.3032 9.94361 10.1234 10.1234C9.94361 10.3032 9.71452 10.4257 9.46512 10.4753C9.21571 10.5249 8.9572 10.4994 8.72226 10.4021C8.48733 10.3048 8.28653 10.14 8.14525 9.92859C8.00398 9.71716 7.92857 9.46858 7.92857 9.21429V2.78571C7.92857 2.53142 8.00398 2.28285 8.14525 2.07141C8.28653 1.85998 8.48733 1.69518 8.72226 1.59787C8.9572 1.50056 9.21571 1.4751 9.46512 1.52471C9.71452 1.57431 9.94361 1.69677 10.1234 1.87658C10.3032 2.05639 10.4257 2.28548 10.4753 2.53488C10.5249 2.78429 10.4994 3.0428 10.4021 3.27774C10.3048 3.51267 10.14 3.71347 9.92859 3.85475C9.71716 3.99602 9.46858 4.07143 9.21429 4.07143H2.78571Z" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round"/></svg>)", 1.0f, &icon_w_px, &icon_h_px );
+-
+-		const auto [header_tw, header_th] = xdraw::measure_text( "快捷键" );
+-		const auto header_w = inner_pad + icon_size + inner_pad + header_tw + text_pad_x * 2.0f + inner_pad;
+-		const auto header_x = ( right_side ? static_cast<float>( screen_w ) - margin - header_w : margin ) + kb_cfg.offset_x.value;
+-		const auto header_inner_h = header_h - inner_pad * 2.0f;
+-		const auto inner_h = row_h - inner_pad * 2.0f;
+-		const auto master_u8 = static_cast< std::uint8_t >( 255.0f * master_alpha );
+-
+-		if ( kb_cfg.show_header.value )
+-		{
+-			draw_list.rect_filled_blurred( header_x, base_ry, header_w, header_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, master_u8 } );
+-			draw_list.rect_filled( header_x, base_ry, header_w, header_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * master_alpha ) ), xdraw::corner_radius{ r } );
+-			draw_list.rect_filled( header_x + inner_pad, base_ry + inner_pad, icon_size, header_inner_h, s.accent.alpha( static_cast< std::uint8_t >( s.accent.a * master_alpha ) ), xdraw::corner_radius{ inner_r } );
+-
+-			if ( kb_icon )
+-			{
+-				const auto icon_draw = icon_size - icon_inner_pad * 2.0f;
+-				const auto ix = std::floor( header_x + inner_pad + icon_inner_pad );
+-				const auto iy = std::floor( base_ry + inner_pad + ( header_inner_h - icon_draw ) * 0.5f + 1.0f );
+-				draw_list.image( ix, iy, icon_draw, icon_draw, kb_icon.Get( ), s.checkbox_mark_icon.alpha( static_cast< std::uint8_t >( s.checkbox_mark_icon.a * master_alpha ) ) );
+-			}
+-
+-			const auto htx = header_x + inner_pad + icon_size + inner_pad;
+-			const auto htw = header_tw + text_pad_x * 2.0f;
+-			draw_list.rect_filled( htx, base_ry + inner_pad, htw, header_inner_h, s.child_bg.alpha( static_cast< std::uint8_t >( s.child_bg.a * master_alpha ) ), xdraw::corner_radius{ inner_r } );
+-			draw_list.text( htx + text_pad_x, base_ry + ( header_h - header_th ) * 0.5f + text_nudge, "快捷键", s.accent.alpha( static_cast< std::uint8_t >( s.accent.a * master_alpha ) ) );
+-		}
+-
++		// Clamp the actual spring/fade bounds, including rows leaving the list.
+ 		for ( auto& [name, state] : row_states )
+ 			state.active_this_frame = false;
+ 
++		float animated_min_y = 0.0f;
++		float animated_max_y = kb_cfg.show_header.value ? header_h : 0.0f;
++		float row_offsets[ 32 ]{};
++		float row_alphas[ 32 ]{};
+ 		float current_offset_y = header_block_h;
+ 		for ( auto i = 0; i < count; ++i )
+ 		{
+@@ -565,8 +539,70 @@
+ 			anim.alpha.update( );
+ 			anim.offset_y.update( );
+ 
+-			const auto row_alpha = anim.alpha.alpha( ) * master_alpha;
+-			const auto draw_y = base_ry + anim.offset_y.value( );
++			row_offsets[ i ] = anim.offset_y.value( );
++			row_alphas[ i ] = anim.alpha.alpha( );
++			animated_min_y = std::min( animated_min_y, row_offsets[ i ] );
++			animated_max_y = std::max( animated_max_y, row_offsets[ i ] + row_h );
++			current_offset_y += row_h + row_spacing;
++		}
++
++		for ( auto it = row_states.begin( ); it != row_states.end( ); )
++		{
++			if ( !it->second.active_this_frame )
++			{
++				it->second.alpha.fade_out( 0.15f );
++				it->second.alpha.update( );
++				it->second.offset_y.update( );
++
++				if ( it->second.alpha.alpha( ) <= 0.001f )
++				{
++					it = row_states.erase( it );
++					continue;
++				}
++
++				animated_min_y = std::min( animated_min_y, it->second.offset_y.value( ) );
++				animated_max_y = std::max( animated_max_y, it->second.offset_y.value( ) + row_h );
++			}
++			++it;
++		}
++
++		const auto base_ry = rendering::viewport::clamp_origin( smoothed_base_y.value( ) + animated_min_y, animated_max_y - animated_min_y, static_cast<float>( screen_h ) ) - animated_min_y;
++
++		static auto icon_w_px = 0, icon_h_px = 0;
++		static const auto kb_icon = xdraw::load_svg( R"(<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.78571 4.07143C2.53142 4.07143 2.28285 3.99602 2.07141 3.85475C1.85998 3.71347 1.69518 3.51267 1.59787 3.27774C1.50056 3.0428 1.4751 2.78429 1.52471 2.53488C1.57431 2.28548 1.69677 2.05639 1.87658 1.87658C2.05639 1.69677 2.28548 1.57431 2.53488 1.52471C2.78429 1.4751 3.0428 1.50056 3.27774 1.59787C3.51267 1.69518 3.71347 1.85998 3.85475 2.07141C3.99602 2.28285 4.07143 2.53142 4.07143 2.78571V9.21429C4.07143 9.46858 3.99602 9.71716 3.85475 9.92859C3.71347 10.14 3.51267 10.3048 3.27774 10.4021C3.0428 10.4994 2.78429 10.5249 2.53488 10.4753C2.28548 10.4257 2.05639 10.3032 1.87658 10.1234C1.69677 9.94361 1.57431 9.71452 1.52471 9.46512C1.4751 9.21571 1.50056 8.9572 1.59787 8.72226C1.69518 8.48733 1.85998 8.28653 2.07141 8.14525C2.28285 8.00398 2.53142 7.92857 2.78571 7.92857H9.21429C9.46858 7.92857 9.71716 8.00398 9.92859 8.14525C10.14 8.28653 10.3048 8.48733 10.4021 8.72226C10.4994 8.9572 10.5249 9.21571 10.4753 9.46512C10.4257 9.71452 10.3032 9.94361 10.1234 10.1234C9.94361 10.3032 9.71452 10.4257 9.46512 10.4753C9.21571 10.5249 8.9572 10.4994 8.72226 10.4021C8.48733 10.3048 8.28653 10.14 8.14525 9.92859C8.00398 9.71716 7.92857 9.46858 7.92857 9.21429V2.78571C7.92857 2.53142 8.00398 2.28285 8.14525 2.07141C8.28653 1.85998 8.48733 1.69518 8.72226 1.59787C8.9572 1.50056 9.21571 1.4751 9.46512 1.52471C9.71452 1.57431 9.94361 1.69677 10.1234 1.87658C10.3032 2.05639 10.4257 2.28548 10.4753 2.53488C10.5249 2.78429 10.4994 3.0428 10.4021 3.27774C10.3048 3.51267 10.14 3.71347 9.92859 3.85475C9.71716 3.99602 9.46858 4.07143 9.21429 4.07143H2.78571Z" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round"/></svg>)", 1.0f, &icon_w_px, &icon_h_px );
++
++		const auto [header_tw, header_th] = xdraw::measure_text( "快捷键" );
++		const auto header_w = inner_pad + icon_size + inner_pad + header_tw + text_pad_x * 2.0f + inner_pad;
++		const auto header_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - header_w : margin ) + kb_cfg.offset_x.value, header_w, static_cast<float>( screen_w ) );
++		const auto header_inner_h = header_h - inner_pad * 2.0f;
++		const auto inner_h = row_h - inner_pad * 2.0f;
++		const auto master_u8 = static_cast< std::uint8_t >( 255.0f * master_alpha );
++
++		if ( kb_cfg.show_header.value )
++		{
++			draw_list.rect_filled_blurred( header_x, base_ry, header_w, header_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, master_u8 } );
++			draw_list.rect_filled( header_x, base_ry, header_w, header_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * master_alpha ) ), xdraw::corner_radius{ r } );
++			draw_list.rect_filled( header_x + inner_pad, base_ry + inner_pad, icon_size, header_inner_h, s.accent.alpha( static_cast< std::uint8_t >( s.accent.a * master_alpha ) ), xdraw::corner_radius{ inner_r } );
++
++			if ( kb_icon )
++			{
++				const auto icon_draw = icon_size - icon_inner_pad * 2.0f;
++				const auto ix = std::floor( header_x + inner_pad + icon_inner_pad );
++				const auto iy = std::floor( base_ry + inner_pad + ( header_inner_h - icon_draw ) * 0.5f + 1.0f );
++				draw_list.image( ix, iy, icon_draw, icon_draw, kb_icon.Get( ), s.checkbox_mark_icon.alpha( static_cast< std::uint8_t >( s.checkbox_mark_icon.a * master_alpha ) ) );
++			}
++
++			const auto htx = header_x + inner_pad + icon_size + inner_pad;
++			const auto htw = header_tw + text_pad_x * 2.0f;
++			draw_list.rect_filled( htx, base_ry + inner_pad, htw, header_inner_h, s.child_bg.alpha( static_cast< std::uint8_t >( s.child_bg.a * master_alpha ) ), xdraw::corner_radius{ inner_r } );
++			draw_list.text( htx + text_pad_x, base_ry + ( header_h - header_th ) * 0.5f + text_nudge, "快捷键", s.accent.alpha( static_cast< std::uint8_t >( s.accent.a * master_alpha ) ) );
++		}
++
++		for ( auto i = 0; i < count; ++i )
++		{
++			const auto& e = entries[ i ];
++			const auto row_alpha = row_alphas[ i ] * master_alpha;
++			const auto draw_y = base_ry + row_offsets[ i ];
+ 			const auto [nw, nh] = xdraw::measure_text( e.name );
+ 			const auto row_u8 = static_cast< std::uint8_t >( 255.0f * row_alpha );
+ 
+@@ -576,7 +612,7 @@
+ 				const auto name_pill_w = nw + text_pad_x * 2.0f;
+ 				const auto value_pill_w = vw + text_pad_x * 2.0f;
+ 				const auto row_w = inner_pad + name_pill_w + inner_pad + value_pill_w + inner_pad;
+-				const auto row_x = ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value;
++				const auto row_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value, row_w, static_cast<float>( screen_w ) );
+ 
+ 				draw_list.rect_filled_blurred( row_x, draw_y, row_w, row_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, row_u8 } );
+ 				draw_list.rect_filled( row_x, draw_y, row_w, row_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * row_alpha ) ), xdraw::corner_radius{ r } );
+@@ -591,7 +627,7 @@
+ 			{
+ 				const auto name_pill_w = nw + text_pad_x * 2.0f;
+ 				const auto row_w = inner_pad + name_pill_w + inner_pad;
+-				const auto row_x = ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value;
++				const auto row_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value, row_w, static_cast<float>( screen_w ) );
+ 				const auto text_col = ( e.mode == xui::bind_mode::toggle ) ? s.text_dim : s.accent;
+ 
+ 				draw_list.rect_filled_blurred( row_x, draw_y, row_w, row_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, row_u8 } );
+@@ -600,34 +636,22 @@
+ 				draw_list.text( row_x + inner_pad + text_pad_x, draw_y + ( row_h - nh ) * 0.5f + text_nudge, e.name, text_col.alpha( static_cast< std::uint8_t >( text_col.a * row_alpha ) ) );
+ 			}
+ 
+-			current_offset_y += row_h + row_spacing;
+-		}
+-
+-		for ( auto it = row_states.begin( ); it != row_states.end( ); )
++		}
++
++		for ( auto it = row_states.begin( ); it != row_states.end( ); ++it )
+ 		{
+ 			if ( !it->second.active_this_frame )
+ 			{
+-				it->second.alpha.fade_out( 0.15f );
+-				it->second.alpha.update( );
+-				it->second.offset_y.update( );
+-
+-				if ( it->second.alpha.alpha( ) <= 0.001f )
+-				{
+-					it = row_states.erase( it );
+-					continue;
+-				}
+-
+ 				const auto row_alpha = it->second.alpha.alpha( ) * master_alpha;
+ 				const auto row_u8 = static_cast< std::uint8_t >( 255.0f * row_alpha );
+ 				const auto draw_y = base_ry + it->second.offset_y.value( );
+ 				const auto [nw, nh] = xdraw::measure_text( it->first.c_str( ) );
+ 				const auto row_w = inner_pad + ( nw + text_pad_x * 2.0f ) + inner_pad;
+-				const auto row_x = ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value;
++				const auto row_x = rendering::viewport::clamp_origin( ( right_side ? static_cast<float>( screen_w ) - margin - row_w : margin ) + kb_cfg.offset_x.value, row_w, static_cast<float>( screen_w ) );
+ 
+ 				draw_list.rect_filled_blurred( row_x, draw_y, row_w, row_h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, row_u8 } );
+ 				draw_list.rect_filled( row_x, draw_y, row_w, row_h, s.window_bg.alpha( static_cast< std::uint8_t >( s.window_bg.a * row_alpha ) ), xdraw::corner_radius{ r } );
+ 			}
+-			++it;
+ 		}
+ 	}
+ 
+--- a/project/core/rendering/rendering.hpp
++++ b/project/core/rendering/rendering.hpp
+@@ -1,7 +1,9 @@
+ #pragma once
+ 
++#include <array>
+ #include <string>
+ #include <vector>
++#include "impl/menu/menu.ui-model.hpp"
+ 
+ namespace rendering {
+ 
+@@ -128,13 +130,13 @@
+         int m_exact_page{};
+         int m_profile_tab{};
+         bool m_sidebar_compact{};
+-        bool m_exact_last_compact{};
+         bool m_dim_interface{};
+         bool m_inventory_categories_open{};
+         mutable bool m_inventory_tools_open{};
+         bool m_hotkey_overview_open{};
+         bool m_layout_editor_open{};
+-        int m_misc_section_open{ 0 };
++        std::array<bool, 6> m_misc_section_open{ true, true, true, true, true, true };
++        ui_model::section_focus m_misc_section_focus{};
+         std::string m_hotkey_filter{};
+         int m_exact_config_index{};
+         int m_subtab_pill_tab{ -1 };
+@@ -156,8 +158,7 @@
+ 			std::string category{};
+ 			std::string name_lower{};
+ 			std::string category_lower{};
+-			int tab{};
+-			int subtab{};
++			ui_model::search_route destination{};
+ 			int bind_key{};
+ 		};
+ 		std::vector<search_entry> m_search_entries{};
+--- /dev/null
++++ b/project/core/rendering/viewport_bounds.hpp
+@@ -0,0 +1,18 @@
++#pragma once
++
++#include <algorithm>
++#include <cmath>
++
++namespace rendering::viewport {
++
++    // Clamp draw coordinates only; leave saved user offsets and animation state intact.
++    // An oversized widget starts at the viewport edge instead of using an inverted range.
++    [[nodiscard]] inline float clamp_origin( float origin, float extent, float viewport_extent ) noexcept
++    {
++        if ( !std::isfinite( origin ) || !std::isfinite( extent ) || !std::isfinite( viewport_extent ) || extent < 0.0f || viewport_extent <= 0.0f )
++            return 0.0f;
++
++        return std::clamp( origin, 0.0f, std::max( 0.0f, viewport_extent - extent ) );
++    }
++
++} // namespace rendering::viewport
+--- a/project/external/xdraw/xui/xui.cpp
++++ b/project/external/xdraw/xui/xui.cpp
+@@ -1885,7 +1885,7 @@
+ 		const auto consumed_y = pwin->cursor_y + ( pwin->line_h > 0.0f ? pwin->line_h + s.item_spacing_y : 0.0f );
+ 		const auto max_h = parent->bounds.h - consumed_y - s.window_pad_y;
+ 
+-		if ( max_h > 0.0f && !parent->scrollable )
++		if ( max_h > 0.0f && !parent->scrollable && !parent->auto_height )
+ 		{
+ 			actual_h = std::min( actual_h, max_h );
+ 		}
+@@ -1905,6 +1905,7 @@
+ 		state.cursor_x = s.window_pad_x;
+ 		state.cursor_y = s.window_pad_y - scroll_y;
+ 		state.is_child = true;
++		state.auto_height = h <= 0.0f && !scrollable;
+ 		state.group_id = id;
+ 		state.scrollable = scrollable;
+ 		state.scroll_y = scroll_y;
+@@ -2527,10 +2528,11 @@
+ 		const auto& input = c.input;
+ 
+ 		const auto check_size = st.checkbox_size;
+-		const auto abs = layout::item( check_size, check_size );
+-
+ 		const auto [lw, lh] = xdraw::measure_text( display );
+-		const auto full_w = !display.empty( ) ? ( abs.w + st.item_spacing_x + lw ) : abs.w;
++		const auto wanted_w = !display.empty( ) ? ( check_size + st.item_spacing_x + lw ) : check_size;
++		const auto full_w = std::min( wanted_w, std::max( check_size, layout::avail( ).first ) );
++		const auto slot = layout::item( full_w, check_size );
++		const auto abs = rect{ slot.x, slot.y, check_size, check_size };
+ 		const auto extended = rect{ abs.x, abs.y, full_w, abs.h };
+ 		const auto interaction = extended.expand( 5.0f );
+ 
+@@ -2657,6 +2659,7 @@
+ 
+ 				if ( badge_x + badge_w < win->bounds.right( ) - st.window_pad_x )
+ 				{
++					win->last_item.w = std::max( win->last_item.w, badge_x + badge_w - abs.x );
+ 					const auto badge_hovered = can_interact && input.in_rect( badge_rect );
+ 					if ( badge_hovered && input.mouse_clicked && !badge_listening && !c.overlay_blocking( ) )
+ 					{
+--- a/project/external/xdraw/xui/xui.hpp
++++ b/project/external/xdraw/xui/xui.hpp
+@@ -4,6 +4,7 @@
+ #include "ui_contract.hpp"
+ 
+ #include <array>
++#include <deque>
+ #include <functional>
+ #include <memory>
+ #include <optional>
+@@ -440,6 +441,7 @@
+ 		float line_h{};
+ 		rect last_item{};
+ 		bool is_child{};
++		bool auto_height{};
+ 		float content_h{};
+ 		std::uintptr_t group_id{ null_id };
+ 		bool scrollable{};
+@@ -510,7 +512,8 @@
+ 		std::size_t slider_edit_cursor{};
+ 		float slider_edit_blink{};
+ 
+-		std::vector<window_state> windows{};
++		// Child/overlay pushes must not invalidate retained parent window pointers.
++		std::deque<window_state> windows{};
+ 		std::vector<std::uintptr_t> id_stack{};
+ 		std::vector<xdraw::layer> layer_stack{};
+ 

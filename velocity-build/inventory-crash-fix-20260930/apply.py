@@ -54,6 +54,8 @@ checks={
 bad=[k for k,v in checks.items() if not v]
 if bad:
     raise RuntimeError("inventory fix postcondition failed: "+", ".join(bad))
-report={"name":"MCB inventory crash + quick preset removal 2026-09-30","patch_sha256":hashlib.sha256(patch).hexdigest(),"checks":checks,"runtime":"NOT_TESTED"}
+# Follow-up stays in the existing source-rebuild pipeline and saved build inputs.
+subprocess.run([sys.executable, str(HERE/"ui-stability/apply.py"), str(ROOT)], check=True)
+report={"name":"MCB inventory crash + quick preset removal 2026-09-30","patch_sha256":hashlib.sha256(patch).hexdigest(),"checks":checks,"runtime":"NOT_TESTED","ui_stability_followup":json.loads((ROOT/"MCB_UI_STABILITY_20260930.json").read_text(encoding="utf-8"))}
 (ROOT/"MCB_INVENTORY_CRASH_FIX_20260930.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
 print(json.dumps(report,ensure_ascii=False,indent=2))

@@ -1,0 +1,14 @@
+[
+  "project/core/features/esp/other/other.overlay.cpp",
+  "project/core/features/misc/impl/impacts.cpp",
+  "project/core/rendering/impl/menu/menu.core.cpp",
+  "project/core/rendering/impl/menu/menu.exact.cpp",
+  "project/core/rendering/impl/menu/menu.legitbot.cpp",
+  "project/core/rendering/impl/menu/menu.skins.cpp",
+  "project/core/rendering/impl/menu/menu.ui-model.hpp",
+  "project/core/rendering/impl/widgets.cpp",
+  "project/core/rendering/rendering.hpp",
+  "project/core/rendering/viewport_bounds.hpp",
+  "project/external/xdraw/xui/xui.cpp",
+  "project/external/xdraw/xui/xui.hpp"
+]
